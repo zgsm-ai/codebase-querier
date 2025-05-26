@@ -1,0 +1,28 @@
+syntax = "v1"
+
+type SemanticRequest {
+	clientId    string `form:"clientId"` // 用户机器ID（如MAC地址）
+	projectPath string `form:"projectPath"` // 项目绝对路径
+	query       string `form:"query"` // 查询内容
+	topK        int    `form:"topK,optional,default=10"` // 结果返回数量（默认10）
+}
+
+type SemanticFileItem {
+	content  string  `json:"content"` // 代码片段
+	filePath string  `json:"filePath"` // 文件相对路径
+	score    float64 `json:"score"` // 匹配得分
+}
+
+type SemanticResponseData {
+	list []SemanticFileItem `json:"list"` // 检索结果列表
+}
+
+@server (
+	jwt:    Auth
+	prefix: /codebase-indexer
+)
+service codebaseindexer {
+	@handler semantic
+	get /api/v1/semantics (SemanticRequest) returns (SemanticResponseData)
+}
+
