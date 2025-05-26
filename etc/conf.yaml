@@ -1,0 +1,29 @@
+Name: codebase-indexer
+Host: 0.0.0.0
+Port: 8888
+Mode: dev # dev,test,rt,pre, pro
+Auth:
+  UserInfoHeader: "x-userinfo"
+# Primary database configuration (single-node or master-slave mode)
+DBPrimary:
+  Driver: postgres          # Database driver (fixed as postgres)
+  # Data source format: postgres://user:${DB_PASSWORD}@host:port/dbname?sslmode=option
+  DataSource: postgres://user:${PRIMARY_DB_PASSWORD}@host:port/codebase_indexer?sslmode=disable
+
+## Replication database configuration (for master-slave mode, empty for single-node)
+#DBReplicas:
+#  - Driver: postgres
+#    # Replication database password from environment variable
+#    DataSource: postgres://replica_user:${REPLICA_DB_PASSWORD}@replica1_host:5432/codebase_indexer?sslmode=disable
+
+RedisConf:
+  Host: 0.0.0.0:6379
+  Type: node # node cluster
+Log:
+  Mode: console # console,file,volume
+  Encoding: plain # json,plain
+  Path: logs
+  Level: info # debug,info,error,severe
+  KeepDays: 15
+  MaxSize: 100 # MB per file, take affect when Rotation is size.
+  Rotation: daily # split by day or size
