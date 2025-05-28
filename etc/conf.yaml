@@ -7,12 +7,57 @@ Auth:
 
 Database:
   Driver: postgres
-  # Data source format: postgres://user:${DB_PASSWORD}@host:port/dbname?sslmode=option
   DataSource: postgres://user:${PRIMARY_DB_PASSWORD}@host:port/codebase_indexer?sslmode=disable
 
-RedisConf:
-  Host: 0.0.0.0:6379
-  Type: node # node cluster
+IndexJob:
+  EnableFlag: 1
+  PoolSize: 50
+  Timeout: 300
+
+MessageQueue:
+  Type: redis
+  Common:
+    ConnectTimeout: 10
+    ReadTimeout: 10
+    WriteTimeout: 10
+    MaxRetries: 10
+  Redis:
+    Host: 0.0.0.0
+    PoolSize: 10
+    MinIdleConn: 10
+
+VectorStore:
+  Type: weaviate
+  Timeout: 60s
+  MaxRetries: 5
+  Weaviate:
+    Endpoint: "http://localhost:8080"
+    ApiKey: "your-api-key"
+    IndexName: "my-vector-index"
+    BatchSize: 100
+    Namespace: "your-namespace"
+  Embedder:
+    Timeout: 10
+    MaxRetries: 3
+    BatchSize: 10
+    StripNewLines: true
+    Model: gte-modernbert-base
+    ApiKey: 123
+    ApiBase: http://localhost:4000
+  Rerank:
+    Timeout: 10
+    MaxRetries: 3
+    BatchSize: 10
+    Model: gte-reranker-modernbert-base
+    ApiKey: 123
+    ApiBase: http://localhost:3000
+  Retriever:
+    NumberDocuments: 10
+    Namespace: "your-namespace"
+    ScoreThreshold: 0.5
+  CodeSplitter:
+
+
 Log:
   Mode: console # console,file,volume
   Encoding: plain # json,plain

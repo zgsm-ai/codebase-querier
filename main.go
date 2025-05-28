@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
-
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
+	"github.com/zgsm-ai/codebase-indexer/internal/job"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -26,10 +27,20 @@ func main() {
 	server := rest.MustNewServer(c.RestConf)
 	defer server.Stop()
 
-	server.Use()
+	serverCtx, cancelFunc := context.WithCancel(context.Background())
 
-	ctx := svc.NewServiceContext(c)
-	handler.RegisterHandlers(server, ctx)
+	svcCtx, err := svc.NewServiceContext(serverCtx, c)
+
+	defer cancelFunc()
+	// start index job
+	indexJobScheduler := job.NewIndexJobScheduler(svcCtx, serverCtx)
+	go indexJobScheduler.Start()
+
+	if err != nil {
+		panic(err)
+	}
+
+	handler.RegisterHandlers(server, svcCtx)
 
 	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
 	server.Start()
