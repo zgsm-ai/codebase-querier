@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,43 +12,58 @@ import (
 
 const scalaQueryFile = "queries/scala.scm"
 
+// Node kinds for Scala
+const (
+	scalaClassDeclaration  = "class_declaration"
+	scalaObjectDeclaration = "object_declaration"
+	scalaTraitDeclaration  = "trait_declaration"
+	scalaDefDeclaration    = "def_declaration"
+	scalaValDeclaration    = "val_declaration"
+	scalaVarDeclaration    = "var_declaration"
+	scalaTypeDeclaration   = "type_declaration"
+)
+
+// Field names for Scala
+const (
+	scalaNameField = "name"
+)
+
 type scalaParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
-	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	parser            *sitter.Parser   // Add Tree-sitter parser instance
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewScalaParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewScalaParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_scala.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		fmt.Printf("Error setting Scala language for parser: %v\n", err)
-		return nil
+		// Handle error: incompatible language version, etc.
+		return nil, fmt.Errorf("error setting Scala language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", scalaQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, scalaQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading Scala query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Scala query: %w", err)
 	}
 
 	scalaParser := &scalaParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.Scala, scalaParser)
-	return scalaParser
+	return scalaParser, nil
 }
 
 func (p *scalaParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -60,9 +74,8 @@ func (p *scalaParser) Parse(code string, filePath string) ([]types.CodeBlock, er
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_scala.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -85,34 +98,44 @@ func (p *scalaParser) Parse(code string, filePath string) ([]types.CodeBlock, er
 		parentClass := ""
 
 		if len(match.Captures) == 0 {
-			continue
+			continue // Should not happen with the current query, but as a safeguard
 		}
 
 		capturedNode := match.Captures[0].Node
-		var definitionNode *sitter.Node
+		var declarationNode *sitter.Node
 
-		curr := capturedNode.Parent()
-		for curr != nil && curr.Kind() != "class_definition" && curr.Kind() != "object_definition" && curr.Kind() != "trait_definition" && curr.Kind() != "method_declaration" && curr.Kind() != "function_definition" {
-			curr = curr.Parent()
+		// Check if the captured node's parent is the declaration (common for name nodes)
+		// Use constants for node kinds
+		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == scalaClassDeclaration || capturedNode.Parent().Kind() == scalaObjectDeclaration || capturedNode.Parent().Kind() == scalaTraitDeclaration || capturedNode.Parent().Kind() == scalaDefDeclaration || capturedNode.Parent().Kind() == scalaValDeclaration || capturedNode.Parent().Kind() == scalaVarDeclaration || capturedNode.Parent().Kind() == scalaTypeDeclaration) {
+			declarationNode = capturedNode.Parent()
+		} else if capturedNode.Kind() == scalaClassDeclaration || capturedNode.Kind() == scalaObjectDeclaration || capturedNode.Kind() == scalaTraitDeclaration || capturedNode.Kind() == scalaDefDeclaration || capturedNode.Kind() == scalaValDeclaration || capturedNode.Kind() == scalaVarDeclaration || capturedNode.Kind() == scalaTypeDeclaration {
+			// In case the query captured the node directly
+			declarationNode = &capturedNode // Take the address
+		} else {
+			// If not immediately obvious, traverse up to find the nearest ancestor
+			curr := capturedNode.Parent()
+			for curr != nil && curr.Kind() != scalaClassDeclaration && curr.Kind() != scalaObjectDeclaration && curr.Kind() != scalaTraitDeclaration && curr.Kind() != scalaDefDeclaration && curr.Kind() != scalaValDeclaration && curr.Kind() != scalaVarDeclaration && curr.Kind() != scalaTypeDeclaration {
+				curr = curr.Parent()
+			}
+			declarationNode = curr
 		}
-		definitionNode = curr
 
-		if definitionNode == nil {
+		if declarationNode == nil {
 			continue
 		}
 
-		content := definitionNode.Utf8Text([]byte(code))
+		content := declarationNode.Utf8Text([]byte(code))
 
-		startLine := definitionNode.StartPosition().Row + 1
-		endLine := definitionNode.EndPosition().Row + 1
+		startLine := declarationNode.StartPosition().Row + 1
+		endLine := declarationNode.EndPosition().Row + 1
 
-		switch definitionNode.Kind() {
-		case "method_declaration", "function_definition":
-			curr := definitionNode.Parent()
+		switch declarationNode.Kind() {
+		case scalaClassDeclaration, scalaObjectDeclaration, scalaTraitDeclaration, scalaDefDeclaration, scalaValDeclaration, scalaVarDeclaration, scalaTypeDeclaration:
+			curr := declarationNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class_definition", "object_definition", "trait_definition":
-					nameNode := curr.ChildByFieldName("name")
+				case scalaClassDeclaration, scalaObjectDeclaration, scalaTraitDeclaration:
+					nameNode := curr.ChildByFieldName(scalaNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}

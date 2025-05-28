@@ -20,59 +20,57 @@ type CodeSplitter interface {
 	Close()
 }
 
-// CodeBlock represents a chunk of code with associated metadata.
-// Moved to internal/types/types.go
-
 type codeSplitter struct {
 	logger    logx.Logger
 	config    config.CodeSplitterConf // Store config to access MaxTokensPerBlock and OverlapTokens
-	parsers   map[types.Language]parser.CodeParser
-	tokenizer tokenizer.Codec // Add tokenizer instance
+	registry  *parser.Registry        // Store the parser registry
+	tokenizer tokenizer.Codec         // Add tokenizer instance
 }
 
-func NewCodeSplitter(ctx context.Context, c config.CodeSplitterConf) CodeSplitter {
-	// Ensure all parsers are registered before creating the splitter.
-	// This is now handled by InitRegisteredParsers in the parser package.
-	parser.InitRegisteredParsers(c.MaxTokensPerBlock, c.OverlapTokens)
+func NewCodeSplitter(ctx context.Context, c config.CodeSplitterConf) (CodeSplitter, error) {
+	registry, err := parser.NewParserRegistry(parser.WithMaxTokensPerBlock(c.MaxTokensPerBlock),
+		parser.WithOverlapTokens(c.OverlapTokens))
+
+	if err != nil {
+		return nil, err // Or handle the error appropriately
+	}
 
 	// Initialize the tokenizer
-	enc, err := tokenizer.Get(tokenizer.Cl100kBase) // Using cl100k_base encoding
+	enc, err := tokenizer.Get(tokenizer.Cl100kBase)
 	if err != nil {
-		// Handle error: encoding not found, etc.
-		// For now, we'll log and panic or return nil
-		// In a real app, you'd want more robust error handling
-		logx.WithContext(ctx).Errorf("Failed to get tokenizer encoding cl100k_base: %v", err)
-		// Depending on error handling strategy, might return nil or a splitter that can't tokenize
-		return nil
+		return nil, err
 	}
 
 	s := &codeSplitter{
 		logger:    logx.WithContext(ctx),
-		config:    c, // Store config
-		parsers:   make(map[types.Language]parser.CodeParser),
-		tokenizer: enc, // Store the initialized tokenizer
+		config:    c,
+		registry:  registry,
+		tokenizer: enc,
 	}
 
-	// Retrieve registered parsers and add them to the splitter's map.
-	for lang, p := range parser.RegisteredParsers {
-		s.parsers[lang] = p
-	}
-
-	return s
+	return s, nil
 }
 
 func (s *codeSplitter) SplitCode(code, filePath string) ([]types.CodeBlock, error) {
 	var parserToUse parser.CodeParser
 	var inferredLanguage = types.Unknown
 
-	// Infer language and find the appropriate parser
-	for lang, p := range s.parsers {
+	// Infer language and find the appropriate parser from the registry
+	for lang, p := range s.registry.GetAllParsers() {
 		if p.InferLanguage(filePath) {
 			parserToUse = p
 			inferredLanguage = lang
 			break
 		}
 	}
+
+	// If no specific parser is found, maybe use a default or return an error
+	// For now, we'll just continue and the parse call will likely fail.
+
+	if parserToUse == nil {
+		return nil, fmt.Errorf("no suitable parser found for file %s", filePath)
+	}
+
 	s.logger.Debugf("file %s inferred language %v", filePath, inferredLanguage)
 
 	// Step 1: Perform syntax-based splitting using the language parser
@@ -98,7 +96,7 @@ func (s *codeSplitter) SplitCode(code, filePath string) ([]types.CodeBlock, erro
 		// Use TokenCount for size check
 		if block.TokenCount > s.config.MaxTokensPerBlock {
 			// Apply sliding window to this large block based on tokens
-			s.logger.Infof("Applying sliding window to large block in %s (lines %d-%d), token size %d", block.FilePath, block.StartLine, block.EndLine, block.TokenCount)
+			s.logger.Debugf("Applying sliding window to large block in %s (lines %d-%d), token size %d", block.FilePath, block.StartLine, block.EndLine, block.TokenCount)
 
 			chunkSize := s.config.MaxTokensPerBlock
 			overlapTokens := s.config.OverlapTokens
@@ -227,9 +225,7 @@ func (s *codeSplitter) SplitCode(code, filePath string) ([]types.CodeBlock, erro
 
 // Close releases resources held by the CodeSplitter and its parsers.
 func (s *codeSplitter) Close() {
-	for _, p := range s.parsers {
+	for _, p := range s.registry.GetAllParsers() {
 		p.Close()
 	}
-	// Tokenizer does not have a Close method based on current interface,
-	// but if it did, we would call it here.
 }

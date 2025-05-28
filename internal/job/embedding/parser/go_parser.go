@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,38 +12,52 @@ import (
 
 const goQueryFile = "queries/go.scm"
 
+// Node kinds for Go
+const (
+	goFunctionDeclaration = "function_declaration"
+	goMethodDeclaration   = "method_declaration"
+	goTypeDeclaration     = "type_declaration"
+	goStructType          = "struct_type"
+	goInterfaceType       = "interface_type"
+)
+
+// Field names for Go
+const (
+	goNameField     = "name"
+	goTypeField     = "type"
+	goReceiverField = "receiver"
+)
+
 type goParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
 	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewGoParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewGoParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_go.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		fmt.Printf("Error setting Go language for parser: %v\n", err)
-		return nil
+		return nil, fmt.Errorf("error setting Go language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", goQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, goQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading Go query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Go query: %w", err)
 	}
 
 	goParser := &goParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.Go, goParser)
-	return goParser
+	return goParser, nil
 }
 
 func (p *goParser) Close() {
@@ -55,8 +68,8 @@ func (p *goParser) Close() {
 }
 
 func (p *goParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -67,9 +80,8 @@ func (p *goParser) Parse(code string, filePath string) ([]types.CodeBlock, error
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field
-	lang := sitter.NewLanguage(sitter_go.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -92,32 +104,54 @@ func (p *goParser) Parse(code string, filePath string) ([]types.CodeBlock, error
 		parentClass := ""
 
 		capturedNode := match.Captures[0].Node
-		var declarationNode *sitter.Node
+		var definitionNode *sitter.Node
 
-		if capturedNode.Kind() == "function_declaration" || capturedNode.Kind() == "method_declaration" {
-			declarationNode = &capturedNode
+		// Check if the captured node's parent is the declaration/definition (common for name nodes)
+		// Use constants for node kinds
+		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == goFunctionDeclaration || capturedNode.Parent().Kind() == goMethodDeclaration || capturedNode.Parent().Kind() == goTypeDeclaration) {
+			definitionNode = capturedNode.Parent()
+		} else if capturedNode.Kind() == goFunctionDeclaration || capturedNode.Kind() == goMethodDeclaration || capturedNode.Kind() == goTypeDeclaration {
+			// In case the query captured the node directly
+			definitionNode = &capturedNode // Take the address
 		} else {
-			declarationNode = capturedNode.Parent()
+			// If not immediately obvious, traverse up to find the nearest ancestor
+			curr := capturedNode.Parent()
+			for curr != nil && curr.Kind() != goFunctionDeclaration && curr.Kind() != goMethodDeclaration && curr.Kind() != goTypeDeclaration {
+				curr = curr.Parent()
+			}
+			definitionNode = curr
 		}
 
-		for declarationNode != nil && declarationNode.Kind() != "function_declaration" && declarationNode.Kind() != "method_declaration" {
-			declarationNode = declarationNode.Parent()
-		}
-
-		if declarationNode == nil {
+		if definitionNode == nil {
 			continue
 		}
 
-		content := declarationNode.Utf8Text([]byte(code))
+		content := definitionNode.Utf8Text([]byte(code))
 
-		startLine := declarationNode.StartPosition().Row + 1
-		endLine := declarationNode.EndPosition().Row + 1
+		startLine := definitionNode.StartPosition().Row + 1
+		endLine := definitionNode.EndPosition().Row + 1
 
-		if declarationNode.Kind() == "method_declaration" {
-			receiverNode := declarationNode.Child(0)
-			if receiverNode != nil {
-				parentClass = receiverNode.Utf8Text([]byte(code))
+		// Determine parent class/interface for methods
+		// Use constants for node kinds and field names
+		if definitionNode.Kind() == goMethodDeclaration {
+			// Traverse up from the method declaration to find the type declaration it belongs to.
+			// The receiver field node's parent is the method_declaration.
+			// The method_declaration is a child of the source_file or type_declaration.
+			// So we need to go up to the parent and check if it's a type_declaration.
+			curr := definitionNode.Parent()
+			for curr != nil {
+				switch curr.Kind() {
+				case goTypeDeclaration: // Methods are associated with type declarations
+					// Found the enclosing type declaration, try to find its name
+					nameNode := curr.ChildByFieldName(goNameField)
+					if nameNode != nil {
+						parentClass = nameNode.Utf8Text([]byte(code))
+					}
+					goto foundParent // Exit loops once parent is found
+				}
+				curr = curr.Parent()
 			}
+		foundParent:
 		}
 
 		blocks = append(blocks, types.CodeBlock{
@@ -128,6 +162,7 @@ func (p *goParser) Parse(code string, filePath string) ([]types.CodeBlock, error
 			ParentFunc:   parentFunc,
 			ParentClass:  parentClass,
 			OriginalSize: len(content),
+			TokenCount:   0,
 		})
 	}
 

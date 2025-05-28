@@ -1,6 +1,10 @@
 package parser
 
 import (
+	"fmt"
+	"os"
+
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -14,36 +18,96 @@ type CodeParser interface {
 	Close()
 }
 
-// RegisteredParsers stores the registered language parsers.
-var RegisteredParsers = make(map[types.Language]CodeParser)
-
-// registerParser registers a CodeParser for a specific language.
-func registerParser(lang types.Language, parser CodeParser) {
-	RegisteredParsers[lang] = parser
+// Registry manages the registration and retrieval of language parsers.
+type Registry struct {
+	parsers          map[types.Language]CodeParser
+	maxTokenPerBlock int
+	overlapTokens    int
 }
 
-// GetParser retrieves the CodeParser for the given language.
-func GetParser(lang types.Language) (CodeParser, bool) {
-	parser, ok := RegisteredParsers[lang]
+// Register registers a CodeParser for a specific language with the registry.
+func (r *Registry) Register(lang types.Language, parser CodeParser) {
+	r.parsers[lang] = parser
+}
+
+// Get retrieves the CodeParser for the given language from the registry.
+func (r *Registry) Get(lang types.Language) (CodeParser, bool) {
+	parser, ok := r.parsers[lang]
 	return parser, ok
 }
 
-// InitRegisteredParsers initializes and registers all known language parsers.
-func InitRegisteredParsers(maxTokensPerBlock, overlapTokens int) {
-	// Call the New functions for each parser. These functions should handle their own registration.
-	NewJavaParser(maxTokensPerBlock, overlapTokens)
-	NewPythonParser(maxTokensPerBlock, overlapTokens)
-	NewGoParser(maxTokensPerBlock, overlapTokens)
-	NewJavaScriptParser(maxTokensPerBlock, overlapTokens)
-	NewTypeScriptTSParser(maxTokensPerBlock, overlapTokens)
-	NewTypeScriptTSXParser(maxTokensPerBlock, overlapTokens)
-	NewRustParser(maxTokensPerBlock, overlapTokens)
-	NewCParser(maxTokensPerBlock, overlapTokens)
-	NewCPPParser(maxTokensPerBlock, overlapTokens)
-	NewCSharpParser(maxTokensPerBlock, overlapTokens)
-	NewRubyParser(maxTokensPerBlock, overlapTokens)
-	NewPhpParser(maxTokensPerBlock, overlapTokens)
-	NewKotlinParser(maxTokensPerBlock, overlapTokens)
-	NewScalaParser(maxTokensPerBlock, overlapTokens)
-	// Add calls for any new parsers here
+// GetAllParsers returns the map of all registered parsers.
+// Note: Returning the map directly allows external access and modification.
+// A more robust approach might be to return a copy or an iterator.
+func (r *Registry) GetAllParsers() map[types.Language]CodeParser {
+	return r.parsers
+}
+
+type RegistryFunc func(registry *Registry)
+
+func WithMaxTokensPerBlock(maxTokensPerBlock int) RegistryFunc {
+	return func(registry *Registry) {
+		registry.maxTokenPerBlock = maxTokensPerBlock
+	}
+}
+
+func WithOverlapTokens(overlapTokens int) RegistryFunc {
+	return func(registry *Registry) {
+		registry.overlapTokens = overlapTokens
+	}
+}
+
+// NewParserRegistry initializes and registers all known language parsers.
+func NewParserRegistry(opts ...RegistryFunc) (*Registry, error) {
+	registry := &Registry{
+		parsers: make(map[types.Language]CodeParser),
+	}
+	for _, opt := range opts {
+		opt(registry)
+	}
+
+	parsersToRegister := []struct {
+		lang    types.Language
+		newFunc func(maxTokensPerBlock, overlapTokens int) (CodeParser, error)
+	}{
+		{types.Java, NewJavaParser},
+		{types.Python, NewPythonParser},
+		{types.Go, NewGoParser},
+		{types.JavaScript, NewJavaScriptParser},
+		{types.TypeScript, NewTypeScriptTSParser},
+		{types.TSX, NewTypeScriptTSXParser},
+		{types.Rust, NewRustParser},
+		{types.C, NewCParser},
+		{types.CPP, NewCPPParser},
+		{types.CSharp, NewCSharpParser},
+		{types.Ruby, NewRubyParser},
+		{types.PHP, NewPhpParser},
+		{types.Kotlin, NewKotlinParser},
+		{types.Scala, NewScalaParser},
+	}
+
+	for _, p := range parsersToRegister {
+		parser, err := p.newFunc(registry.maxTokenPerBlock, registry.overlapTokens)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize %s parser: %w", p.lang, err)
+		}
+		registry.Register(p.lang, parser)
+	}
+
+	return registry, nil
+}
+
+func loadQuery(lang *sitter.Language, queryFilePath string) (string, error) {
+	// Read the query file
+	queryContent, err := os.ReadFile(queryFilePath)
+	if err != nil {
+		return "", err
+	}
+	queryStr := string(queryContent)
+	// Validate query early
+	_, queryErr := sitter.NewQuery(lang, queryStr)
+	if queryErr != nil {
+		return "", err
+	}
+	return queryStr, nil
 }

@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,43 +12,52 @@ import (
 
 const rustQueryFile = "queries/rust.scm"
 
+// Node kinds for Rust
+const (
+	rustFunctionItem = "function_item"
+	rustStructItem   = "struct_item"
+)
+
+// Field names for Rust
+const (
+	rustNameField = "name"
+)
+
 type rustParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
 	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewRustParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewRustParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_rust.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		fmt.Printf("Error setting Rust language for parser: %v\n", err)
-		return nil
+		return nil, fmt.Errorf("error setting Rust language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", rustQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, rustQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading Rust query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Rust query: %w", err)
 	}
 
 	rustParser := &rustParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.Rust, rustParser)
-	return rustParser
+	return rustParser, nil
 }
 
 func (p *rustParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -60,9 +68,8 @@ func (p *rustParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_rust.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -91,13 +98,14 @@ func (p *rustParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		capturedNode := match.Captures[0].Node
 		var itemNode *sitter.Node
 
-		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == "function_item" || capturedNode.Parent().Kind() == "struct_item") {
+		// Use constants for node kinds
+		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == rustFunctionItem || capturedNode.Parent().Kind() == rustStructItem) {
 			itemNode = capturedNode.Parent()
-		} else if capturedNode.Kind() == "function_item" || capturedNode.Kind() == "struct_item" {
+		} else if capturedNode.Kind() == rustFunctionItem || capturedNode.Kind() == rustStructItem {
 			itemNode = &capturedNode
 		} else {
 			curr := capturedNode.Parent()
-			for curr != nil && curr.Kind() != "function_item" && curr.Kind() != "struct_item" {
+			for curr != nil && curr.Kind() != rustFunctionItem && curr.Kind() != rustStructItem {
 				curr = curr.Parent()
 			}
 			itemNode = curr
@@ -112,11 +120,12 @@ func (p *rustParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		startLine := itemNode.StartPosition().Row + 1
 		endLine := itemNode.EndPosition().Row + 1
 
-		if itemNode.Kind() == "function_item" {
+		// Use constants for node kinds and field names
+		if itemNode.Kind() == rustFunctionItem {
 			curr := itemNode.Parent()
 			for curr != nil {
-				if curr.Kind() == "struct_item" {
-					nameNode := curr.ChildByFieldName("name")
+				if curr.Kind() == rustStructItem {
+					nameNode := curr.ChildByFieldName(rustNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}

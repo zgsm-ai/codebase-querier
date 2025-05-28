@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,40 +12,49 @@ import (
 
 const rubyQueryFile = "queries/ruby.scm"
 
+// Node kinds for Ruby
+const (
+	rubyClassDeclaration  = "class_declaration"
+	rubyModuleDeclaration = "module_declaration"
+	rubyMethodDeclaration = "method_declaration"
+)
+
+// Field names for Ruby
+const (
+	rubyNameField = "name"
+)
+
 type rubyParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
-	parser            *sitter.Parser // Add Tree-sitter parser instance
-	queryBytes        []byte         // Store query content as bytes
+	parser            *sitter.Parser   // Add Tree-sitter parser instance
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewRubyParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewRubyParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_ruby.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
 		// Handle error: incompatible language version, etc.
-		// For now, we'll just log and return nil
-		fmt.Printf("Error setting Ruby language for parser: %v\n", err)
-		return nil // Or return a nil parser with an error
+		return nil, fmt.Errorf("error setting Ruby language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", rubyQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, rubyQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading Ruby query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Ruby query: %w", err)
 	}
 
 	rubyParser := &rubyParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.Ruby, rubyParser)
-	return rubyParser
+	return rubyParser, nil
 }
 
 // Close releases the Tree-sitter parser resources.
@@ -59,8 +67,8 @@ func (p *rubyParser) Close() {
 }
 
 func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -72,9 +80,8 @@ func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_ruby.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -109,7 +116,7 @@ func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		// Note: In Ruby, methods can be defined at the top level, within classes, or within modules.
 		// The query targets the method node itself, so we traverse up from there.
 		curr := capturedNode.Parent()
-		for curr != nil && curr.Kind() != "class" && curr.Kind() != "module" && curr.Kind() != "method" {
+		for curr != nil && curr.Kind() != rubyClassDeclaration && curr.Kind() != rubyModuleDeclaration && curr.Kind() != rubyMethodDeclaration {
 			curr = curr.Parent()
 		}
 		definitionNode = curr // This should be the method, class, or module node
@@ -128,15 +135,14 @@ func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		endLine := definitionNode.EndPosition().Row + 1
 
 		// Determine parent class/module for method definitions
-		if definitionNode.Kind() == "method" {
+		if definitionNode.Kind() == rubyMethodDeclaration {
 			// Traverse up the tree from the method definition to find the enclosing class or module
 			curr := definitionNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class", "module": // Methods can be in classes or modules
+				case rubyClassDeclaration, rubyModuleDeclaration: // Methods can be in classes or modules
 					// Found the enclosing type definition, try to find its name
-					// Note: In Ruby, class/module names are 'constant' nodes.
-					nameNode := curr.ChildByFieldName("name")
+					nameNode := curr.ChildByFieldName(rubyNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}
@@ -145,7 +151,6 @@ func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 				curr = curr.Parent()
 			}
 		foundParent:
-			// parentFunc remains empty for methods within types
 		}
 		// For class and module definitions, parentFunc and parentClass remain empty
 
@@ -154,10 +159,10 @@ func (p *rubyParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 			FilePath:     filePath,
 			StartLine:    int(startLine),
 			EndLine:      int(endLine),
-			ParentFunc:   parentFunc,   // Empty for now for top-level structures
-			ParentClass:  parentClass,  // Populated for methods, empty for top-level types
-			OriginalSize: len(content), // Size in bytes
-			TokenCount:   0,            // Will be calculated by CodeSplitter
+			ParentFunc:   parentFunc,  // Empty for now for top-level structures
+			ParentClass:  parentClass, // Populated for methods, empty for top-level types
+			OriginalSize: len(content),
+			TokenCount:   0,
 		})
 	}
 

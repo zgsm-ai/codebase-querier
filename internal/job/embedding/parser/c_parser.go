@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -17,42 +16,44 @@ const (
 	structSpecifier = "struct_specifier"
 	unionSpecifier  = "union_specifier"
 	enumSpecifier   = "enum_specifier"
+	cNameField      = "name"
 )
 
 type cParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
 	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	language          *sitter.Language
+	query             string
 }
 
-func NewCParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewCParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_c.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("error setting C language: %w", err)
 	}
 
 	// Read the query file
-	queryContent, err := os.ReadFile(cQueryFile)
+	queryStr, err := loadQuery(lang, cQueryFile)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("error loading C query: %w", err)
 	}
 
 	cParser := &cParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.C, cParser)
-	return cParser
+	return cParser, nil
 }
 
 func (p *cParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -63,9 +64,8 @@ func (p *cParser) Parse(code string, filePath string) ([]types.CodeBlock, error)
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_c.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -100,7 +100,7 @@ func (p *cParser) Parse(code string, filePath string) ([]types.CodeBlock, error)
 
 		switch declarationNode.Kind() {
 		case structSpecifier, unionSpecifier, enumSpecifier:
-			nameNode := declarationNode.ChildByFieldName(name)
+			nameNode := declarationNode.ChildByFieldName(cNameField)
 			if nameNode != nil {
 				parentClass = nameNode.Utf8Text([]byte(code))
 			}

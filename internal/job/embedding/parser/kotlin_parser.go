@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter_kotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
@@ -13,43 +12,55 @@ import (
 
 const kotlinQueryFile = "queries/kotlin.scm"
 
+// Node kinds for Kotlin
+const (
+	kotlinClassDeclaration  = "class_declaration"
+	kotlinObjectDeclaration = "object_declaration"
+	kotlinFunDeclaration    = "fun_declaration"
+)
+
+// Field names for Kotlin
+const (
+	kotlinNameField = "name"
+)
+
 type kotlinParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
-	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	parser            *sitter.Parser   // Add Tree-sitter parser instance
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewKotlinParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewKotlinParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
-	language := sitter.NewLanguage(sitter_kotlin.Language())
-	err := parser.SetLanguage(language)
+	lang := sitter.NewLanguage(sitter_kotlin.Language())
+	err := parser.SetLanguage(lang)
 	if err != nil {
-		fmt.Printf("Error setting Kotlin language for parser: %v\n", err)
-		return nil
+		// Handle error: incompatible language version, etc.
+		return nil, fmt.Errorf("error setting Kotlin language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", javaScriptQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, kotlinQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading JavaScript query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Kotlin query: %w", err)
 	}
 
 	kotlinParser := &kotlinParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent,
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.Kotlin, kotlinParser)
-	return kotlinParser
+
+	return kotlinParser, nil
 }
 
 func (p *kotlinParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -60,28 +71,25 @@ func (p *kotlinParser) Parse(code string, filePath string) ([]types.CodeBlock, e
 
 	root := tree.RootNode()
 
-	lang := sitter_kotlin.Language()
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
-		var qe *sitter.QueryError
-		if errors.As(queryErr, &qe) {
-			return nil, fmt.Errorf("failed to create query: %w at offset %d, kind %s", queryErr, qe.Offset, qe.Kind)
-		} else {
-			return nil, fmt.Errorf("failed to create query: %w", queryErr)
-		}
+		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
 	defer query.Close()
 
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	matches := qc.Exec(query, root)
+	matches := qc.Matches(query, root, []byte(code)) // Corrected from qc.Exec
 
 	var blocks []types.CodeBlock
 
+	captureNames := query.CaptureNames() // Corrected from query.CaptureNameForId
+
 	for {
-		match, ok := matches.NextMatch()
-		if !ok {
+		match := matches.Next()
+		if match == nil {
 			break
 		}
 
@@ -90,19 +98,19 @@ func (p *kotlinParser) Parse(code string, filePath string) ([]types.CodeBlock, e
 
 		var definitionNode *sitter.Node
 		for _, capture := range match.Captures {
-			if query.CaptureNameForId(capture.Index) == "name" {
+			if capture.Index < uint32(len(captureNames)) && captureNames[capture.Index] == kotlinNameField { // Corrected capture name check
 				curr := capture.Node.Parent()
 				for curr != nil {
 					switch curr.Kind() {
-					case "class_declaration", "object_declaration", "interface_declaration", "function_declaration", "property_declaration":
+					case kotlinClassDeclaration, kotlinObjectDeclaration, kotlinFunDeclaration:
 						definitionNode = curr
 						goto foundDefinition
 					}
 					curr = curr.Parent()
 				}
 				switch capture.Node.Kind() {
-				case "class_declaration", "object_declaration", "interface_declaration", "function_declaration", "property_declaration":
-					definitionNode = capture.Node
+				case kotlinClassDeclaration, kotlinObjectDeclaration, kotlinFunDeclaration:
+					definitionNode = &capture.Node
 					goto foundDefinition
 				}
 			}
@@ -114,22 +122,23 @@ func (p *kotlinParser) Parse(code string, filePath string) ([]types.CodeBlock, e
 			continue
 		}
 
-		contentBytes := definitionNode.Content([]byte(code))
-		content := string(contentBytes)
+		content := definitionNode.Utf8Text([]byte(code)) // Corrected from definitionNode.Content
 
-		startLine := definitionNode.StartPoint().Row + 1
-		endLine := definitionNode.EndPoint().Row + 1
+		startPoint := definitionNode.StartPosition() // Corrected from definitionNode.StartPoint
+		endPoint := definitionNode.EndPosition()     // Corrected from definitionNode.EndPoint()
+
+		startLine := startPoint.Row + 1
+		endLine := endPoint.Row + 1
 
 		switch definitionNode.Kind() {
-		case "function_declaration", "property_declaration":
+		case kotlinFunDeclaration:
 			curr := definitionNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class_declaration", "object_declaration", "interface_declaration":
-					nameNode := curr.ChildByFieldName("name")
+				case kotlinClassDeclaration, kotlinObjectDeclaration:
+					nameNode := curr.ChildByFieldName(kotlinNameField)
 					if nameNode != nil {
-						parentClassBytes := nameNode.Content([]byte(code))
-						parentClass = string(parentClassBytes)
+						parentClass = nameNode.Utf8Text([]byte(code)) // Corrected from nameNode.Content
 					}
 					goto foundParent
 				}
@@ -153,6 +162,8 @@ func (p *kotlinParser) Parse(code string, filePath string) ([]types.CodeBlock, e
 	return blocks, nil
 }
 
+// Close releases the Tree-sitter parser resources.
+// It's important to call this when the parser is no longer needed.
 func (p *kotlinParser) Close() {
 	if p.parser != nil {
 		p.parser.Close()

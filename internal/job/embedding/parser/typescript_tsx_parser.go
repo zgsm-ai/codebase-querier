@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,41 +12,51 @@ import (
 
 const typeScriptTSXQueryFile = "queries/typescript_tsx.scm"
 
+// Node kinds for TypeScript TSX
+const (
+	tsTSXClassDeclaration             = "class_declaration"
+	typeScriptTSXFunctionDeclaration  = "function_declaration"
+	typeScriptTSXMethodDefinition     = "method_definition"
+	typeScriptTSXInterfaceDeclaration = "interface_declaration"
+)
+
+// Field names for TypeScript TSX
+const (
+	typeScriptTSXNameField = "name"
+)
+
 type typeScriptTSXParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
-	parser            *sitter.Parser // Add Tree-sitter parser instance
-	queryBytes        []byte         // Store query content as bytes
+	parser            *sitter.Parser   // Add Tree-sitter parser instance
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewTypeScriptTSXParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewTypeScriptTSXParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	// Use the LanguageTSX() function for TSX
 	lang := sitter.NewLanguage(sitter_typescript.LanguageTSX())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		// Handle error: incompatible language version, etc.
-		// For now, we'll just log and return nil
-		fmt.Printf("Error setting TSX language for parser: %v\n", err)
-		return nil // Or return a nil parser with an error
+		return nil, err
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", typeScriptTSXQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, typeScriptTSXQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading TSX query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading TSX query: %w", err)
 	}
 
 	typeScriptTSXParser := &typeScriptTSXParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.TSX, typeScriptTSXParser)
-	return typeScriptTSXParser
+
+	return typeScriptTSXParser, err
 }
 
 // Close releases the Tree-sitter parser resources.
@@ -60,8 +69,8 @@ func (p *typeScriptTSXParser) Close() {
 }
 
 func (p *typeScriptTSXParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -73,9 +82,8 @@ func (p *typeScriptTSXParser) Parse(code string, filePath string) ([]types.CodeB
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_typescript.LanguageTSX())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -107,15 +115,16 @@ func (p *typeScriptTSXParser) Parse(code string, filePath string) ([]types.CodeB
 		var definitionNode *sitter.Node
 
 		// Check if the captured node's parent is the declaration/definition (common for name nodes)
-		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == "class_declaration" || capturedNode.Parent().Kind() == "function_declaration" || capturedNode.Parent().Kind() == "method_definition" || capturedNode.Parent().Kind() == "interface_declaration") {
+		// Use constants for node kinds
+		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == tsTSXClassDeclaration || capturedNode.Parent().Kind() == typeScriptTSXFunctionDeclaration || capturedNode.Parent().Kind() == typeScriptTSXMethodDefinition || capturedNode.Parent().Kind() == typeScriptTSXInterfaceDeclaration) {
 			definitionNode = capturedNode.Parent()
-		} else if capturedNode.Kind() == "class_declaration" || capturedNode.Kind() == "function_declaration" || capturedNode.Kind() == "method_definition" || capturedNode.Kind() == "interface_declaration" {
+		} else if capturedNode.Kind() == tsTSXClassDeclaration || capturedNode.Kind() == typeScriptTSXFunctionDeclaration || capturedNode.Kind() == typeScriptTSXMethodDefinition || capturedNode.Kind() == typeScriptTSXInterfaceDeclaration {
 			// In case the query captured the node directly
 			definitionNode = &capturedNode // Take the address
 		} else {
 			// If not immediately obvious, traverse up to find the nearest ancestor
 			curr := capturedNode.Parent()
-			for curr != nil && curr.Kind() != "class_declaration" && curr.Kind() != "function_declaration" && curr.Kind() != "method_definition" && curr.Kind() != "interface_declaration" {
+			for curr != nil && curr.Kind() != tsTSXClassDeclaration && curr.Kind() != typeScriptTSXFunctionDeclaration && curr.Kind() != typeScriptTSXMethodDefinition && curr.Kind() != typeScriptTSXInterfaceDeclaration {
 				curr = curr.Parent()
 			}
 			definitionNode = curr
@@ -134,14 +143,15 @@ func (p *typeScriptTSXParser) Parse(code string, filePath string) ([]types.CodeB
 		endLine := definitionNode.EndPosition().Row + 1
 
 		// Determine parent class/interface for method definitions
-		if definitionNode.Kind() == "method_definition" {
+		// Use constants for node kinds and field names
+		if definitionNode.Kind() == typeScriptTSXMethodDefinition {
 			// Traverse up the tree from the method definition to find the enclosing type declaration
 			curr := definitionNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class_declaration", "interface_declaration": // Methods can be in classes or interfaces
+				case tsTSXClassDeclaration, typeScriptTSXInterfaceDeclaration: // Methods can be in classes or interfaces
 					// Found the enclosing type declaration, try to find its name
-					nameNode := curr.ChildByFieldName("name")
+					nameNode := curr.ChildByFieldName(typeScriptTSXNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}

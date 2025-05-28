@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,43 +12,54 @@ import (
 
 const javaQueryFile = "queries/java.scm"
 
+// Node kinds for Java
+const (
+	javaClassDeclaration     = "class_declaration"
+	javaInterfaceDeclaration = "interface_declaration"
+	javaEnumDeclaration      = "enum_declaration"
+	javaMethodDeclaration    = "method_declaration"
+)
+
+// Field names for Java
+const (
+	javaNameField = "name"
+)
+
 type javaParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
 	parser            *sitter.Parser
-	queryBytes        []byte // Store query content as bytes
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewJavaParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewJavaParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_java.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
-		fmt.Printf("Error setting Java language for parser: %v\n", err)
-		return nil
+		return nil, fmt.Errorf("error setting Java language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", javaQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, javaQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading Java query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading Java query: %w", err)
 	}
 
 	javaParser := &javaParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
 		parser:            parser,
-		queryBytes:        queryContent, // Store query content
+		language:          lang,     // Store language instance
+		query:             queryStr, // Store query string
 	}
-	registerParser(types.Java, javaParser)
-	return javaParser
+	return javaParser, nil
 }
 
 func (p *javaParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -60,8 +70,8 @@ func (p *javaParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	query, queryErr := sitter.NewQuery(sitter.NewLanguage(sitter_java.Language()), string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -90,13 +100,14 @@ func (p *javaParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		capturedNode := match.Captures[0].Node
 		var declarationNode *sitter.Node
 
-		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == "class_declaration" || capturedNode.Parent().Kind() == "interface_declaration" || capturedNode.Parent().Kind() == "enum_declaration" || capturedNode.Parent().Kind() == "method_declaration") {
+		// Use constants for node kinds
+		if capturedNode.Parent() != nil && (capturedNode.Parent().Kind() == javaClassDeclaration || capturedNode.Parent().Kind() == javaInterfaceDeclaration || capturedNode.Parent().Kind() == javaEnumDeclaration || capturedNode.Parent().Kind() == javaMethodDeclaration) {
 			declarationNode = capturedNode.Parent()
-		} else if capturedNode.Kind() == "class_declaration" || capturedNode.Kind() == "interface_declaration" || capturedNode.Kind() == "enum_declaration" || capturedNode.Kind() == "method_declaration" {
+		} else if capturedNode.Kind() == javaClassDeclaration || capturedNode.Kind() == javaInterfaceDeclaration || capturedNode.Kind() == javaEnumDeclaration || capturedNode.Kind() == javaMethodDeclaration {
 			declarationNode = &capturedNode
 		} else {
 			curr := capturedNode.Parent()
-			for curr != nil && curr.Kind() != "class_declaration" && curr.Kind() != "interface_declaration" && curr.Kind() != "enum_declaration" && curr.Kind() != "method_declaration" {
+			for curr != nil && curr.Kind() != javaClassDeclaration && curr.Kind() != javaInterfaceDeclaration && curr.Kind() != javaEnumDeclaration && curr.Kind() != javaMethodDeclaration {
 				curr = curr.Parent()
 			}
 			declarationNode = curr
@@ -111,12 +122,13 @@ func (p *javaParser) Parse(code string, filePath string) ([]types.CodeBlock, err
 		startLine := declarationNode.StartPosition().Row + 1
 		endLine := declarationNode.EndPosition().Row + 1
 
-		if declarationNode.Kind() == "method_declaration" {
+		// Use constants for node kinds and field names
+		if declarationNode.Kind() == javaMethodDeclaration {
 			curr := declarationNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class_declaration", "interface_declaration", "enum_declaration":
-					nameNode := curr.ChildByFieldName("name")
+				case javaClassDeclaration, javaInterfaceDeclaration, javaEnumDeclaration:
+					nameNode := curr.ChildByFieldName(javaNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}

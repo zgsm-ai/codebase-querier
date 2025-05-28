@@ -3,7 +3,6 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -13,45 +12,56 @@ import (
 
 const cppQueryFile = "queries/cpp.scm"
 
+// Node kinds
+const (
+	cppFunctionDefinition = "function_definition"
+	cppMethodDefinition   = "method_definition"
+	cppFunctionDeclarator = "function_declarator"
+	cppClassSpecifier     = "class_specifier"
+	cppStructSpecifier    = "struct_specifier"
+)
+
+// Field names
+const (
+	cppNameField = "name"
+)
+
 type cppParser struct {
 	maxTokensPerBlock int
 	overlapTokens     int
-	parser            *sitter.Parser // Add Tree-sitter parser instance
-	queryBytes        []byte         // Store query content as bytes
+	parser            *sitter.Parser   // Add Tree-sitter parser instance
+	language          *sitter.Language // Store language instance
+	query             string           // Store query string
 }
 
-func NewCPPParser(maxTokensPerBlock, overlapTokens int) CodeParser {
+func NewCPPParser(maxTokensPerBlock, overlapTokens int) (CodeParser, error) {
 	parser := sitter.NewParser()
 	lang := sitter.NewLanguage(sitter_cpp.Language())
 	err := parser.SetLanguage(lang)
 	if err != nil {
 		// Handle error: incompatible language version, etc.
-		// For now, we'll just log and return nil
-		fmt.Printf("Error setting C++ language for parser: %v\n", err)
-		return nil // Or return a nil parser with an error
+		return nil, fmt.Errorf("error setting C++ language: %w", err)
 	}
 
 	// Read the query file
-	queryPath := filepath.Join("internal/job/embedding/splitter/parser", cppQueryFile)
-	queryContent, err := os.ReadFile(queryPath)
+	queryStr, err := loadQuery(lang, cppQueryFile)
 	if err != nil {
-		fmt.Printf("Error reading C++ query file %s: %v\n", queryPath, err)
-		return nil // Or handle error appropriately
+		return nil, fmt.Errorf("error loading C++ query: %w", err)
 	}
 
 	cppParser := &cppParser{
 		maxTokensPerBlock: maxTokensPerBlock,
 		overlapTokens:     overlapTokens,
-		parser:            parser,       // Assign the created parser to the struct field
-		queryBytes:        queryContent, // Store query content
+		parser:            parser,
+		language:          lang,
+		query:             queryStr,
 	}
-	registerParser(types.CPP, cppParser)
-	return cppParser
+	return cppParser, nil
 }
 
 func (p *cppParser) Parse(code string, filePath string) ([]types.CodeBlock, error) {
-	if p.parser == nil {
-		return nil, errors.New("parser is not initialized or has been closed")
+	if p.parser == nil || p.language == nil || p.query == "" {
+		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
 
 	tree := p.parser.Parse([]byte(code), nil)
@@ -63,9 +73,8 @@ func (p *cppParser) Parse(code string, filePath string) ([]types.CodeBlock, erro
 
 	root := tree.RootNode()
 
-	// Use the query content from the struct field, converting to string
-	lang := sitter.NewLanguage(sitter_cpp.Language())
-	query, queryErr := sitter.NewQuery(lang, string(p.queryBytes))
+	// Use the stored language and query string
+	query, queryErr := sitter.NewQuery(p.language, p.query)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", filePath, queryErr)
 	}
@@ -97,26 +106,26 @@ func (p *cppParser) Parse(code string, filePath string) ([]types.CodeBlock, erro
 		nameNode := match.Captures[0].Node // This is the identifier node (the name)
 		// Traverse up to find the nearest function_definition or method_definition ancestor
 		definitionNode := nameNode.Parent()
-		if definitionNode != nil && (definitionNode.Kind() == "function_declarator") {
+		if definitionNode != nil && (definitionNode.Kind() == cppFunctionDeclarator) {
 			// Go up one more level to the actual definition node
 			definitionNode = definitionNode.Parent()
 		}
 
-		if definitionNode == nil || (definitionNode.Kind() != "function_definition" && definitionNode.Kind() != "method_definition") {
+		if definitionNode == nil || (definitionNode.Kind() != cppFunctionDefinition && definitionNode.Kind() != cppMethodDefinition) {
 			// If we couldn't find the definition node (should not happen with this query)
 			// or it's not the expected type, skip.
 			continue
 		}
 
 		// Determine parent class for method definitions
-		if definitionNode.Kind() == "method_definition" {
+		if definitionNode.Kind() == cppMethodDefinition {
 			// Traverse up the tree to find the enclosing class_specifier or struct_specifier
 			curr := definitionNode.Parent()
 			for curr != nil {
 				switch curr.Kind() {
-				case "class_specifier", "struct_specifier":
+				case cppClassSpecifier, cppStructSpecifier:
 					// Found the enclosing type definition, try to find its name
-					nameNode := curr.ChildByFieldName("name") // Assuming 'name' field exists in grammar
+					nameNode := curr.ChildByFieldName(cppNameField)
 					if nameNode != nil {
 						parentClass = nameNode.Utf8Text([]byte(code))
 					}
@@ -140,10 +149,10 @@ func (p *cppParser) Parse(code string, filePath string) ([]types.CodeBlock, erro
 			FilePath:     filePath,
 			StartLine:    int(startLine),
 			EndLine:      int(endLine),
-			ParentFunc:   parentFunc,   // Empty for now for C++ functions/methods themselves
-			ParentClass:  parentClass,  // Populated for methods, empty for functions
-			OriginalSize: len(content), // Size in bytes
-			TokenCount:   0,            // Will be calculated by CodeSplitter
+			ParentFunc:   parentFunc,  // Empty for now for C++ functions/methods themselves
+			ParentClass:  parentClass, // Populated for methods, empty for functions
+			OriginalSize: len(content),
+			TokenCount:   0,
 		})
 	}
 
