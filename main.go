@@ -7,14 +7,14 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
-	"github.com/zgsm-ai/codebase-indexer/internal/job"
+	"github.com/zgsm-ai/codebase-indexer/internal/index"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/rest"
 )
 
-var configFile = flag.String("f", "etc/codebaseindexer.yaml", "the config file")
+var configFile = flag.String("f", "etc/conf.yaml", "the config file")
 
 func main() {
 	flag.Parse()
@@ -31,11 +31,20 @@ func main() {
 
 	svcCtx, err := svc.NewServiceContext(serverCtx, c)
 
+	if err != nil {
+		panic(err)
+	}
+
 	defer cancelFunc()
 	// start index job
-	indexJobScheduler := job.NewIndexJobScheduler(svcCtx, serverCtx)
-	go indexJobScheduler.Start()
+	indexJobScheduler, err := index.NewIndexJobScheduler(svcCtx, serverCtx)
+	if err != nil {
+		panic(err)
+	}
 
+	go indexJobScheduler.Schedule()
+
+	defer indexJobScheduler.Close()
 	if err != nil {
 		panic(err)
 	}

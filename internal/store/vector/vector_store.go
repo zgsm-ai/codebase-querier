@@ -4,33 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tmc/langchaingo/schema"
 	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-type VectorStore interface {
+type Store interface {
 	vectorstores.VectorStore
+	UpsertCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options ...vectorstores.Option) error
+	DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options ...vectorstores.Option) (any, error)
+	Close()
 }
 
 const vectorWeaviate = "weaviate"
 
-type vectorStore struct {
-	logger          logx.Logger
-	config          config.VectorStoreConf
-	vectorStoreImpl vectorstores.VectorStore
-}
-
-func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embed Embedder) (VectorStore, error) {
-	var vectorStoreImpl vectorstores.VectorStore
+func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embed Embedder) (Store, error) {
+	var vectorStoreImpl Store
 	var err error
 	switch cfg.Type {
 	case vectorWeaviate:
 		if cfg.Weaviate == nil {
 			return nil, errors.New("vector conf weaviate is required for weaviate type")
 		}
-		vectorStoreImpl, err = newWeaviate(cfg, embed)
+		vectorStoreImpl, err = New(ctx, cfg, embed)
 	default:
 		err = fmt.Errorf("unsupported vector type: %s", cfg.Type)
 	}
@@ -38,17 +34,5 @@ func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embed Embed
 	if err != nil {
 		return nil, err
 	}
-	return &vectorStore{
-		logger:          logx.WithContext(ctx),
-		config:          cfg,
-		vectorStoreImpl: vectorStoreImpl,
-	}, nil
-}
-
-func (v *vectorStore) AddDocuments(ctx context.Context, docs []schema.Document, options ...vectorstores.Option) ([]string, error) {
-	return v.AddDocuments(ctx, docs, options...)
-}
-
-func (v *vectorStore) SimilaritySearch(ctx context.Context, query string, numDocuments int, options ...vectorstores.Option) ([]schema.Document, error) {
-	return v.SimilaritySearch(ctx, query, numDocuments, options...)
+	return vectorStoreImpl, nil
 }

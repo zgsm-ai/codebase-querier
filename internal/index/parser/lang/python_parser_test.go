@@ -1,0 +1,143 @@
+package lang
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
+)
+
+func TestPythonParser(t *testing.T) {
+	// Define test cases
+	tests := []struct {
+		name            string
+		code            string
+		Path            string
+		expectError     bool
+		expectBlocks    []types.CodeChunk // For simpler cases
+		expectMinBlocks int               // For rich test data file
+	}{
+		{
+			name:        "rich test data file",
+			Path:        filepath.Join("testdata", "python_rich_test.py"),
+			expectError: false,
+			// Based on a quick count of functions and classes/methods.
+			// Estimated blocks: 100 placeholder functions + global functions + methods + classes.
+			// Includes: hello_world, add, User (class), __init__ (method), get_username (method), MyClass, my_method (method), explore_list, check_number, simple_while, simple_for, documented_function, process_list, filter_even_numbers, complex_logic, Point (class), __init__ (method), distance_from_origin (method), placeholder_function_py_1-100, final_python_function.
+			// Total: 18 standard + 100 placeholders = 118.
+			// Let's assert a minimum of 110 to allow for some flexibility.
+			expectMinBlocks: 110,
+		},
+		// Add more test cases with smaller code snippets below
+		{
+			name: "simple function",
+			code: `def my_function():
+    print("Hello")
+`,
+			Path:        "test.py",
+			expectError: false,
+			expectBlocks: []types.CodeChunk{
+				{
+					Content:     "def my_function():\n    print(\"Hello\")",
+					FilePath:    "test.py",
+					StartLine:   1,
+					EndLine:     2,
+					ParentFunc:  "",
+					ParentClass: "", // Top level function
+				},
+			},
+		},
+		{
+			name: "simple class and method",
+			code: `class MyClass:
+    def my_method(self):
+        return 1
+`,
+			Path:        "class_test.py",
+			expectError: false,
+			expectBlocks: []types.CodeChunk{
+				{
+					Content:     "class MyClass:\n    def my_method(self):\n        return 1",
+					FilePath:    "class_test.py",
+					StartLine:   1,
+					EndLine:     3,
+					ParentFunc:  "",
+					ParentClass: "", // Class definition itself
+				},
+				{
+					Content:     "def my_method(self):\n        return 1",
+					FilePath:    "class_test.py",
+					StartLine:   2,
+					EndLine:     3,
+					ParentFunc:  "",
+					ParentClass: "MyClass", // Method inside class
+				},
+			},
+		},
+	}
+
+	// Initialize the parser outside the loop
+	parser, err := NewPythonParser()
+	assert.NoError(t, err, "Failed to create Python parser")
+	assert.NotNil(t, parser, "Python parser should not be nil")
+	defer parser.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code := []byte{}
+			if tt.code != "" {
+				code = []byte(tt.code)
+			} else if tt.Path != "" {
+				// Load code from file for the rich test case
+				fileCode, readErr := os.ReadFile(tt.Path)
+				assert.NoError(t, readErr, "Failed to read test data file")
+				code = fileCode
+			} else {
+				assert.FailNow(t, "Test case must provide either code or codeFile.Path")
+			}
+
+			// Create a types.CodeFile object
+			codeFile := &types.CodeFile{
+				Path:    tt.Path,
+				Content: string(code),
+				// Language and other fields can be zero values for this test
+			}
+
+			// Using arbitrary values for maxTokensPerChunk and overlapTokens for the test call
+			maxTokensPerChunk := 1000
+			overlapTokens := 100
+
+			// Call the Split method with the new signature
+			blocks, parseErr := parser.Split(codeFile, maxTokensPerChunk, overlapTokens)
+
+			if tt.expectError {
+				assert.Error(t, parseErr)
+			} else {
+				assert.NoError(t, parseErr)
+				assert.NotEmpty(t, blocks)
+
+				if tt.expectMinBlocks > 0 {
+					assert.GreaterOrEqual(t, len(blocks), tt.expectMinBlocks, "Should find minimum number of code blocks")
+				} else if len(tt.expectBlocks) > 0 {
+					assert.Equal(t, len(tt.expectBlocks), len(blocks), "Should have the expected number of blocks")
+					for _, expectedBlock := range tt.expectBlocks {
+						// Find the corresponding block in the actual results and assert properties
+						foundBlock := findBlockByContentSubstring(blocks, strings.TrimSpace(expectedBlock.Content)) // Use substring for flexibility
+						assert.NotNil(t, foundBlock, "Expected block not found: %s", expectedBlock.Content)
+						if foundBlock != nil {
+							assert.Equal(t, expectedBlock.FilePath, foundBlock.FilePath)
+							assert.Equal(t, expectedBlock.StartLine, foundBlock.StartLine)
+							assert.Equal(t, expectedBlock.EndLine, foundBlock.EndLine)
+							assert.Equal(t, expectedBlock.ParentFunc, foundBlock.ParentFunc)
+							assert.Equal(t, expectedBlock.ParentClass, foundBlock.ParentClass)
+							// Optional: assert.Equal(t, strings.TrimSpace(expectedBlock.Content), strings.TrimSpace(foundBlock.Content))
+						}
+					}
+				}
+			}
+		})
+	}
+}

@@ -16,7 +16,7 @@ type Config struct {
 	}
 	CodeBaseStore CodeBaseStoreConf
 	MessageQueue  MessageQueueConf
-	IndexJob      IndexJob
+	IndexTask     IndexTaskConf
 	VectorStore   VectorStoreConf
 }
 

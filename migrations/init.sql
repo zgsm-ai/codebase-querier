@@ -97,19 +97,23 @@ CREATE INDEX idx_sync_history_publish_status ON codebase_indexer.public.sync_his
 -- Index building task history table
 CREATE TABLE codebase_indexer.public.index_history
 (
-    id                    integer     NOT NULL,
-    sync_id               INTEGER     NOT NULL, -- sync_history.id
-    codebase_id           INTEGER     not null, -- codebase.id
-    codebase_path         TEXT        not null, -- codebase
-    total_code_file_count INTEGER     NOT NULL,
-    task_type             VARCHAR(50) NOT NULL, -- vector, relation
-    status                VARCHAR(50) NOT NULL, -- pending, running, success, failed
-    progress              float,                -- index job progress
-    error_message         TEXT,                 -- failed  message
-    start_time            TIMESTAMP,
-    end_time              TIMESTAMP,
-    created_at            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id                  integer     NOT NULL,
+    sync_id             INTEGER     NOT NULL, -- sync_history.id
+    codebase_id         INTEGER     not null, -- codebase.id
+    codebase_path       TEXT        not null, -- codebase
+    codebase_name       TEXT        not null, -- codebase
+    total_file_count    INTEGER     NOT NULL,
+    total_success_count INTEGER     NOT NULL,
+    total_fail_count    INTEGER     NOT NULL,
+    total_ignore_count  INTEGER     NOT NULL,
+    task_type           VARCHAR(50) NOT NULL, -- vector, relation
+    status              VARCHAR(50) NOT NULL, -- pending, running, success, failed
+    progress            float,                -- index job progress
+    error_message       TEXT,                 -- failed  message
+    start_time          TIMESTAMP,
+    end_time            TIMESTAMP,
+    created_at          TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT
@@ -122,8 +126,16 @@ COMMENT
 ON COLUMN codebase_indexer.public.index_history.codebase_id IS 'ID of the associated project repository';
 COMMENT
 ON COLUMN codebase_indexer.public.index_history.codebase_path IS 'Path of the project repository';
+CoMMENT
+ON COLUMN codebase_indexer.public.index_history.codebase_name IS 'name of the project repository';
 COMMENT
-ON COLUMN codebase_indexer.public.index_history.total_code_file_count IS 'Total number of code files';
+ON COLUMN codebase_indexer.public.index_history.total_file_count IS 'Total number of files';
+COMMENT
+ON COLUMN codebase_indexer.public.index_history.total_success_count IS 'Total success number of files';
+COMMENT
+ON COLUMN codebase_indexer.public.index_history.total_fail_count IS 'Total fail number of files';
+COMMENT
+ON COLUMN codebase_indexer.public.index_history.total_ignore_count IS 'Total ignore number of files';
 COMMENT
 ON COLUMN codebase_indexer.public.index_history.task_type IS 'Task type: vector, relation';
 COMMENT

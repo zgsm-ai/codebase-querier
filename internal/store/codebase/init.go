@@ -8,7 +8,7 @@ import (
 
 var codebaseLocal = "local"
 
-func New(cfg config.CodeBaseStoreConf) (CodebaseStore, error) {
+func New(cfg config.CodeBaseStoreConf) (Store, error) {
 	switch cfg.Type {
 	case codebaseLocal:
 		if cfg.Local == nil {

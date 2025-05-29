@@ -3,11 +3,12 @@ package mq
 import (
 	"context"
 	"errors"
-	"github.com/zeromicro/go-zero/core/logx"
-	"time"
-
+	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"time"
 )
 
 // redisMQ Redis消息队列实现（基于原生redis/go-redis/v9）
@@ -54,7 +55,7 @@ func (r *redisMQ) Close() error {
 	return nil
 }
 
-func (r *redisMQ) CreateTopic(ctx context.Context, topic string, opts ...TopicOption) error {
+func (r *redisMQ) CreateTopic(ctx context.Context, topic string, opts types.TopicOptions) error {
 	// Redis中列表自动创建，无需显式创建
 	return nil
 }
@@ -64,27 +65,8 @@ func (r *redisMQ) DeleteTopic(ctx context.Context, topic string) error {
 	return err
 }
 
-func (r *redisMQ) Status(ctx context.Context) (Status, error) {
-	pong, err := r.client.Ping(ctx).Result()
-	if err != nil {
-		return Status{}, err
-	}
-
-	// 计算延迟
-	start := time.Now()
-	_, err = r.client.Ping(ctx).Result()
-	latency := time.Since(start)
-
-	return Status{
-		Connected:    pong == "PONG",
-		Latency:      latency,
-		MessageCount: 0,
-		Error:        nil,
-	}, nil
-}
-
-// Publish 实现MessageQueue接口的Publish方法
-func (r *redisMQ) Publish(ctx context.Context, topic string, message []byte, opts ...PublishOption) error {
+// Produce 实现MessageQueue接口的Publish方法
+func (r *redisMQ) Produce(ctx context.Context, topic string, message []byte, opts types.ProduceOptions) error {
 	ctx, cancel := context.WithTimeout(ctx, r.commonCfg.WriteTimeout)
 	defer cancel()
 
@@ -96,46 +78,26 @@ func (r *redisMQ) Publish(ctx context.Context, topic string, message []byte, opt
 	return nil
 }
 
-// Subscribe 实现MessageQueue接口的Subscribe方法
-func (r *redisMQ) Subscribe(ctx context.Context, topic string, opts ...SubscribeOption) (<-chan Message, error) {
-	msgCh := make(chan Message)
-
-	go func() {
-		defer close(msgCh)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				// 使用BLPop命令实现阻塞读取，设置超时时间
-				ctxTimeout, cancel := context.WithTimeout(ctx, r.commonCfg.ReadTimeout)
-				vals, err := r.client.BLPop(ctxTimeout, r.commonCfg.ReadTimeout, topic).Result()
-				cancel()
-
-				if err != nil {
-					if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, redis.Nil) {
-						// 超时或无消息，继续循环
-						continue
-					}
-					r.logger.Errorf("BLPop from redis error: %v", err)
-				}
-
-				// 解析消息（vals[0]=key, vals[1]=value）
-				if len(vals) >= 2 {
-					msg := Message{
-						Body:      []byte(vals[1]),
-						Topic:     topic,
-						Timestamp: time.Now(),
-					}
-					select {
-					case msgCh <- msg:
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
+// Consume  实现MessageQueue接口的Subscribe方法
+func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeOptions) (*types.Message, error) {
+	// 使用BLPop命令实现阻塞读取，设置超时时间
+	vals, err := r.client.BLPop(ctx, r.commonCfg.ReadTimeout, topic).Result()
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, redis.Nil) {
+			// 超时或无消息，继续循环
+			return nil, types.ErrReadTimeout
 		}
-	}()
+		return nil, err
+	}
 
-	return msgCh, nil
+	// 解析消息（vals[0]=key, vals[1]=value）
+	if len(vals) < 2 {
+		return nil, fmt.Errorf("invalid message: %v", vals)
+	}
+	return &types.Message{
+		Body:      []byte(vals[1]),
+		Topic:     topic,
+		Timestamp: time.Now(),
+	}, nil
+
 }

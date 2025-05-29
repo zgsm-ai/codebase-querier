@@ -8,7 +8,7 @@ import (
 
 const messageQueueRedis = "redis"
 
-// newRedisMQ 根据配置创建消息队列实例
+// New  根据配置创建消息队列实例
 func New(cfg config.MessageQueueConf) (MessageQueue, error) {
 	switch cfg.Type {
 	case messageQueueRedis:

@@ -37,19 +37,23 @@ type (
 	}
 
 	IndexHistory struct {
-		Id                 int64           `db:"id"`                    // Unique identifier for the index task history record
-		SyncId             int64           `db:"sync_id"`               // ID of the associated synchronization history record
-		CodebaseId         int64           `db:"codebase_id"`           // ID of the associated project repository
-		CodebasePath       string          `db:"codebase_path"`         // BasePath of the project repository
-		TotalCodeFileCount int64           `db:"total_code_file_count"` // Total number of code files
-		TaskType           string          `db:"task_type"`             // Task type: vector, relation
-		Status             string          `db:"status"`                // Task status: pending, running, success, failed
-		Progress           sql.NullFloat64 `db:"progress"`              // Task progress (floating point number between 0 and 1)
-		ErrorMessage       sql.NullString  `db:"error_message"`         // Error message if the task failed
-		StartTime          sql.NullTime    `db:"start_time"`            // Task start time
-		EndTime            sql.NullTime    `db:"end_time"`              // Task end time
-		CreatedAt          time.Time       `db:"created_at"`            // Time when the record was created
-		UpdatedAt          time.Time       `db:"updated_at"`            // Time when the record was last updated
+		Id               int64           `db:"id"`                 // Unique identifier for the index task history record
+		SyncId           int64           `db:"sync_id"`            // ID of the associated synchronization history record
+		CodebaseId       int64           `db:"codebase_id"`        // ID of the associated project repository
+		CodebasePath     string          `db:"codebase_path"`      // BasePath of the project repository
+		CodebaseName     string          `db:"codebase_name"`      // BasePath of the project repository
+		TotalFileCount   int64           `db:"total_file_count"`   // Total number of files
+		SuccessFileCount int64           `db:"success_file_count"` // Total number of success files
+		FailFileCount    int64           `db:"fail_file_count"`    // Total number of fail files
+		IgnoreFileCount  int64           `db:"ignore_file_count"`  // Total number of ignore files
+		TaskType         string          `db:"task_type"`          // Task type: vector, relation
+		Status           string          `db:"status"`             // Task status: pending, running, success, failed
+		Progress         sql.NullFloat64 `db:"progress"`           // Task progress (floating point number between 0 and 1)
+		ErrorMessage     sql.NullString  `db:"error_message"`      // Error message if the task failed
+		StartTime        sql.NullTime    `db:"start_time"`         // Task start time
+		EndTime          sql.NullTime    `db:"end_time"`           // Task end time
+		CreatedAt        time.Time       `db:"created_at"`         // Time when the record was created
+		UpdatedAt          time.Time       `db:"updated_at"`       // Time when the record was last updated
 	}
 )
 
@@ -82,13 +86,13 @@ func (m *defaultIndexHistoryModel) FindOne(ctx context.Context, id int64) (*Inde
 
 func (m *defaultIndexHistoryModel) Insert(ctx context.Context, data *IndexHistory) (sql.Result, error) {
 	query := fmt.Sprintf("insert into %s (%s) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", m.table, indexHistoryRowsExpectAutoSet)
-	ret, err := m.conn.ExecCtx(ctx, query, data.SyncId, data.CodebaseId, data.CodebasePath, data.TotalCodeFileCount, data.TaskType, data.Status, data.Progress, data.ErrorMessage, data.StartTime, data.EndTime)
+	ret, err := m.conn.ExecCtx(ctx, query, data.SyncId, data.CodebaseId, data.CodebasePath, data.TotalFileCount, data.TaskType, data.Status, data.Progress, data.ErrorMessage, data.StartTime, data.EndTime)
 	return ret, err
 }
 
 func (m *defaultIndexHistoryModel) Update(ctx context.Context, data *IndexHistory) error {
 	query := fmt.Sprintf("update %s set %s where id = $1", m.table, indexHistoryRowsWithPlaceHolder)
-	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.SyncId, data.CodebaseId, data.CodebasePath, data.TotalCodeFileCount, data.TaskType, data.Status, data.Progress, data.ErrorMessage, data.StartTime, data.EndTime)
+	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.SyncId, data.CodebaseId, data.CodebasePath, data.TotalFileCount, data.TaskType, data.Status, data.Progress, data.ErrorMessage, data.StartTime, data.EndTime)
 	return err
 }
 

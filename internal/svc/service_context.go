@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/zeromicro/go-zero/core/stores/postgres"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/index/embedding"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/mq"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -15,10 +16,12 @@ type ServiceContext struct {
 	CodebaseModel     model.CodebaseModel
 	IndexHistoryModel model.IndexHistoryModel
 	SyncHistoryModel  model.SyncHistoryModel
-	CodebaseStore     codebase.CodebaseStore
+	CodebaseStore     codebase.Store
 	MessageQueue      mq.MessageQueue
 	Retriever         vector.Retriever
 	Embedder          vector.Embedder
+	VectorStore       vector.Store
+	CodeSplitter      embedding.CodeSplitter
 }
 
 func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {
@@ -38,8 +41,22 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	}
 
 	embedder, err := vector.NewEmbedder(ctx, c.VectorStore.Embedder)
+	if err != nil {
+		return nil, err
+	}
 
 	vectorStore, err := vector.NewVectorStore(context.Background(), c.VectorStore, embedder)
+	if err != nil {
+		return nil, err
+	}
+
+	splitter, err := embedding.NewCodeSplitter(ctx,
+		embedding.WithOverlapTokens(c.IndexTask.EmbeddingTask.OverlapTokens),
+		embedding.WithMaxTokensPerChunk(c.IndexTask.EmbeddingTask.MaxTokensPerChunk),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ServiceContext{
 		Config:            c,
@@ -48,7 +65,9 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		SyncHistoryModel:  model.NewSyncHistoryModel(sqlConn),
 		CodebaseStore:     codebaseStore,
 		MessageQueue:      messageQueue,
+		VectorStore:       vectorStore,
 		Retriever:         vector.NewRetriever(vectorStore, embedder, c.VectorStore.Retriever),
 		Embedder:          embedder,
+		CodeSplitter:      splitter,
 	}, err
 }

@@ -9,10 +9,17 @@ Database:
   Driver: postgres
   DataSource: postgres://user:${PRIMARY_DB_PASSWORD}@host:port/codebase_indexer?sslmode=disable
 
-IndexJob:
-  EnableFlag: 1
-  PoolSize: 50
-  Timeout: 300
+IndexTask:
+  EmbeddingTask:
+    PoolSize: 10
+    MaxConcurrency: 10
+    Timeout: 300
+    OverlapTokens: 100
+    MaxTokensPerChunk: 1000
+  GraphTask:
+    PoolSize: 10
+    MaxConcurrency: 10
+    Timeout: 300
 
 MessageQueue:
   Type: redis
@@ -36,6 +43,7 @@ VectorStore:
     IndexName: "my-vector-index"
     BatchSize: 100
     Namespace: "your-namespace"
+    ClassName: "your-class-name"
   Embedder:
     Timeout: 10
     MaxRetries: 3
@@ -55,7 +63,6 @@ VectorStore:
     NumberDocuments: 10
     Namespace: "your-namespace"
     ScoreThreshold: 0.5
-  CodeSplitter:
 
 
 Log:

@@ -14,7 +14,7 @@ type retriever struct {
 	vectorstores.Retriever
 }
 
-func NewRetriever(store VectorStore, embedder Embedder, cfg config.RetrieverConf) Retriever {
+func NewRetriever(store Store, embedder Embedder, cfg config.RetrieverConf) Retriever {
 	return &retriever{
 		Retriever: vectorstores.ToRetriever(store,
 			cfg.NumDocuments,
