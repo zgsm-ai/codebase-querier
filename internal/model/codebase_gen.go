@@ -27,6 +27,7 @@ type (
 	codebaseModel interface {
 		Insert(ctx context.Context, data *Codebase) (sql.Result, error)
 		FindOne(ctx context.Context, id int64) (*Codebase, error)
+		FindByClientIdAndPath(ctx context.Context, clientId string, path string) (*Codebase, error)
 		Update(ctx context.Context, data *Codebase) error
 		Delete(ctx context.Context, id int64) error
 	}
@@ -37,15 +38,15 @@ type (
 	}
 
 	Codebase struct {
-		Id            int64          `db:"id"`             // Unique identifier for the project repository
+		Id            int64          `db:"id"`             // Unique identifier for the codebase repository
 		ClientId      string         `db:"client_id"`      // User client identifier, such as MAC address
 		UserId        string         `db:"user_id"`        // User identifier, such as email or phone number
-		Name          string         `db:"name"`           // Name of the project repository
-		LocalPath     string         `db:"local_path"`     // Local path of the project on the user's machine
+		Name          string         `db:"name"`           // Name of the codebase repository
+		LocalPath     string         `db:"local_path"`     // Local path of the codebase on the user's machine
 		Path          string         `db:"path"`           // Path of the codebase
-		FileCount     int64          `db:"file_count"`     // Number of files in the project
-		TotalSize     int64          `db:"total_size"`     // Total size of the project (in bytes)
-		ExtraMetadata sql.NullString `db:"extra_metadata"` // Additional metadata about the project
+		FileCount     int64          `db:"file_count"`     // Number of files in the codebase
+		TotalSize     int64          `db:"total_size"`     // Total size of the codebase (in bytes)
+		ExtraMetadata sql.NullString `db:"extra_metadata"` // Additional metadata about the codebase
 		CreatedAt     time.Time      `db:"created_at"`     // Time when the record was created
 		UpdatedAt     time.Time      `db:"updated_at"`     // Time when the record was last updated
 	}
@@ -89,6 +90,21 @@ func (m *defaultCodebaseModel) Update(ctx context.Context, data *Codebase) error
 	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.ClientId, data.UserId, data.Name, data.LocalPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
 	return err
 }
+
+func (m *defaultCodebaseModel)  FindByClientIdAndPath(ctx context.Context, clientId string, path string) (*Codebase, error) {
+	query := fmt.Sprintf("select %s from %s where client_id = $1 and path = $2 limit 1", codebaseRows, m.table)
+	var resp Codebase
+	err := m.conn.QueryRowCtx(ctx, &resp, query, clientId, path)
+	switch err {
+	case nil:
+		return &resp, nil
+	case sqlx.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, err
+	}
+}
+
 
 func (m *defaultCodebaseModel) tableName() string {
 	return m.table

@@ -9,27 +9,32 @@ import (
 	goweaviate "github.com/weaviate/weaviate-go-client/v4/weaviate"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/auth"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"math"
 )
 
 const (
-	http    = "http"
-	https   = "https"
-	Verbose = "verbose"
-	Normal  = "normal"
+	schemeHttp  = "http"
+	schemeHttps = "https"
+	Verbose     = "verbose"
+	Normal      = "normal"
 )
 
 type weaviateWrapper struct {
 	ctx context.Context
 	weaviate.Store
+	reranker  Reranker
 	client    *goweaviate.Client // langchaingo not supported delete
 	className string
+	cfg       config.VectorStoreConf
+	logger    logx.Logger
 }
 
-func New(ctx context.Context, cfg config.VectorStoreConf, embedder embeddings.Embedder) (Store, error) {
+func New(ctx context.Context, cfg config.VectorStoreConf, embedder embeddings.Embedder, reranker Reranker) (Store, error) {
 	store, err := weaviate.New(
-		weaviate.WithHost(cfg.Weaviate.Host),
+		weaviate.WithHost(cfg.Weaviate.Endpoint),
 		weaviate.WithAPIKey(cfg.Weaviate.APIKey),
 		weaviate.WithIndexName(cfg.Weaviate.IndexName),
 		weaviate.WithNameSpace(cfg.Weaviate.Namespace),
@@ -40,8 +45,8 @@ func New(ctx context.Context, cfg config.VectorStoreConf, embedder embeddings.Em
 	}
 	// langchaingo not supported delete
 	client, err := goweaviate.NewClient(goweaviate.Config{
-		Host:       cfg.Weaviate.Host,
-		Scheme:     http,
+		Host:       cfg.Weaviate.Endpoint,
+		Scheme:     schemeHttp,
 		AuthConfig: auth.ApiKey{Value: cfg.Weaviate.APIKey},
 	})
 
@@ -50,6 +55,9 @@ func New(ctx context.Context, cfg config.VectorStoreConf, embedder embeddings.Em
 		client:    client,
 		ctx:       ctx,
 		className: cfg.Weaviate.ClassName,
+		reranker:  reranker,
+		cfg:       cfg,
+		logger:    logx.WithContext(ctx),
 	}, nil
 }
 
@@ -117,4 +125,30 @@ func (v *weaviateWrapper) UpsertCodeChunks(ctx context.Context, chunks []*types.
 	}
 	_, err := v.AddDocuments(ctx, documents, options...)
 	return err
+}
+
+func (r *weaviateWrapper) Query(ctx context.Context, query string, topK int, options ...vectorstores.Option) ([]types.SemanticFileItem, error) {
+	documents, err := r.Store.SimilaritySearch(ctx, query, r.cfg.Weaviate.MaxDocuments, options...)
+	if err != nil {
+		return nil, err
+	}
+	// TODO 调用reranker模型进行重排
+	rerankedDocs, err := r.reranker.Rerank(ctx, query, documents)
+	if err != nil {
+		r.logger.Errorf("failed rerank docs: %v", err)
+	}
+	if len(rerankedDocs) == 0 {
+		rerankedDocs = documents
+	}
+	// topK
+	rerankedDocs = rerankedDocs[:int(math.Min(float64(topK), float64(len(rerankedDocs))))]
+	res := make([]types.SemanticFileItem, len(rerankedDocs))
+	for i, doc := range rerankedDocs {
+		res[i] = types.SemanticFileItem{
+			Content:  doc.PageContent,
+			FilePath: doc.Metadata[types.MetadataFilePath].(string),
+			Score:    float64(doc.Score),
+		}
+	}
+	return res, nil
 }

@@ -6,12 +6,12 @@ package types
 import "time"
 
 type ComparisonResponseData struct {
-	ProjectTree []ProjectTreeItem `json:"projectTree"` // 项目文件树
+	CodebaseTree []CodebaseTreeItem `json:"codebaseTree"` // 项目文件树
 }
 
 type FileContentRequest struct {
 	ClientId    string `form:"clientId"`                      // 用户机器ID
-	ProjectPath string `form:"projectPath"`                   // 项目绝对路径
+	CodebasePath string `form:"codebasePath"`                   // 项目绝对路径
 	FilePath    string `form:"filePath"`                      // 文件相对路径
 	StartLine   int    `form:"startLine,optional,default=1"`  // 开始行（默认1）
 	EndLine     int    `form:"endLine",optional,default=100"` // 结束行（默认100，-1=全部）
@@ -19,8 +19,8 @@ type FileContentRequest struct {
 
 type FileUploadRequest struct {
 	ClientId      string `form:"clientId"`               // 客户ID
-	ProjectPath   string `form:"projectPath"`            // 项目路径
-	ProjectName   string `form:"projectName"`            // 项目名称
+	CodebasePath   string `form:"codebasePath"`            // 项目路径
+	CodebaseName   string `form:"codebaseName"`            // 项目名称
 	ExtraMetadata string `form:"extraMetadata,optional"` // 额外元数据（JSON字符串）
 }
 
@@ -31,12 +31,12 @@ type Position struct {
 	EndColumn   int `json:"endColumn"`   // 结束列（从1开始）
 }
 
-type ProjectComparisonRequest struct {
+type CodebaseComparisonRequest struct {
 	ClientId    string `form:"clientId"`    // 客户ID
-	ProjectPath string `form:"projectPath"` // 项目路径
+	CodebasePath string `form:"codebasePath"` // 项目路径
 }
 
-type ProjectTreeItem struct {
+type CodebaseTreeItem struct {
 	Path string `json:"Path"` // 文件路径
 	Hash string `json:"hash"` // 文件哈希值
 }
@@ -51,7 +51,7 @@ type RelationNode struct {
 
 type RelationRequest struct {
 	ClientId       string `form:"clientId"`                     // 用户机器ID
-	ProjectPath    string `form:"projectPath"`                  // 项目绝对路径
+	CodebasePath    string `form:"codebasePath"`                  // 项目绝对路径
 	FilePath       string `form:"filePath"`                     // 文件相对路径
 	StartLine      int    `form:"startLine"`                    // 开始行
 	StartColumn    int    `form:"startColumn"`                  // 开始列
@@ -72,14 +72,14 @@ type SemanticFileItem struct {
 	Score    float64 `json:"score"`    // 匹配得分
 }
 
-type SemanticRequest struct {
+type SemanticSearchRequest struct {
 	ClientId    string `form:"clientId"`                 // 用户机器ID（如MAC地址）
-	ProjectPath string `form:"projectPath"`              // 项目绝对路径
+	CodebasePath string `form:"codebasePath"`              // 项目绝对路径
 	Query       string `form:"query"`                    // 查询内容
 	TopK        int    `form:"topK,optional,default=10"` // 结果返回数量（默认10）
 }
 
-type SemanticResponseData struct {
+type SemanticSearchResponseData struct {
 	List []SemanticFileItem `json:"list"` // 检索结果列表
 }
 

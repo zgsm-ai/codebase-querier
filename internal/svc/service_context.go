@@ -4,11 +4,11 @@ import (
 	"context"
 	"github.com/zeromicro/go-zero/core/stores/postgres"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"github.com/zgsm-ai/codebase-indexer/internal/index/embedding"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/mq"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
+	"github.com/zgsm-ai/codebase-indexer/internal/task/embedding"
 )
 
 type ServiceContext struct {
@@ -18,7 +18,6 @@ type ServiceContext struct {
 	SyncHistoryModel  model.SyncHistoryModel
 	CodebaseStore     codebase.Store
 	MessageQueue      mq.MessageQueue
-	Retriever         vector.Retriever
 	Embedder          vector.Embedder
 	VectorStore       vector.Store
 	CodeSplitter      embedding.CodeSplitter
@@ -26,16 +25,20 @@ type ServiceContext struct {
 
 func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {
 	var err error
+	svcCtx := &ServiceContext{
+		Config: c,
+	}
+
 	sqlConn := postgres.New(
-		c.DB.DataSource,
+		c.Database.DataSource,
 	)
 
-	messageQueue, err := mq.New(c.MessageQueue)
+	messageQueue, err := mq.New(ctx, c.MessageQueue)
 	if err != nil {
 		return nil, err
 	}
 
-	codebaseStore, err := codebase.New(c.CodeBaseStore)
+	codebaseStore, err := codebase.New(ctx, c.CodeBaseStore)
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +47,9 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
+	reranker := vector.NewReranker(c.VectorStore.Reranker)
 
-	vectorStore, err := vector.NewVectorStore(context.Background(), c.VectorStore, embedder)
+	vectorStore, err := vector.NewVectorStore(ctx, c.VectorStore, embedder, reranker)
 	if err != nil {
 		return nil, err
 	}
@@ -58,16 +62,14 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		return nil, err
 	}
 
-	return &ServiceContext{
-		Config:            c,
-		CodebaseModel:     model.NewCodebaseModel(sqlConn),
-		IndexHistoryModel: model.NewIndexHistoryModel(sqlConn),
-		SyncHistoryModel:  model.NewSyncHistoryModel(sqlConn),
-		CodebaseStore:     codebaseStore,
-		MessageQueue:      messageQueue,
-		VectorStore:       vectorStore,
-		Retriever:         vector.NewRetriever(vectorStore, embedder, c.VectorStore.Retriever),
-		Embedder:          embedder,
-		CodeSplitter:      splitter,
-	}, err
+	svcCtx.CodebaseModel = model.NewCodebaseModel(sqlConn)
+	svcCtx.IndexHistoryModel = model.NewIndexHistoryModel(sqlConn)
+	svcCtx.SyncHistoryModel = model.NewSyncHistoryModel(sqlConn)
+	svcCtx.CodebaseStore = codebaseStore
+	svcCtx.MessageQueue = messageQueue
+	svcCtx.VectorStore = vectorStore
+	svcCtx.Embedder = embedder
+	svcCtx.CodeSplitter = splitter
+
+	return svcCtx, err
 }

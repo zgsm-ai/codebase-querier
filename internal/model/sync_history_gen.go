@@ -38,7 +38,7 @@ type (
 
 	SyncHistory struct {
 		Id            int64        `db:"id"`             // Unique identifier for the synchronization history record
-		CodebaseId    int64        `db:"codebase_id"`    // ID of the associated project repository
+		CodebaseId    int64        `db:"codebase_id"`    // ID of the associated codebase repository
 		Message       string       `db:"message"`        // Content of the synchronization message
 		PublishStatus string       `db:"publish_status"` // Publishing status: pending, success, failed
 		PublishTime   sql.NullTime `db:"publish_time"`   // Time of publication

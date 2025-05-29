@@ -1,5 +1,0 @@
-(class_declaration name: (simple_identifier) @name)
-(object_declaration name: (simple_identifier) @name)
-(interface_declaration name: (simple_identifier) @name)
-(function_declaration name: (simple_identifier) @name)
-(property_declaration name: (simple_identifier) @name)

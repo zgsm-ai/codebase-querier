@@ -1,43 +1,51 @@
 Name: codebase-indexer
 Host: 0.0.0.0
 Port: 8888
+Timeout: 30000 #ms
 Mode: dev # dev,test,rt,pre, pro
 Auth:
   UserInfoHeader: "x-userinfo"
 
 Database:
   Driver: postgres
-  DataSource: postgres://user:${PRIMARY_DB_PASSWORD}@host:port/codebase_indexer?sslmode=disable
-
+  DataSource: postgres://shenma:${DB_PASSWORD}@localhost:5432/codebase_indexer?sslmode=disable
+  AutoMigrate:
+    enable: true
+    scripts: migrations/
 IndexTask:
+  Topic: "your-topic"
   EmbeddingTask:
     PoolSize: 10
     MaxConcurrency: 10
-    Timeout: 300
+    Timeout: 120s
     OverlapTokens: 100
     MaxTokensPerChunk: 1000
   GraphTask:
     PoolSize: 10
     MaxConcurrency: 10
-    Timeout: 300
+    Timeout: 180s
+
+Cleaner:
+  Cron: "0 0 0 * * *"
 
 MessageQueue:
   Type: redis
-  Common:
-    ConnectTimeout: 10
-    ReadTimeout: 10
-    WriteTimeout: 10
-    MaxRetries: 10
   Redis:
     Host: 0.0.0.0
     PoolSize: 10
     MinIdleConn: 10
+
+CodeBaseStore:
+  type: local
+  local:
+    BasePath: tmp/
 
 VectorStore:
   Type: weaviate
   Timeout: 60s
   MaxRetries: 5
   Weaviate:
+    MaxDocuments: 20
     Endpoint: "http://localhost:8080"
     ApiKey: "your-api-key"
     IndexName: "my-vector-index"
@@ -45,25 +53,22 @@ VectorStore:
     Namespace: "your-namespace"
     ClassName: "your-class-name"
   Embedder:
-    Timeout: 10
+    Timeout: 10s
     MaxRetries: 3
     BatchSize: 10
     StripNewLines: true
     Model: gte-modernbert-base
-    ApiKey: 123
+    ApiKey: "123"
     ApiBase: http://localhost:4000
-  Rerank:
-    Timeout: 10
+  Reranker:
+    Namespace: "your-namespace"
+    ScoreThreshold: 0.5
+    Timeout: 10s
     MaxRetries: 3
     BatchSize: 10
     Model: gte-reranker-modernbert-base
-    ApiKey: 123
+    ApiKey: "123"
     ApiBase: http://localhost:3000
-  Retriever:
-    NumberDocuments: 10
-    Namespace: "your-namespace"
-    ScoreThreshold: 0.5
-
 
 Log:
   Mode: console # console,file,volume

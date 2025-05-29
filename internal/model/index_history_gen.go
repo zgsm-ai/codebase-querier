@@ -39,9 +39,9 @@ type (
 	IndexHistory struct {
 		Id               int64           `db:"id"`                 // Unique identifier for the index task history record
 		SyncId           int64           `db:"sync_id"`            // ID of the associated synchronization history record
-		CodebaseId       int64           `db:"codebase_id"`        // ID of the associated project repository
-		CodebasePath     string          `db:"codebase_path"`      // BasePath of the project repository
-		CodebaseName     string          `db:"codebase_name"`      // BasePath of the project repository
+		CodebaseId       int64           `db:"codebase_id"`        // ID of the associated codebase repository
+		CodebasePath     string          `db:"codebase_path"`      // BasePath of the codebase repository
+		CodebaseName     string          `db:"codebase_name"`      // BasePath of the codebase repository
 		TotalFileCount   int64           `db:"total_file_count"`   // Total number of files
 		SuccessFileCount int64           `db:"success_file_count"` // Total number of success files
 		FailFileCount    int64           `db:"fail_file_count"`    // Total number of fail files

@@ -12,23 +12,13 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/relations",
-				Handler: relationHandler(serverCtx),
-			},
-		},
-		rest.WithPrefix("/codebase-indexer"),
-	)
 
 	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
 				Path:    "/api/v1/comparison",
-				Handler: compareProjectsHandler(serverCtx),
+				Handler: compareCodebaseHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,
@@ -44,12 +34,24 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithPrefix("/codebase-indexer"),
 	)
 
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/relations",
+				Handler: relationHandler(serverCtx),
+			},
+		},
+		rest.WithPrefix("/codebase-indexer"),
+	)
+
 	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
 				Path:    "/api/v1/semantics",
-				Handler: semanticHandler(serverCtx),
+				Handler: semanticSearchHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),

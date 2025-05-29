@@ -1,5 +1,0 @@
-(class_definition name: (identifier) @name)
-(object_definition name: (identifier) @name)
-(trait_definition name: (identifier) @name)
-(method_declaration name: (identifier) @name)
-(function_definition name: (identifier) @name) 

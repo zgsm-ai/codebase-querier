@@ -10,14 +10,12 @@ type Config struct {
 	Auth struct {
 		UserInfoHeader string
 	}
-	DB struct {
-		Driver     string
-		DataSource string
-	}
+	Database      Database
 	CodeBaseStore CodeBaseStoreConf
 	MessageQueue  MessageQueueConf
 	IndexTask     IndexTaskConf
 	VectorStore   VectorStoreConf
+	Cleaner       CleanerConf
 }
 
 // Validate 实现 Validator 接口

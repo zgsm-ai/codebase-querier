@@ -23,6 +23,7 @@ type ProduceOptions struct {
 }
 
 type ConsumeOptions struct {
+	ReadTimeout time.Duration
 }
 
 type TopicOptions struct {

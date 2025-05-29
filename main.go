@@ -7,8 +7,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
-	"github.com/zgsm-ai/codebase-indexer/internal/index"
+	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
+	"github.com/zgsm-ai/codebase-indexer/internal/task"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/rest"
@@ -20,9 +21,13 @@ func main() {
 	flag.Parse()
 
 	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	conf.MustLoad(*configFile, &c, conf.UseEnv())
 
 	logx.MustSetup(c.Log)
+
+	if err := model.AutoMigrate(c.Database); err != nil {
+		panic(err)
+	}
 
 	server := rest.MustNewServer(c.RestConf)
 	defer server.Stop()
@@ -37,14 +42,17 @@ func main() {
 
 	defer cancelFunc()
 	// start index job
-	indexJobScheduler, err := index.NewIndexJobScheduler(svcCtx, serverCtx)
+	indexJobScheduler, err := task.NewIndexJobScheduler(svcCtx, serverCtx)
 	if err != nil {
 		panic(err)
 	}
 
 	go indexJobScheduler.Schedule()
-
 	defer indexJobScheduler.Close()
+
+	cleaner := task.NewCleaner(svcCtx, serverCtx)
+	cleaner.Run()
+
 	if err != nil {
 		panic(err)
 	}

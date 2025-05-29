@@ -4,13 +4,9 @@ package config
 type CodeBaseStoreConf struct {
 	// 存储类型，可选值: local, minio
 	Type string
-
-	// 通用配置
-	BasePath string
-
 	// 具体存储类型的配置，使用内嵌结构实现
-	Local *LocalStoreConf
-	Minio *MinioStoreConf
+	Local LocalStoreConf `json:",optional"`
+	Minio MinioStoreConf `json:",optional"`
 }
 
 // LocalStoreConf 本地文件系统存储配置
