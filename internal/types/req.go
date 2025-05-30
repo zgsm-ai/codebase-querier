@@ -24,12 +24,7 @@ type FileUploadRequest struct {
 	ExtraMetadata string `form:"extraMetadata,optional"` // 额外元数据（JSON字符串）
 }
 
-type Position struct {
-	StartLine   int `json:"startLine"`   // 开始行（从1开始）
-	StartColumn int `json:"startColumn"` // 开始列（从1开始）
-	EndLine     int `json:"endLine"`     // 结束行（从1开始）
-	EndColumn   int `json:"endColumn"`   // 结束列（从1开始）
-}
+
 
 type CodebaseComparisonRequest struct {
 	ClientId    string `form:"clientId"`    // 客户ID
@@ -41,13 +36,6 @@ type CodebaseTreeItem struct {
 	Hash string `json:"hash"` // 文件哈希值
 }
 
-type RelationNode struct {
-	Content  string         `json:"Content"`  // 代码内容
-	NodeType string         `json:"nodeType"` // 节点类型（definition=定义，reference=引用）
-	FilePath string         `json:"filePath"` // 文件相对路径
-	Position Position       `json:"position"` // 代码位置
-	Children []RelationNode `json:"children"` // 子节点（引用关系）
-}
 
 type RelationRequest struct {
 	ClientId       string `form:"clientId"`                     // 用户机器ID
@@ -63,7 +51,7 @@ type RelationRequest struct {
 }
 
 type RelationResponseData struct {
-	List []RelationNode `json:"list"` // 关系树列表
+	List []GraphNode `json:"list"` // 关系树列表
 }
 
 type SemanticFileItem struct {

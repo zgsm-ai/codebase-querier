@@ -1,0 +1,64 @@
+# scip-go
+# scip-typescript
+# scip-clang
+# scip-java
+# scip-python
+# scip-ruby
+# scip-dotnet
+# scip-rust
+#  维护一个语言-> 构建工具的列表， 先判断项目是什么语言、什么构建工具，必要时拆分多个项目。  一开始要初始化好目录
+common:
+  variables:
+    sourcePath: {codebasePath}
+    outputPath: {codebasePath}/.codebase_index/
+commands:
+  - language: typescript
+    commands:
+      - scip-typescript  index --cwd ${sourcePath} --output ${outputPath}/index.scip  --infer-tsconfig # tsconfig.json
+
+  - language: javascript
+    commands:
+      - scip-typescript  index --cwd ${sourcePath} --output ${outputPath}/index.scip  --infer-tsconfig
+
+  - language: c
+    commands:
+      - {buildCommand}
+      - scip-clang --compdb-path=${outputPath}/build/compile_commands.json  --index-output-path ${outputPath}/index.scip  -j $(nproc)
+    buildCommand:
+      autoconf: ./configure || ./Configure  && bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+      cmake: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S ${sourcePath}  -B ${outputPath}/build/
+      make: bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+
+  - language: cpp
+    commands:
+      - {buildCommand}
+      - scip-clang --compdb-path=${outputPath}/build/compile_commands.json  --index-output-path ${outputPath}/index.scip  -j $(nproc)
+    buildCommand:
+      autoconf: ./configure || ./Configure  && bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+      cmake: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S ${sourcePath}  -B ${outputPath}/build/
+      make: bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+
+  - language: java
+    commands:
+      - scip-java index --cwd ${sourcePath} --targetroot {outputPath}/build --output {outputPath}/index.scip -- {buildCommand}
+    buildCommand:
+      maven:  verify --batch-mode  --fail-never -DskipTests  --offline -T 8 # offline
+      gradle: --offline --continue --no-tests --parallel --max-workers=8 --no-interactive #  sed -i 's|distributionUrl=.*|distributionUrl=file:///opt/gradle/gradle-8.14.1-bin.zip|' gradle/wrapper/gradle-wrapper.properties
+   # scala  kotlin only gradle  not supported
+
+  - language: python
+    commands:
+      - scip-python index --output {outputPath}/index.scip --cwd ${sourcePath} --project-version 1
+
+  - language: ruby
+    commands:
+      -  scip-ruby  --dir ${sourcePath}  --max-threads 32   --index-file {outputPath}/index.scip --gem-metadata ruby@v0.0.1
+
+  - language: dotnet
+    commands:
+      - scip-dotnet index   --output {outputPath}/index.scip --working-directory ${sourcePath}  --skip-dotnet-restore True
+
+  - language: rust
+    commands:
+      - scip-rust index   --output {outputPath}/index.scip --working-directory ${sourcePath}  --skip-dotnet-restore True
+

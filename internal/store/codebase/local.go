@@ -22,7 +22,7 @@ func newLocalCodeBase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
 	}
 }
 
-func (l *localCodebase) Init(ctx context.Context, codebase types.Codebase) error {
+func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebasePath string) (types.Codebase, error) {
 	//TODO implement me
 	panic("implement me")
 }

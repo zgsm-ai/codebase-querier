@@ -9,7 +9,7 @@ import (
 // Store 存储代码仓库文件
 type Store interface {
 	// Init 初始化代码仓库
-	Init(ctx context.Context, codebase types.Codebase) error
+	Init(ctx context.Context, clientId string, clientCodebasePath string) (types.Codebase, error)
 
 	// Add 将代码文件添加到目标路径
 	Add(ctx context.Context, codebasePath string, source io.Reader, target string) error
