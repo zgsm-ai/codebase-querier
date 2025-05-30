@@ -78,22 +78,43 @@ func convertToGoValueToLua(L *lua.LState, goValue interface{}) lua.LValue {
 // luaRunCommand is a Go function exposed to Lua to run a terminal command.
 // It takes a command string as input and returns the command output and an error string (empty if no error).
 // This function uses os/exec internally to execute the command.
+// It now expects the command string as the first argument and the working directory as the second.
 func luaRunCommand(l *lua.LState) int {
-	command := l.CheckString(1) // Get the command string from Lua argument
+	command := l.CheckString(1)    // Get the command string from Lua argument
+	workingDir := l.CheckString(2) // Get the working directory from Lua argument
+
+	fmt.Printf("DEBUG: Executing command: %s\n", command)
+	fmt.Printf("DEBUG: Explicitly setting working directory to: %s\n", workingDir)
 
 	cmd := exec.Command("bash", "-c", command)
+	cmd.Dir = workingDir // Set the working directory for the command
+
+	// Get the current working directory for debugging (this is the Go process's WD, not the command's)
+	wd, err := os.Getwd()
+	if err == nil {
+		fmt.Printf("DEBUG: Go process's current working directory is: %s\n", wd)
+	} else {
+		fmt.Printf("DEBUG: Failed to get Go process's current working directory: %v\n", err)
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
+
+	// Print command output and error
+	fmt.Printf("DEBUG: Command finished.\n")
+	fmt.Printf("DEBUG: Stdout:\n%s\n", stdout.String())
+	fmt.Printf("DEBUG: Stderr:\n%s\n", stderr.String())
 
 	// Return output and error message to Lua
 	if err != nil {
+		fmt.Printf("DEBUG: Command Error: %v\n", err)
 		l.Push(lua.LString(stdout.String() + stderr.String())) // Combined output on error
 		l.Push(lua.LString(err.Error()))
 	} else {
+		fmt.Println("DEBUG: Command Success.")
 		l.Push(lua.LString(stdout.String())) // stdout on success
 		l.Push(lua.LNil)                     // No error message on success
 	}
@@ -332,6 +353,9 @@ func (g *SCIPIndexGenerator) Generate(ctx context.Context, codebasePath string) 
 	}
 	l.SetGlobal("commandsToExecute", luaCommandsTable)
 	l.SetGlobal("finalResultPath", lua.LString(filepath.Join(outputPath, "index.scip")))
+
+	// Set codebasePath as a global variable in Lua
+	l.SetGlobal("codebasePath", lua.LString(codebasePath))
 
 	// Execute the main Lua indexing script
 	// The Lua script is expected to iterate and execute commandsToExecute
