@@ -8,14 +8,14 @@ import (
 )
 
 // NewRedisClient creates a new Redis client.
-func NewRedisClient(c config.MessageQueueConf) (*redis.Client, error) {
+func NewRedisClient(c config.RedisConfig) (*redis.Client, error) {
 	// 构建原生Redis客户端配置
 	rdbCfg := redis.Options{
-		Addr:         c.Redis.Host,
-		Password:     c.Redis.Password,
-		DB:           c.Redis.DB,
-		PoolSize:     c.Redis.PoolSize,
-		MinIdleConns: c.Redis.MinIdleConn,
+		Addr:         c.Host,
+		Password:     c.Password,
+		DB:           c.DB,
+		PoolSize:     c.PoolSize,
+		MinIdleConns: c.MinIdleConn,
 		DialTimeout:  c.ConnectTimeout,
 		ReadTimeout:  c.ReadTimeout,
 		WriteTimeout: c.WriteTimeout,

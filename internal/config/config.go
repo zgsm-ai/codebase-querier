@@ -11,6 +11,7 @@ type Config struct {
 		UserInfoHeader string
 	}
 	Database      Database
+	Redis         RedisConfig
 	CodeBaseStore CodeBaseStoreConf
 	MessageQueue  MessageQueueConf
 	IndexTask     IndexTaskConf

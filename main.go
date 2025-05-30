@@ -7,9 +7,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
+	"github.com/zgsm-ai/codebase-indexer/internal/job"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
-	"github.com/zgsm-ai/codebase-indexer/internal/task"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/rest"
@@ -33,29 +33,18 @@ func main() {
 	defer server.Stop()
 
 	serverCtx, cancelFunc := context.WithCancel(context.Background())
-
 	svcCtx, err := svc.NewServiceContext(serverCtx, c)
-
 	if err != nil {
 		panic(err)
 	}
-
 	defer cancelFunc()
 	// start index job
-	indexJobScheduler, err := task.NewIndexJobScheduler(svcCtx, serverCtx)
+	jobScheduler, err := job.NewScheduler(serverCtx, svcCtx)
 	if err != nil {
 		panic(err)
 	}
-
-	go indexJobScheduler.Schedule()
-	defer indexJobScheduler.Close()
-
-	cleaner := task.NewCleaner(svcCtx, serverCtx)
-	cleaner.Run()
-
-	if err != nil {
-		panic(err)
-	}
+	jobScheduler.Schedule()
+	defer jobScheduler.Close()
 
 	handler.RegisterHandlers(server, svcCtx)
 

@@ -28,12 +28,13 @@ IndexTask:
 Cleaner:
   Cron: "0 0 0 * * *"
 
+Redis:
+  Host: 0.0.0.0
+  PoolSize: 10
+  MinIdleConn: 10
+
 MessageQueue:
   Type: redis
-  Redis:
-    Host: 0.0.0.0
-    PoolSize: 10
-    MinIdleConn: 10
 
 CodeBaseStore:
   type: local
