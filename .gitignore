@@ -25,3 +25,5 @@ go.work.sum
 .env
 .vscode
 .idea
+main
+main.exe
