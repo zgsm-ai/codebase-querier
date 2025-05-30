@@ -1,10 +1,6 @@
 local commands = commandsToExecute
 local final_result_path = finalResultPath
 
--- Debugging: Print the value and type of codebasePath global
-print("Lua Debug: codebasePath global value: " .. tostring(codebasePath))
-print("Lua Debug: codebasePath global type: " .. type(codebasePath))
-
 -- Print commands to be executed
 print("Lua: Commands to execute:")
 for i, cmd in ipairs(commands) do
@@ -19,16 +15,8 @@ local error_message = ""
 for i, cmd in ipairs(commands) do
     print("Lua: Executing command [" .. i .. "]: " .. cmd)
 
-    -- Check if codebasePath global is nil before calling run_command
-    if codebasePath == nil or type(codebasePath) ~= "string" then
-        error_message = "Lua Error: codebasePath global is nil or not a string: " .. tostring(codebasePath)
-        print(error_message)
-        success = false
-        break -- Stop if working directory is invalid
-    end
-
-    -- Pass command and codebasePath (working directory) directly to the Go run_command function
-    local output, err = run_command(cmd, codebasePath) -- Use codebasePath global directly
+    -- Pass only the command to the Go run_command function
+    local output, err = run_command(cmd) -- Removed codebasePath argument
 
     if err then
         print("Lua: Command failed: " .. err)
