@@ -36,7 +36,7 @@ type CodebaseComparisonRequest struct {
 }
 
 type CodebaseTreeItem struct {
-	Path string `json:"Path"` // 文件路径
+	Path string `json:"FullPath"` // 文件路径
 	Hash string `json:"hash"` // 文件哈希值
 }
 
@@ -83,7 +83,7 @@ type TreeNode struct {
 
 type FileInfo struct {
 	Name    string    `json:"Name"`              // 节点名称
-	Path    string    `json:"Path"`              // 节点路径
+	Path    string    `json:"FullPath"`              // 节点路径
 	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
 	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
 	IsDir   bool      `json:"IsDir"`             // 是否是目录

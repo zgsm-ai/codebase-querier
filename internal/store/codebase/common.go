@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 )
 
+const logicAnd = "&"
+
 // generateUniquePath 使用 SHA-256 生成唯一的路径
 // clientId 和 codebasePath 使用 & 作为分隔符，确保不同组合生成不同的 hash
 func generateUniquePath(clientId, codebasePath string) string {
-	input := clientId + "&" + codebasePath
+	input := clientId + logicAnd + codebasePath
 	hash := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(hash[:])
 }

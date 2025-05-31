@@ -17,7 +17,7 @@ type CodeChunk struct {
 	CodebaseName string
 	Language     string
 	Content      string // The actual code snippet
-	FilePath     string // The Path to the file this block came from
+	FilePath     string // The FullPath to the file this block came from
 	StartLine    int    // The 1-indexed starting line number of the block in the original file
 	EndLine      int    // The 1-indexed ending line number of the block in the original file
 	ParentFunc   string // The Name of the parent function (if applicable)

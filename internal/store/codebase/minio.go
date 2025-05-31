@@ -29,38 +29,26 @@ const (
 var _ Store = &minioCodebase{}
 
 type minioCodebase struct {
-	logger logx.Logger
 	cfg    config.CodeBaseStoreConf
-	client *minio.Client
-	mu     sync.RWMutex // 保护并发访问
+	client MinioClient
+	logger logx.Logger
+	mu     sync.RWMutex
 }
 
-func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store, error) {
+func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
 	client, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKeyID, cfg.Minio.SecretAccessKey, ""),
 		Secure: cfg.Minio.UseSSL,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create minio client: %w", err)
-	}
-
-	// Ensure bucket exists
-	exists, err := client.BucketExists(ctx, cfg.Minio.Bucket)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check bucket existence: %w", err)
-	}
-	if !exists {
-		err = client.MakeBucket(ctx, cfg.Minio.Bucket, minio.MakeBucketOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create bucket: %w", err)
-		}
+		panic(fmt.Sprintf("failed to create minio client: %v", err))
 	}
 
 	return &minioCodebase{
 		cfg:    cfg,
+		client: NewMinioClientWrapper(client),
 		logger: logx.WithContext(ctx),
-		client: client,
-	}, nil
+	}
 }
 
 // getObjectName 获取完整的对象名称
@@ -75,7 +63,7 @@ func (m *minioCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	// 生成唯一的路径
-	dirPath := m.getObjectName(clientId, clientCodebasePath, "") + "/"
+	dirPath := getFullPath(m.cfg.Minio.Bucket, clientId, clientCodebasePath, "") + "/"
 
 	// 在 MinIO 中创建目录（通过创建一个空的目录标记对象）
 	_, err := m.client.PutObject(ctx, m.cfg.Minio.Bucket, dirPath, bytes.NewReader([]byte{}), 0, minio.PutObjectOptions{})
@@ -84,13 +72,15 @@ func (m *minioCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	return &types.Codebase{
-		ClientID: clientId,
-		Path:     clientCodebasePath,
+		FullPath: dirPath,
 	}, nil
 }
 
 func (m *minioCodebase) Add(ctx context.Context, codebasePath string, source io.Reader, target string) error {
-	objectName := m.getObjectName("", codebasePath, target)
+	if codebasePath == "" || target == "" {
+		return errors.New("codebasePath and target cannot be empty")
+	}
+	objectName := filepath.Join(codebasePath, target)
 	_, err := m.client.PutObject(ctx, m.cfg.Minio.Bucket, objectName, source, -1, minio.PutObjectOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to upload file: %w", err)
@@ -110,7 +100,7 @@ func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source i
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
 
-	basePath := m.getObjectName("", codebasePath, target)
+	basePath := filepath.Join(codebasePath, target)
 
 	// Extract each file
 	for _, file := range zipReader.File {
@@ -141,7 +131,10 @@ func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source i
 }
 
 func (m *minioCodebase) Delete(ctx context.Context, codebasePath string, path string) error {
-	objectName := m.getObjectName("", codebasePath, path)
+	if codebasePath == "" || path == "" {
+		return errors.New("codebasePath and path cannot be empty")
+	}
+	objectName := filepath.Join(codebasePath, path)
 	err := m.client.RemoveObject(ctx, m.cfg.Minio.Bucket, objectName, minio.RemoveObjectOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
@@ -152,7 +145,7 @@ func (m *minioCodebase) Delete(ctx context.Context, codebasePath string, path st
 func (m *minioCodebase) MkDirs(ctx context.Context, codebasePath string, path string) error {
 	// MinIO is object-based and doesn't have real directories
 	// We'll create an empty object to simulate directory creation
-	objectName := m.getObjectName("", codebasePath, path) + "/"
+	objectName := filepath.Join(codebasePath, path) + "/"
 	_, err := m.client.PutObject(ctx, m.cfg.Minio.Bucket, objectName, strings.NewReader(""), 0, minio.PutObjectOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -161,7 +154,7 @@ func (m *minioCodebase) MkDirs(ctx context.Context, codebasePath string, path st
 }
 
 func (m *minioCodebase) Exists(ctx context.Context, codebasePath string, path string) (bool, error) {
-	objectName := m.getObjectName("", codebasePath, path)
+	objectName := filepath.Join(codebasePath, path)
 	_, err := m.client.StatObject(ctx, m.cfg.Minio.Bucket, objectName, minio.StatObjectOptions{})
 	if err != nil {
 		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
@@ -173,7 +166,7 @@ func (m *minioCodebase) Exists(ctx context.Context, codebasePath string, path st
 }
 
 func (m *minioCodebase) Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error) {
-	objectName := m.getObjectName("", codebasePath, path)
+	objectName := filepath.Join(codebasePath, path)
 	info, err := m.client.StatObject(ctx, m.cfg.Minio.Bucket, objectName, minio.StatObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object info: %w", err)
@@ -189,7 +182,10 @@ func (m *minioCodebase) Stat(ctx context.Context, codebasePath string, path stri
 }
 
 func (m *minioCodebase) List(ctx context.Context, codebasePath string, dir string, option types.ListOptions) ([]*types.FileInfo, error) {
-	prefix := m.getObjectName("", codebasePath, dir)
+	if codebasePath == "" {
+		return nil, errors.New("codebasePath cannot be empty")
+	}
+	prefix := filepath.Join(codebasePath, dir)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
@@ -210,11 +206,17 @@ func (m *minioCodebase) List(ctx context.Context, codebasePath string, dir strin
 			continue
 		}
 
-		// Apply filters if specified
-		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(object.Key) {
+		// Get the relative path
+		relPath := strings.TrimPrefix(object.Key, prefix)
+		if relPath == "" {
 			continue
 		}
-		if option.IncludePattern != nil && !option.IncludePattern.MatchString(object.Key) {
+
+		// Apply filters if specified
+		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
+			continue
+		}
+		if option.IncludePattern != nil && !option.IncludePattern.MatchString(relPath) {
 			continue
 		}
 
@@ -231,13 +233,19 @@ func (m *minioCodebase) List(ctx context.Context, codebasePath string, dir strin
 }
 
 func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir string, option types.TreeOptions) ([]*types.TreeNode, error) {
-	prefix := m.getObjectName("", codebasePath, dir)
+	if codebasePath == "" {
+		return nil, errors.New("codebasePath cannot be empty")
+	}
+
+	prefix := filepath.Join(codebasePath, dir)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
 
-	// 获取所有对象
-	var objects []minio.ObjectInfo
+	// Build path to node mapping
+	nodeMap := make(map[string]*types.TreeNode)
+	var rootNodes []*types.TreeNode
+
 	objectCh := m.client.ListObjects(ctx, m.cfg.Minio.Bucket, minio.ListObjectsOptions{
 		Prefix:    prefix,
 		Recursive: true,
@@ -247,27 +255,19 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 		if object.Err != nil {
 			return nil, fmt.Errorf("failed to list objects: %w", object.Err)
 		}
-		objects = append(objects, object)
-	}
 
-	// 构建路径到节点的映射
-	nodeMap := make(map[string]*types.TreeNode)
-	var rootNodes []*types.TreeNode
-
-	// 首先创建所有目录节点
-	for _, object := range objects {
-		// 跳过根目录标记
+		// Skip the directory marker itself
 		if object.Key == prefix {
 			continue
 		}
 
-		// 获取相对路径
+		// Get the relative path
 		relPath := strings.TrimPrefix(object.Key, prefix)
 		if relPath == "" {
 			continue
 		}
 
-		// 应用过滤规则
+		// Apply filters
 		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
 			continue
 		}
@@ -275,7 +275,7 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			continue
 		}
 
-		// 处理路径的每一级
+		// Process each level of the path
 		parts := strings.Split(relPath, "/")
 		currentPath := ""
 
@@ -286,12 +286,12 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 				currentPath = filepath.Join(currentPath, part)
 			}
 
-			// 如果这个路径的节点已经存在，跳过
+			// Skip if node already exists
 			if _, exists := nodeMap[currentPath]; exists {
 				continue
 			}
 
-			// 创建新节点
+			// Create new node
 			node := &types.TreeNode{
 				FileInfo: types.FileInfo{
 					Name:    part,
@@ -304,14 +304,14 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 				Children: make([]types.TreeNode, 0),
 			}
 
-			// 将节点添加到映射中
+			// Add node to map
 			nodeMap[currentPath] = node
 
-			// 如果是根级节点，添加到rootNodes
+			// Add to root nodes if it's a root level node
 			if i == 0 {
 				rootNodes = append(rootNodes, node)
 			} else {
-				// 将节点添加到父节点的Children中
+				// Add to parent's children
 				parentPath := filepath.Dir(currentPath)
 				if parent, exists := nodeMap[parentPath]; exists {
 					parent.Children = append(parent.Children, *node)
@@ -324,7 +324,7 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 }
 
 func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
-	objectName := m.getObjectName("", codebasePath, filePath)
+	objectName := filepath.Join(codebasePath, filePath)
 	object, err := m.client.GetObject(ctx, m.cfg.Minio.Bucket, objectName, minio.GetObjectOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get object: %w", err)
@@ -340,7 +340,7 @@ func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath 
 }
 
 func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, process func(io.ReadCloser) (bool, error)) error {
-	prefix := m.getObjectName("", codebasePath, dir)
+	prefix := filepath.Join(codebasePath, dir)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
@@ -383,7 +383,7 @@ func (m *minioCodebase) BatchDelete(ctx context.Context, codebasePath string, pa
 	go func() {
 		defer close(objectsCh)
 		for _, path := range paths {
-			objectName := m.getObjectName("", codebasePath, path)
+			objectName := filepath.Join(codebasePath, path)
 			objectsCh <- minio.ObjectInfo{Key: objectName}
 		}
 	}()

@@ -3,8 +3,7 @@ package types
 import "encoding/json"
 
 type Codebase struct {
-	ClientID string
-	Path     string
+	FullPath string
 }
 
 const SyncMedataDir = ".sync_metadata"

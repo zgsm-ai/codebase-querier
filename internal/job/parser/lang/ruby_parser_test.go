@@ -116,7 +116,7 @@ end
 				assert.NoError(t, readErr, "Failed to read test data file")
 				code = fileCode
 			} else {
-				assert.FailNow(t, "Test case must provide either code or codeFile.Path")
+				assert.FailNow(t, "Test case must provide either code or codeFile.FullPath")
 			}
 
 			// Create a types.CodeFile object

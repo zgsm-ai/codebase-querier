@@ -42,39 +42,48 @@ func (l *localCodebase) getFullPath(clientId, codebasePath, target string) strin
 }
 
 // Init 初始化一个新的代码库
-func (l *localCodebase) Init(ctx context.Context, clientId string, codebasePath string) (*types.Codebase, error) {
-	if clientId == "" || codebasePath == "" {
-		return nil, errors.New("clientId and codebasePath cannot be empty")
+func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error) {
+	if clientId == "" || clientCodebasePath == "" {
+		return nil, errors.New("clientId and clientCodebasePath cannot be empty")
 	}
 
 	// 生成唯一的路径
-	targetPath := l.getFullPath(clientId, codebasePath, "")
+	dirPath := getFullPath(l.cfg.Local.BasePath, clientId, clientCodebasePath, "")
 
 	// 创建目录
-	if err := os.MkdirAll(targetPath, defaultLocalDirMode); err != nil {
+	err := os.MkdirAll(dirPath, defaultLocalDirMode)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create codebase directory: %v", err)
 	}
 
-	return &types.Codebase{
-		ClientID: clientId,
-		Path:     codebasePath,
-	}, nil
+	return &types.Codebase{FullPath: dirPath}, nil
 }
 
 func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.Reader, target string) error {
-	fullPath := l.getFullPath("", codebasePath, target)
-	if err := os.MkdirAll(filepath.Dir(fullPath), defaultLocalDirMode); err != nil {
+	if codebasePath == "" || target == "" {
+		return errors.New("codebasePath and target cannot be empty")
+	}
+
+	// 构建完整路径
+	fullPath := filepath.Join(codebasePath, target)
+
+	// 确保目标目录存在
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, defaultLocalDirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	file, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, defaultLocalFileMode)
+	// 创建目标文件
+	file, err := os.Create(fullPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
 
-	if _, err := io.Copy(file, source); err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
+	// 复制内容
+	_, err = io.Copy(file, source)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	return nil
@@ -147,29 +156,45 @@ func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source i
 }
 
 func (l *localCodebase) Delete(ctx context.Context, codebasePath string, path string) error {
-	fullPath := l.getFullPath("", codebasePath, path)
+	if codebasePath == "" || path == "" {
+		return errors.New("codebasePath and path cannot be empty")
+	}
+
+	fullPath := filepath.Join(codebasePath, path)
 	return os.RemoveAll(fullPath)
 }
 
 func (l *localCodebase) MkDirs(ctx context.Context, codebasePath string, path string) error {
-	fullPath := l.getFullPath("", codebasePath, path)
+	if codebasePath == "" || path == "" {
+		return errors.New("codebasePath and path cannot be empty")
+	}
+
+	fullPath := filepath.Join(codebasePath, path)
 	return os.MkdirAll(fullPath, defaultLocalDirMode)
 }
 
 func (l *localCodebase) Exists(ctx context.Context, codebasePath string, path string) (bool, error) {
-	fullPath := l.getFullPath("", codebasePath, path)
+	if codebasePath == "" || path == "" {
+		return false, errors.New("codebasePath and path cannot be empty")
+	}
+
+	fullPath := filepath.Join(codebasePath, path)
 	_, err := os.Stat(fullPath)
-	if err == nil {
-		return true, nil
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
 	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
+	return true, nil
 }
 
 func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error) {
-	fullPath := l.getFullPath("", codebasePath, path)
+	if codebasePath == "" || path == "" {
+		return nil, errors.New("codebasePath and path cannot be empty")
+	}
+
+	fullPath := filepath.Join(codebasePath, path)
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return nil, err
@@ -185,21 +210,24 @@ func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path stri
 }
 
 func (l *localCodebase) List(ctx context.Context, codebasePath string, dir string, option types.ListOptions) ([]*types.FileInfo, error) {
-	fullPath := l.getFullPath("", codebasePath, dir)
+	if codebasePath == "" {
+		return nil, errors.New("codebasePath cannot be empty")
+	}
+
+	fullPath := filepath.Join(codebasePath, dir)
 	entries, err := os.ReadDir(fullPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	var files []*types.FileInfo
 	for _, entry := range entries {
 		info, err := entry.Info()
 		if err != nil {
-			l.logger.Errorf("failed to get file info for %s: %v", entry.Name(), err)
 			continue
 		}
 
-		// Apply filters if specified
+		// 应用过滤规则
 		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(entry.Name()) {
 			continue
 		}
@@ -208,9 +236,9 @@ func (l *localCodebase) List(ctx context.Context, codebasePath string, dir strin
 		}
 
 		files = append(files, &types.FileInfo{
-			Name:    entry.Name(),
+			Name:    info.Name(),
 			Size:    info.Size(),
-			IsDir:   entry.IsDir(),
+			IsDir:   info.IsDir(),
 			ModTime: info.ModTime(),
 			Mode:    info.Mode(),
 		})
@@ -220,90 +248,57 @@ func (l *localCodebase) List(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir string, option types.TreeOptions) ([]*types.TreeNode, error) {
-	fullPath := l.getFullPath("", codebasePath, dir)
+	if codebasePath == "" {
+		return nil, errors.New("codebasePath cannot be empty")
+	}
 
-	// 构建路径到节点的映射
-	nodeMap := make(map[string]*types.TreeNode)
-	var rootNodes []*types.TreeNode
+	fullPath := filepath.Join(codebasePath, dir)
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
 
-	err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+	var nodes []*types.TreeNode
+	for _, entry := range entries {
+		info, err := entry.Info()
 		if err != nil {
-			return err
-		}
-
-		// 跳过根目录
-		if path == fullPath {
-			return nil
-		}
-
-		// 获取相对路径
-		relPath, err := filepath.Rel(fullPath, path)
-		if err != nil {
-			return err
+			continue
 		}
 
 		// 应用过滤规则
-		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(entry.Name()) {
+			continue
 		}
-		if option.IncludePattern != nil && !option.IncludePattern.MatchString(relPath) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+		if option.IncludePattern != nil && !option.IncludePattern.MatchString(entry.Name()) {
+			continue
 		}
 
-		// 处理路径的每一级
-		parts := strings.Split(relPath, string(filepath.Separator))
-		currentPath := ""
+		node := &types.TreeNode{
+			FileInfo: types.FileInfo{
+				Name:    info.Name(),
+				Path:    entry.Name(),
+				Size:    info.Size(),
+				IsDir:   info.IsDir(),
+				ModTime: info.ModTime(),
+				Mode:    info.Mode(),
+			},
+			Children: make([]types.TreeNode, 0),
+		}
 
-		for i, part := range parts {
-			if i == 0 {
-				currentPath = part
-			} else {
-				currentPath = filepath.Join(currentPath, part)
-			}
-
-			// 如果这个路径的节点已经存在，跳过
-			if _, exists := nodeMap[currentPath]; exists {
+		if info.IsDir() {
+			subNodes, err := l.Tree(ctx, codebasePath, filepath.Join(dir, entry.Name()), option)
+			if err != nil {
 				continue
 			}
-
-			// 创建新节点
-			node := &types.TreeNode{
-				FileInfo: types.FileInfo{
-					Name:    part,
-					Path:    currentPath,
-					IsDir:   i < len(parts)-1 || info.IsDir(),
-					Size:    info.Size(),
-					ModTime: info.ModTime(),
-					Mode:    info.Mode(),
-				},
-				Children: make([]types.TreeNode, 0),
-			}
-
-			// 将节点添加到映射中
-			nodeMap[currentPath] = node
-
-			// 如果是根级节点，添加到rootNodes
-			if i == 0 {
-				rootNodes = append(rootNodes, node)
-			} else {
-				// 将节点添加到父节点的Children中
-				parentPath := filepath.Dir(currentPath)
-				if parent, exists := nodeMap[parentPath]; exists {
-					parent.Children = append(parent.Children, *node)
-				}
+			for _, subNode := range subNodes {
+				node.Children = append(node.Children, *subNode)
 			}
 		}
 
-		return nil
-	})
+		nodes = append(nodes, node)
+	}
 
-	return rootNodes, err
+	return nodes, nil
 }
 
 func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
