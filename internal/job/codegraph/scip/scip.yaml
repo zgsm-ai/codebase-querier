@@ -1,64 +1,235 @@
-# scip-go
-# scip-typescript
-# scip-clang
-# scip-java
-# scip-python
-# scip-ruby
-# scip-dotnet
-# scip-rust
-#  维护一个语言-> 构建工具的列表， 先判断项目是什么语言、什么构建工具，必要时拆分多个项目。  一开始要初始化好目录
-common:
-  variables:
-    sourcePath: {codebasePath}
-    outputPath: {codebasePath}/.codebase_index/
-commands:
-  - language: typescript
-    commands:
-      - scip-typescript  index --cwd ${sourcePath} --output ${outputPath}/index.scip  --infer-tsconfig # tsconfig.json
+# SCIP Indexing Commands Configuration
+# This file defines the commands used to generate SCIP indices for different languages and build tools
 
-  - language: javascript
-    commands:
-      - scip-typescript  index --cwd ${sourcePath} --output ${outputPath}/index.scip  --infer-tsconfig
+languages:
+  - name: typescript
+    detection_files: ["package.json", "tsconfig.json"]
+    tools:
+      - name: scip-typescript
+        commands:
+          - base: "scip-typescript"
+            args:
+              - "index"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--infer-tsconfig"
 
-  - language: c
-    commands:
-      - {buildCommand}
-      - scip-clang --compdb-path=${outputPath}/build/compile_commands.json  --index-output-path ${outputPath}/index.scip  -j $(nproc)
-    buildCommand:
-      autoconf: ./configure || ./Configure  && bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
-      cmake: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S ${sourcePath}  -B ${outputPath}/build/
-      make: bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+  - name: javascript
+    detection_files: ["package.json"]
+    tools:
+      - name: scip-typescript
+        commands:
+          - base: "scip-typescript"
+            args:
+              - "index"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--infer-tsconfig"
 
-  - language: cpp
-    commands:
-      - {buildCommand}
-      - scip-clang --compdb-path=${outputPath}/build/compile_commands.json  --index-output-path ${outputPath}/index.scip  -j $(nproc)
-    buildCommand:
-      autoconf: ./configure || ./Configure  && bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
-      cmake: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S ${sourcePath}  -B ${outputPath}/build/
-      make: bare --output ${outputPath}/build/compile_commands.json  -- make -C ${sourcePath} -j $(nproc)
+  - name: c
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10
+        build_commands:
+          - base: "cmake"
+            args:
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20
+        build_commands:
+          - base: "bare"
+            args:
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "bash"
+            args:
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+    tools:
+      - name: scip-clang
+        commands:
+          - base: "scip-clang"
+            args:
+              - "--compdb-path"
+              - "__outputPath__/build/compile_commands.json"
+              - "--index-output-path"
+              - "__outputPath__/index.scip"
+              - "-j"
+              - "$(nproc)"
 
-  - language: java
-    commands:
-      - scip-java index --cwd ${sourcePath} --targetroot {outputPath}/build --output {outputPath}/index.scip -- {buildCommand}
-    buildCommand:
-      maven:  verify --batch-mode  --fail-never -DskipTests  --offline -T 8 # offline
-      gradle: --offline --continue --no-tests --parallel --max-workers=8 --no-interactive #  sed -i 's|distributionUrl=.*|distributionUrl=file:///opt/gradle/gradle-8.14.1-bin.zip|' gradle/wrapper/gradle-wrapper.properties
-   # scala  kotlin only gradle  not supported
+  - name: cpp
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10
+        build_commands:
+          - base: "cmake"
+            args:
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20
+        build_commands:
+          - base: "bare"
+            args:
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "bash"
+            args:
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+    tools:
+      - name: scip-clang
+        commands:
+          - base: "scip-clang"
+            args:
+              - "--compdb-path"
+              - "__outputPath__/build/compile_commands.json"
+              - "--index-output-path"
+              - "__outputPath__/index.scip"
+              - "-j"
+              - "$(nproc)"
 
-  - language: python
-    commands:
-      - scip-python index --output {outputPath}/index.scip --cwd ${sourcePath} --project-version 1
+  - name: java
+    detection_files: ["pom.xml", "build.gradle"]
+    build_tools:
+      - name: maven
+        detection_files: ["pom.xml"]
+        priority: 10
+        build_commands:
+          - base: "mvn"
+            args:
+              - "verify"
+              - "--batch-mode"
+              - "--fail-never"
+              - "-DskipTests"
+              - "--offline"
+              - "-T"
+              - "8"
+      - name: gradle
+        detection_files: ["build.gradle"]
+        priority: 20
+        build_commands:
+          - base: "gradle"
+            args:
+              - "--offline"
+              - "--continue"
+              - "--no-tests"
+              - "--parallel"
+              - "--max-workers"
+              - "8"
+              - "--no-interactive"
+    tools:
+      - name: scip-java
+        commands:
+          - base: "scip-java"
+            args:
+              - "index"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--targetroot"
+              - "__outputPath__/build"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--"
+              - "__buildArgs__"
 
-  - language: ruby
-    commands:
-      -  scip-ruby  --dir ${sourcePath}  --max-threads 32   --index-file {outputPath}/index.scip --gem-metadata ruby@v0.0.1
+  - name: python
+    detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
+    tools:
+      - name: scip-python
+        commands:
+          - base: "scip-python"
+            args:
+              - "index"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--project-version"
+              - "1"
 
-  - language: dotnet
-    commands:
-      - scip-dotnet index   --output {outputPath}/index.scip --working-directory ${sourcePath}  --skip-dotnet-restore True
+  - name: ruby
+    detection_files: ["Gemfile"]
+    tools:
+      - name: scip-ruby
+        commands:
+          - base: "scip-ruby"
+            args:
+              - "--dir"
+              - "__sourcePath__"
+              - "--max-threads"
+              - "32"
+              - "--index-file"
+              - "__outputPath__/index.scip"
+              - "--gem-metadata"
+              - "ruby@v0.0.1"
 
-  - language: rust
-    commands:
-      - scip-rust index   --output {outputPath}/index.scip --working-directory ${sourcePath}  --skip-dotnet-restore True
+  - name: dotnet
+    detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+    tools:
+      - name: scip-dotnet
+        commands:
+          - base: "scip-dotnet"
+            args:
+              - "index"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--working-directory"
+              - "__sourcePath__"
+              - "--skip-dotnet-restore"
+              - "True"
+
+  - name: rust
+    detection_files: ["Cargo.toml"]
+    tools:
+      - name: scip-rust
+        commands:
+          - base: "scip-rust"
+            args:
+              - "index"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--cwd"
+              - "__sourcePath__"
 

@@ -34,7 +34,7 @@ languages:
     tools:
       - name: scip-go
         commands:
-          - base: "scip-go index"
+          - base: "scip-go"
             args:
               - " --project-root"
               - "__sourcePath__"

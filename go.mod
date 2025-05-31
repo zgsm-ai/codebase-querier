@@ -30,7 +30,6 @@ require (
 	github.com/tree-sitter/tree-sitter-scala v0.23.4
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 	github.com/weaviate/weaviate-go-client/v4 v4.16.1
-	github.com/yuin/gopher-lua v1.1.1
 	github.com/zeromicro/go-zero v1.8.3
 	gopkg.in/yaml.v2 v2.4.0
 )
