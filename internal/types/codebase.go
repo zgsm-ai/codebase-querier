@@ -8,6 +8,7 @@ type Codebase struct {
 }
 
 const SyncMedataDir = ".sync_metadata"
+const CodebaseIndexDir = ".codebase_index"
 
 // SyncMetadata 代码变更事件结构体
 type SyncMetadata struct {

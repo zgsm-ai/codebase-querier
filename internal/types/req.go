@@ -82,7 +82,7 @@ type FileInfo struct {
 	Path    string    `json:"Path"`              // 节点路径
 	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
 	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
-	isDir   bool      `json:"isDir"`             // 是否是目录
+	IsDir   bool      `json:"IsDir"`             // 是否是目录
 }
 
 // ListOption 定义List方法的可选参数

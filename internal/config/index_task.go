@@ -21,4 +21,5 @@ type GraphTaskConf struct {
 	MaxConcurrency int
 	Timeout        time.Duration
 	PoolSize       int
+	ConfFile       string `json:",default=etc/codegraph.yaml"`
 }

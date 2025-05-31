@@ -20,7 +20,7 @@ func NewScipBuilder(svcCtx *svc.ServiceContext) GraphBuilder {
 
 func (s scipBuilder) Build(ctx context.Context, codebasePath string) ([]*types.GraphNode, error) {
 	// generate index.scip
-	
+
 	file, err := os.OpenFile(codebasePath, os.O_RDONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -31,4 +31,5 @@ func (s scipBuilder) Build(ctx context.Context, codebasePath string) ([]*types.G
 	if err != nil {
 		return nil, err
 	}
+	return nil, nil
 }

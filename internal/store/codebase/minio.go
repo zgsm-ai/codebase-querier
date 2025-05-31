@@ -53,7 +53,7 @@ func (m *minioCodebase) Exists(ctx context.Context, codebasePath string, path st
 	panic("implement me")
 }
 
-func (m *minioCodebase) Stat(ctx context.Context, codebasePath string, path string) (types.FileInfo, error) {
+func (m *minioCodebase) Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error) {
 	//TODO implement me
 	panic("implement me")
 }

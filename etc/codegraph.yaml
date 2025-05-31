@@ -1,0 +1,240 @@
+# SCIP Indexing Commands Configuration (Structured)
+# This file defines the commands used to generate SCIP indices for different languages and build tools
+
+languages:
+  - name: typescript
+    detection_files: ["tsconfig.json"]
+    index:
+      name: scip-typescript
+      commands:
+        - base: "scip-typescript index"
+          args:
+            - "--cwd"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--infer-tsconfig"
+          env:
+            - "key=value"
+
+  - name: javascript
+    detection_files: ["package.json"]
+    index:
+      name: scip-typescript
+      commands:
+        - base: "scip-typescript index"
+          args:
+            - "--cwd"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--infer-tsconfig"
+
+  - name: go
+    detection_files: ["go.mod"] # go.mod is a strong indicator for Go Modules projects
+    index:
+      name: scip-go
+      commands:
+        - base: "scip-go"
+          args:
+            - " --project-root"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+
+  - name: java
+    detection_files: ["pom.xml", "build.gradle"] # Primary detection for Java build tools
+    build_tools:
+      - name: maven
+        detection_files: ["pom.xml"]
+        priority: 10 # Maven priority (lower number is higher priority)
+        build_commands:
+          - base: "mvn"
+            args: ["verify", "--batch-mode", "--fail-never", "-DskipTests", "--offline", "-T", "8"]
+      - name: gradle
+        detection_files: ["build.gradle"]
+        priority: 20 # Gradle priority
+        build_commands:
+          - base: "gradle"
+            args: ["--offline", "--continue", "--no-tests", "--parallel", "--max-workers", "8", "--no-interactive"]
+    index:
+      name: scip-java
+      commands:
+        - base: "scip-java index"
+          args:
+            - "--cwd"
+            - "__sourcePath__"
+            - "--targetroot"
+            - "__outputPath__/build"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--" # Separator for build tool arguments
+            - "__buildArgs__" with the substituted build command arguments
+
+  - name: python
+    detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
+    build_tools:
+      - name: poetry
+        detection_files: ["poetry.lock", "pyproject.toml"]
+        priority: 10
+        build_commands: []
+      - name: pipenv
+        detection_files: ["Pipfile"]
+        priority: 20
+        build_commands: []
+      - name: pip
+        detection_files: ["requirements.txt"]
+        priority: 30
+        build_commands: []
+    index:
+      name: scip-python
+      commands:
+        - base: "scip-python index"
+          args:
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--cwd"
+            - "__sourcePath__"
+            - "--project-version"
+            - "1"
+
+  - name: ruby
+    detection_files: ["Gemfile"]
+    index:
+      name: scip-ruby
+      commands:
+        - base: "scip-ruby"
+          args:
+            - "--dir"
+            - "__sourcePath__"
+            - "--max-threads"
+            - "32"
+            - "--index-file"
+            - "__outputPath__/index.scip"
+            - "--gem-metadata"
+            - "ruby@v0.0.1"
+
+  - name: dotnet
+    detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+    index:
+      name: scip-dotnet
+      commands:
+        - base: "scip-dotnet index"
+          args:
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--working-directory"
+            - "__sourcePath__"
+            - "--skip-dotnet-restore"
+            - "True"
+
+  - name: c
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10
+        build_commands:
+          - base: "cmake"
+            args:
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20
+        build_commands:
+          - base: "bare"
+            args:
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "bash"
+            args:
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+    index:
+      name: scip-clang
+      commands:
+        - base: "scip-clang"
+          args:
+            - "--compdb-path"
+            - "__outputPath__/build/compile_commands.json"
+            - "--index-output-path"
+            - "__outputPath__/index.scip"
+            - "-j"
+            - "$(nproc)"
+
+  - name: cpp
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10 # CMake preferred for C/C++
+        build_commands:
+          - base: "cmake"
+            args:
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20 # Make second priority
+        build_commands:
+          - base: "bare"
+            args:
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "bash"
+            args:
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+    index:
+      name: scip-clang
+      commands:
+        - base: "scip-clang"
+          args:
+            - "--compdb-path"
+            - "__outputPath__/build/compile_commands.json"
+            - "--index-output-path"
+            - "__outputPath__/index.scip"
+            - "-j"
+            - "$(nproc)"
+
+  - name: rust
+    detection_files: ["Cargo.toml"]
+    index:
+      name: scip-rust
+      commands:
+        - base: "rust-analyzer scip"
+          args:
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"

@@ -27,7 +27,7 @@ type Store interface {
 	Exists(ctx context.Context, codebasePath string, path string) (bool, error)
 
 	// Stat 获取文件或目录的元信息
-	Stat(ctx context.Context, codebasePath string, path string) (types.FileInfo, error)
+	Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error)
 
 	// List 列出目录内容
 	List(ctx context.Context, codebasePath string, dir string, option types.ListOptions) ([]*types.FileInfo, error)

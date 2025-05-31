@@ -52,7 +52,7 @@ func (l *localCodebase) Exists(ctx context.Context, codebasePath string, path st
 	panic("implement me")
 }
 
-func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path string) (types.FileInfo, error) {
+func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error) {
 	//TODO implement me
 	panic("implement me")
 }
