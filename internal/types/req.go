@@ -3,7 +3,11 @@
 
 package types
 
-import "time"
+import (
+	"io/fs"
+	"regexp"
+	"time"
+)
 
 type ComparisonResponseData struct {
 	CodebaseTree []CodebaseTreeItem `json:"codebaseTree"` // 项目文件树
@@ -83,6 +87,7 @@ type FileInfo struct {
 	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
 	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
 	IsDir   bool      `json:"IsDir"`             // 是否是目录
+	Mode    fs.FileMode
 }
 
 // ListOption 定义List方法的可选参数
@@ -90,10 +95,11 @@ type ListOption func(*ListOptions)
 
 // ListOptions 包含List方法的可选参数
 type ListOptions struct {
-	Recursive bool   // 是否递归列出子目录
-	Filter    string // 文件名过滤模式
-	Limit     int    // 返回结果数量限制
-	Offset    int    // 结果偏移量
+	Recursive      bool          // 是否递归列出子目录
+	Limit          int          // 返回结果数量限制
+	Offset         int          // 结果偏移量
+	ExcludePattern *regexp.Regexp // 排除文件的正则表达式
+	IncludePattern *regexp.Regexp // 包含文件的正则表达式
 }
 
 // TreeOption 定义Tree方法的可选参数
@@ -101,8 +107,9 @@ type TreeOption func(*TreeOptions)
 
 // TreeOptions 包含Tree方法的可选参数
 type TreeOptions struct {
-	MaxDepth int    // 最大递归深度
-	Filter   string // 文件名过滤模式
+	MaxDepth       int           // 最大递归深度
+	ExcludePattern *regexp.Regexp // 排除文件的正则表达式
+	IncludePattern *regexp.Regexp // 包含文件的正则表达式
 }
 
 type ReadOptions struct {

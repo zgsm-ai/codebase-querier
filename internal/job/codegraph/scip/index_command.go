@@ -13,8 +13,8 @@ import (
 	"strings"
 )
 
-// CommandExecutor handles command execution for SCIP indexing
-type CommandExecutor struct {
+// commandExecutor handles command execution for SCIP indexing
+type commandExecutor struct {
 	workDir string
 	// build
 	buildCmds []*exec.Cmd
@@ -22,10 +22,10 @@ type CommandExecutor struct {
 	logger    logx.Logger
 }
 
-// NewCommandExecutor creates a new CommandExecutor
-func NewCommandExecutor(ctx context.Context,
+// newCommandExecutor creates a new commandExecutor
+func newCommandExecutor(ctx context.Context,
 	workDir string, indexTool *IndexTool,
-	buildTool *BuildTool, placeHolders map[string]string) (*CommandExecutor, error) {
+	buildTool *BuildTool, placeHolders map[string]string) (*commandExecutor, error) {
 	if workDir == "" {
 		return nil, fmt.Errorf("working dir is required")
 	}
@@ -41,7 +41,7 @@ func NewCommandExecutor(ctx context.Context,
 	if indexFileLogger != nil {
 		logWriter = indexFileLogger.Writer()
 	}
-	return &CommandExecutor{
+	return &commandExecutor{
 		workDir:   workDir,
 		buildCmds: buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
 		indexCmds: buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
@@ -57,14 +57,12 @@ func buildBuildCmds(buildTool *BuildTool, workDir string, logFileWriter io.Write
 	if buildTool != nil && len(buildTool.Commands) > 0 {
 		for _, v := range buildTool.Commands {
 			renderedCmd := renderCommand(v, placeHolders)
-			buildCmds = append(buildCmds, &exec.Cmd{
-				Path:   renderedCmd.Base,
-				Args:   renderedCmd.Args,
-				Dir:    workDir,
-				Env:    renderedCmd.Env,
-				Stdout: logFileWriter,
-				Stderr: logFileWriter,
-			})
+			cmd := exec.Command(renderedCmd.Base, renderedCmd.Args...)
+			cmd.Dir = workDir
+			cmd.Env = renderedCmd.Env
+			cmd.Stdout = logFileWriter
+			cmd.Stderr = logFileWriter
+			buildCmds = append(buildCmds, cmd)
 		}
 	}
 	return buildCmds
@@ -77,14 +75,12 @@ func buildIndexCmds(indexTool *IndexTool, workDir string, logFileWriter io.Write
 	var indexCmds []*exec.Cmd
 	for _, v := range indexTool.Commands {
 		renderedCmd := renderCommand(v, placeHolders)
-		indexCmds = append(indexCmds, &exec.Cmd{
-			Path:   renderedCmd.Base,
-			Args:   renderedCmd.Args,
-			Dir:    workDir,
-			Env:    renderedCmd.Env,
-			Stdout: logFileWriter,
-			Stderr: logFileWriter,
-		})
+		cmd := exec.Command(renderedCmd.Base, renderedCmd.Args...)
+		cmd.Dir = workDir
+		cmd.Env = renderedCmd.Env
+		cmd.Stdout = logFileWriter
+		cmd.Stderr = logFileWriter
+		indexCmds = append(indexCmds, cmd)
 	}
 	return indexCmds
 }
@@ -109,7 +105,7 @@ func replacePlaceHolder(base string, placeHolders map[string]string) string {
 }
 
 // Execute executes a command string
-func (e *CommandExecutor) Execute() error {
+func (e *commandExecutor) Execute() error {
 
 	e.logger.Debugf("[%s] start to execute command", e.workDir)
 
@@ -117,10 +113,10 @@ func (e *CommandExecutor) Execute() error {
 
 	for _, cmd := range e.buildCmds {
 		if curErr := cmd.Run(); curErr != nil {
-			e.logger.Errorf("[%s] buld command execution failed: %v, err: %s", e.workDir, cmd, err)
+			e.logger.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, err)
 			err = errors.Join(err, curErr)
 		} else {
-			e.logger.Debugf("[%s] buld command execution successfully: %v", e.workDir, cmd)
+			e.logger.Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
 		}
 	}
 

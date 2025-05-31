@@ -4,7 +4,7 @@ import "encoding/json"
 
 type Codebase struct {
 	ClientID string
-	RootPath string
+	Path     string
 }
 
 const SyncMedataDir = ".sync_metadata"

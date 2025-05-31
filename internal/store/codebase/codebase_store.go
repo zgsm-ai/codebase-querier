@@ -2,45 +2,64 @@ package codebase
 
 import (
 	"context"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-// Store 存储代码仓库文件
+// Store defines the interface for codebase storage operations
 type Store interface {
-	// Init 初始化代码仓库
-	Init(ctx context.Context, clientId string, clientCodebasePath string) (types.Codebase, error)
+	// Init initializes a new codebase for a client
+	// Returns the initialized codebase or an error if initialization fails
+	Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error)
 
-	// Add 将代码文件添加到目标路径
+	// Add adds a file to the codebase
+	// source: the source reader containing the file content
+	// target: the target path where the file should be stored
 	Add(ctx context.Context, codebasePath string, source io.Reader, target string) error
 
-	// Unzip 将zip文件解压到目标路径
+	// Unzip extracts a zip file into the codebase
+	// source: the source reader containing the zip file
+	// target: the target directory where files should be extracted
 	Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error
 
-	// Delete 删除文件或目录
+	// Delete removes a file or directory from the codebase
+	// path: the path to the file or directory to delete
 	Delete(ctx context.Context, codebasePath string, path string) error
 
-	// MkDirs 创建目录
+	// MkDirs creates directories in the codebase
+	// path: the path where directories should be created
 	MkDirs(ctx context.Context, codebasePath string, path string) error
 
-	// Exists 检查路径是否存在
+	// Exists checks if a path exists in the codebase
+	// Returns true if the path exists, false otherwise
 	Exists(ctx context.Context, codebasePath string, path string) (bool, error)
 
-	// Stat 获取文件或目录的元信息
+	// Stat returns information about a file or directory
+	// Returns FileInfo or an error if the path doesn't exist
 	Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error)
 
-	// List 列出目录内容
+	// List lists files and directories in a directory
+	// dir: the directory to list
+	// option: optional parameters for listing
 	List(ctx context.Context, codebasePath string, dir string, option types.ListOptions) ([]*types.FileInfo, error)
 
-	// Tree 构建目录树结构
+	// Tree returns a tree structure of the codebase
+	// dir: the root directory for the tree
+	// option: optional parameters for tree construction
 	Tree(ctx context.Context, codebasePath string, dir string, option types.TreeOptions) ([]*types.TreeNode, error)
 
-	// Read 读取文件内容
+	// Read reads the content of a file
+	// filePath: the path to the file to read
+	// option: optional parameters for reading
 	Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error)
 
-	// Walk 递归遍历目录并处理每个文件
+	// Walk walks through the codebase and processes each file
+	// dir: the root directory to start walking from
+	// process: function to process each file
 	Walk(ctx context.Context, codebasePath string, dir string, process func(io.ReadCloser) (bool, error)) error
 
-	// BatchDelete 批量删除文件或目录
+	// BatchDelete deletes multiple files or directories
+	// paths: list of paths to delete
 	BatchDelete(ctx context.Context, codebasePath string, paths []string) error
 }

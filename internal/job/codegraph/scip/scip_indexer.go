@@ -45,7 +45,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		placeholderOutputPath: indexOutputDir(codebasePath),
 	}
 
-	executor, err := NewCommandExecutor(ctx, codebasePath, index, build, placeHolders)
+	executor, err := newCommandExecutor(ctx, codebasePath, index, build, placeHolders)
 	if err != nil {
 		return err
 	}
