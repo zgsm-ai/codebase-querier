@@ -28,3 +28,4 @@ test/testdata
 main
 main.exe
 .codebase_index/
+/test/testdata/

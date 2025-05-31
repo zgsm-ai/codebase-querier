@@ -287,144 +287,144 @@ type SymbolNode struct {
 	RelationshipsOut map[types.NodeType][]string // Outgoing relationships (type -> target symbol names)
 }
 
-// ParseSCIPFileForGraph parses a SCIP index file and extracts symbol and relationship information.
-// It returns a map where keys are symbol names and values are SymbolNode containing aggregated data.
+// ParseSCIPFileForGraph parses a SCIP index file and returns its relationship graph.
 func ParseSCIPFileForGraph(scipFilePath string) (map[string]*SymbolNode, error) {
-	fmt.Println("Starting SCIP file parsing...")
+	// Verify file exists
+	if _, err := os.Stat(scipFilePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
+	}
 
+	// Open file
 	file, err := os.Open(scipFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open SCIP file %s: %w", scipFilePath, err)
+		return nil, fmt.Errorf("failed to open SCIP file: %w", err)
 	}
 	defer file.Close()
 
-	symbolNodes := make(map[string]*SymbolNode)
-
-	// Helper to get or create a SymbolNode
-	getOrCreateSymbolNode := func(symbolName string) *SymbolNode {
-		node, exists := symbolNodes[symbolName]
-		if !exists {
-			node = &SymbolNode{
-				SymbolName:       symbolName,
-				ReferenceOccs:    make([]*scip.Occurrence, 0),
-				RelationshipsOut: make(map[types.NodeType][]string),
-			}
-			symbolNodes[symbolName] = node
-			fmt.Printf("Created node for symbol: %s\n", symbolName)
-		}
-		return node
+	// Check if file is empty
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+	if fileInfo.Size() == 0 {
+		return nil, fmt.Errorf("empty SCIP file")
 	}
 
-	// First pass: Collect SymbolInformation (from documents and external) and all occurrences
+	// Initialize symbol nodes map
+	symbolNodes := make(map[string]*SymbolNode)
+
+	// Create visitor
 	visitor := scip.IndexVisitor{
 		VisitMetadata: func(m *scip.Metadata) {
-			fmt.Println("Visiting Metadata...")
-			// Metadata collected but not stored in SymbolNode
+			// Store metadata if needed
 		},
 		VisitDocument: func(d *scip.Document) {
-			fmt.Printf("Visiting Document: %s\n", d.RelativePath)
-
-			// Process symbols defined within the document
+			// Process document symbols
 			for _, s := range d.Symbols {
-				fmt.Printf("  Processing Symbol in document: %s\n", s.Symbol)
-				node := getOrCreateSymbolNode(s.Symbol)
-				node.SymbolInfo = s
-
-				// Process relationships defined within this symbol's SymbolInformation
-				// These are outgoing relationships from this symbol
-				for _, rel := range s.Relationships {
-					fmt.Printf("    Processing Relationship from %s to %s\n", s.Symbol, rel.Symbol)
-					targetName := rel.Symbol
-					// Ensure target node exists
-					getOrCreateSymbolNode(targetName) // Create if not exists
-
-					var relationType types.NodeType
-					if rel.IsImplementation {
-						relationType = types.NodeTypeImplementation
-					} else if rel.IsReference {
-						relationType = types.NodeTypeReference // Map SymbolInfo IsReference to NodeTypeReference
-					} else {
-						continue // Skip unknown types
+				// Create or update symbol node
+				node, exists := symbolNodes[s.Symbol]
+				if !exists {
+					node = &SymbolNode{
+						SymbolName:       s.Symbol,
+						SymbolInfo:       s,
+						ReferenceOccs:    make([]*scip.Occurrence, 0),
+						RelationshipsOut: make(map[types.NodeType][]string),
 					}
-					node.RelationshipsOut[relationType] = append(node.RelationshipsOut[relationType], targetName)
+					symbolNodes[s.Symbol] = node
+				} else if node.SymbolInfo == nil {
+					node.SymbolInfo = s
+				}
+
+				// Process relationships
+				for _, rel := range s.Relationships {
+					// Determine relationship type
+					var relType types.NodeType
+					switch {
+					case rel.IsImplementation:
+						relType = types.NodeTypeImplementation
+					case rel.IsReference:
+						relType = types.NodeTypeReference
+					case rel.IsTypeDefinition:
+						relType = types.NodeTypeDefinition
+					default:
+						continue
+					}
+
+					// Add relationship
+					node.RelationshipsOut[relType] = append(node.RelationshipsOut[relType], rel.Symbol)
 				}
 			}
 
-			// Process occurrences within the document
-			fmt.Printf("  Processing %d Occurrences in document...\n", len(d.Occurrences))
+			// Process occurrences
 			for _, occ := range d.Occurrences {
 				if occ.Symbol == "" {
 					continue
 				}
-				node := getOrCreateSymbolNode(occ.Symbol)
 
+				// Create or update symbol node
+				node, exists := symbolNodes[occ.Symbol]
+				if !exists {
+					node = &SymbolNode{
+						SymbolName:       occ.Symbol,
+						ReferenceOccs:    make([]*scip.Occurrence, 0),
+						RelationshipsOut: make(map[types.NodeType][]string),
+					}
+					symbolNodes[occ.Symbol] = node
+				}
+
+				// Process occurrence
 				if scip.SymbolRole_Definition.Matches(occ) {
-					node.DefinitionOcc = occ // Store the definition occurrence
+					node.DefinitionOcc = occ
 				} else {
-					node.ReferenceOccs = append(node.ReferenceOccs, occ) // Collect all reference occurrences
+					node.ReferenceOccs = append(node.ReferenceOccs, occ)
 				}
 			}
 		},
 		VisitExternalSymbol: func(s *scip.SymbolInformation) {
-			fmt.Printf("Visiting External Symbol: %s\n", s.Symbol)
-			node := getOrCreateSymbolNode(s.Symbol)
-			if node.SymbolInfo == nil { // Don't overwrite if SymbolInfo was already added from document
+			// Create or update symbol node
+			node, exists := symbolNodes[s.Symbol]
+			if !exists {
+				node = &SymbolNode{
+					SymbolName:       s.Symbol,
+					SymbolInfo:       s,
+					ReferenceOccs:    make([]*scip.Occurrence, 0),
+					RelationshipsOut: make(map[types.NodeType][]string),
+				}
+				symbolNodes[s.Symbol] = node
+			} else if node.SymbolInfo == nil {
 				node.SymbolInfo = s
 			}
 
-			// Process relationships defined within this external symbol's SymbolInformation
-			// These are outgoing relationships from this symbol (e.g., an external library symbol referencing another)
+			// Process relationships
 			for _, rel := range s.Relationships {
-				fmt.Printf("    Processing Relationship from %s to %s\n", s.Symbol, rel.Symbol)
-				targetName := rel.Symbol
-				// Ensure target node exists
-				getOrCreateSymbolNode(targetName) // Create if not exists
-
-				var relationType types.NodeType
-				if rel.IsImplementation {
-					relationType = types.NodeTypeImplementation
-				} else if rel.IsReference {
-					relationType = types.NodeTypeReference
-				} else {
-					continue // Skip unknown types
+				// Determine relationship type
+				var relType types.NodeType
+				switch {
+				case rel.IsImplementation:
+					relType = types.NodeTypeImplementation
+				case rel.IsReference:
+					relType = types.NodeTypeReference
+				case rel.IsTypeDefinition:
+					relType = types.NodeTypeDefinition
+				default:
+					continue
 				}
-				node.RelationshipsOut[relationType] = append(node.RelationshipsOut[relationType], targetName)
+
+				// Add relationship
+				node.RelationshipsOut[relType] = append(node.RelationshipsOut[relType], rel.Symbol)
 			}
 		},
 	}
 
-	// Parse the SCIP file using the visitor
-	fmt.Println("Calling ParseStreaming...")
+	// Parse SCIP file
 	if err := visitor.ParseStreaming(file); err != nil {
-		return nil, fmt.Errorf("failed to parse SCIP file %s: %w", scipFilePath, err)
+		return nil, fmt.Errorf("failed to parse SCIP file: %w", err)
 	}
 
-	fmt.Printf("ParseStreaming finished. Total symbol nodes created (before post-processing): %d\n", len(symbolNodes))
-
-	// Post-processing: At this point, symbolNodes map contains all symbols,
-	// their SymbolInfo (if available), definition occurrence (if any), all reference occurrences,
-	// and outgoing relationships based on SymbolInfo.
-
-	// We still need to handle relationships implied by occurrences, particularly references.
-	// A reference occurrence of Symbol A at position P in Document D implicitly means
-	// "the code at P in D refers to Symbol A". To build a graph where nodes are symbols
-	// and edges represent relationships, we need to determine the source of this reference.
-	// If we want to represent "Symbol X references Symbol A", we need to find Symbol X.
-	// This is the difficult part without scope information.
-
-	// For now, let's return the symbolNodes map as is. It contains the raw data extracted
-	// in a structured way: symbols, their definitions, all reference locations, and
-	// relationships explicitly stated in SymbolInfo. This map can be used to answer queries like:
-	// - "Find definition of Symbol S" (look at SymbolNode[S].DefinitionOcc)
-	// - "Find all references to Symbol S" (look at SymbolNode[S].ReferenceOccs)
-	// - "Find what Symbol S implements/inherits" (look at SymbolNode[S].RelationshipsOut[Implementation/Inheritance])
-
-	// Converting this map to your []types.GraphNode tree structure requires deciding on the root
-	// nodes and how to represent references (which are incoming relationships to the target symbol)
-	// as children (outgoing relationships) of the referencing symbol's node. This mapping isn't
-	// straightforward and depends on the desired visualization or use case of the GraphNode tree.
-
-	// Let's return the map[string]*SymbolNode for now.
+	// Verify that we parsed some symbols
+	if len(symbolNodes) == 0 {
+		return nil, fmt.Errorf("no symbols found in SCIP file")
+	}
 
 	return symbolNodes, nil
 }

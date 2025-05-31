@@ -1,58 +1,52 @@
 package scip
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
-	"sync"
-
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 var (
-	indexLogger logx.Logger
-	once        sync.Once
+	// logger is the global logger instance
+	logger *log.Logger
 )
 
-// InitIndexLogger initializes the index logger
-func InitIndexLogger(logPath string) error {
-	var err error
-	once.Do(func() {
-		// Create log directory if not exists
-		if err = os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-			return
-		}
-
-		// Create index logger with file writer
-		writer, err := logx.NewFileWriter(logPath)
-		if err != nil {
-			return
-		}
-
-		indexLogger = logx.NewLogger(writer, logx.WithCallerSkip(1))
-	})
-	return err
-}
-
-// GetIndexLogger returns the index logger
-func GetIndexLogger() logx.Logger {
-	if indexLogger == nil {
-		// Fallback to default logger if not initialized
-		return logx.WithCallerSkip(1)
+// InitLogger initializes the logger
+func InitLogger(logPath string) error {
+	// Create log directory if it doesn't exist
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
 	}
-	return indexLogger
+
+	// Open log file
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	// Create logger
+	logger = log.New(logFile, "", log.LstdFlags)
+	return nil
 }
 
-// LogIndexInfo logs info level message for indexing
+// LogIndexInfo logs an info message
 func LogIndexInfo(format string, args ...interface{}) {
-	GetIndexLogger().Infof(format, args...)
+	if logger != nil {
+		logger.Printf("[INFO] "+format, args...)
+	}
 }
 
-// LogIndexError logs error level message for indexing
+// LogIndexError logs an error message
 func LogIndexError(format string, args ...interface{}) {
-	GetIndexLogger().Errorf(format, args...)
+	if logger != nil {
+		logger.Printf("[ERROR] "+format, args...)
+	}
 }
 
 // LogIndexDebug logs debug level message for indexing
 func LogIndexDebug(format string, args ...interface{}) {
-	GetIndexLogger().Debugf(format, args...)
-} 
+	if logger != nil {
+		logger.Printf("[DEBUG] "+format, args...)
+	}
+}

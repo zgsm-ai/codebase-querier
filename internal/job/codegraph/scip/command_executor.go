@@ -1,6 +1,7 @@
 package scip
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -17,16 +18,15 @@ type CommandExecutor struct {
 	processing map[string]struct{}
 }
 
-var (
-	processingLock  sync.Mutex
-	processingRepos = make(map[string]struct{})
-)
-
 // NewCommandExecutor creates a new CommandExecutor
 func NewCommandExecutor(outputPath string) (*CommandExecutor, error) {
+	if outputPath == "" {
+		return nil, fmt.Errorf("output path is required")
+	}
+
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		return nil, NewError(ErrCodeResource, "failed to create output directory", err)
+		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	return &CommandExecutor{
@@ -35,20 +35,46 @@ func NewCommandExecutor(outputPath string) (*CommandExecutor, error) {
 	}, nil
 }
 
-// ExecuteCommand executes a command and returns its output
-func (e *CommandExecutor) ExecuteCommand(ctx context.Context, command string) (string, error) {
-	LogIndexInfo("Executing command: %s", command)
+// Execute executes a command
+func (e *CommandExecutor) Execute(ctx context.Context, cmd *Command) error {
+	cmdStr := e.BuildCommandString(cmd, "", e.outputPath)
+	_, err := e.ExecuteCommand(ctx, cmdStr)
+	return err
+}
 
-	// Create command with context
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		LogIndexError("Command execution failed: %v, output: %s", err, string(output))
-		return "", NewError(ErrCodeCommand, fmt.Sprintf("command execution failed: %s", command), err)
+// ExecuteCommand executes a command string
+func (e *CommandExecutor) ExecuteCommand(ctx context.Context, cmdStr string) (string, error) {
+	LogIndexInfo("Executing command: %s", cmdStr)
+
+	cmd := exec.CommandContext(ctx, "bash", "-c", cmdStr)
+	cmd.Dir = e.outputPath
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		output := stdout.String()
+		if stderr.String() != "" {
+			if output != "" {
+				output += "\n"
+			}
+			output += stderr.String()
+		}
+		LogIndexError("Command execution failed: %v, output: %s", err, output)
+		return "", err
 	}
 
-	LogIndexInfo("Command executed successfully, output: %s", string(output))
-	return string(output), nil
+	output := stdout.String()
+	if stderr.String() != "" {
+		if output != "" {
+			output += "\n"
+		}
+		output += stderr.String()
+	}
+
+	LogIndexInfo("Command executed successfully, output: %s", output)
+	return output, nil
 }
 
 // GenerateIndex generates the SCIP index for a codebase
@@ -72,30 +98,11 @@ func (e *CommandExecutor) GenerateIndex(ctx context.Context, codebasePath string
 	// Detect language
 	LogIndexInfo("Detected language: %s", langConfig.Name)
 
-	// Detect build tool
-	buildTool, err := langConfig.FindBuildTool(codebasePath)
-	if err != nil {
-		return NewError(ErrCodeBuildTool, "failed to find build tool", err)
-	}
-	LogIndexInfo("Detected build tool: %s", buildTool.Name)
-
-	// Execute build commands if any
-	if len(buildTool.BuildCommands) > 0 {
-		LogIndexInfo("Executing build commands for %s", buildTool.Name)
-		for _, cmd := range buildTool.BuildCommands {
-			buildArgs := strings.Join(cmd.Args, " ")
-			_, err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, buildArgs))
-			if err != nil {
-				return NewError(ErrCodeCommand, "build command failed", err)
-			}
-		}
-	}
-
 	// Execute index commands
 	for _, tool := range langConfig.Tools {
 		LogIndexInfo("Executing index commands for tool: %s", tool.Name)
 		for _, cmd := range tool.Commands {
-			_, err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, ""))
+			_, err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, "", codebasePath))
 			if err != nil {
 				return NewError(ErrCodeCommand, "index command failed", err)
 			}
@@ -113,20 +120,16 @@ func (e *CommandExecutor) GenerateIndex(ctx context.Context, codebasePath string
 }
 
 // BuildCommandString builds a command string with proper argument substitution
-func (e *CommandExecutor) BuildCommandString(cmd Command, buildArgs string) string {
+func (e *CommandExecutor) BuildCommandString(cmd *Command, buildArgs string, sourcePath string) string {
 	args := make([]string, len(cmd.Args))
 	for i, arg := range cmd.Args {
-		args[i] = e.replacePlaceholders(arg, buildArgs)
+		arg = strings.ReplaceAll(arg, "__sourcePath__", sourcePath)
+		arg = strings.ReplaceAll(arg, "__outputPath__", e.outputPath)
+		arg = strings.ReplaceAll(arg, "__buildArgs__", buildArgs)
+		args[i] = arg
 	}
-	return fmt.Sprintf("%s %s", cmd.Base, strings.Join(args, " "))
-}
 
-// replacePlaceholders replaces placeholders in command arguments
-func (e *CommandExecutor) replacePlaceholders(arg, buildArgs string) string {
-	arg = strings.ReplaceAll(arg, "__sourcePath__", e.outputPath)
-	arg = strings.ReplaceAll(arg, "__outputPath__", e.outputPath)
-	arg = strings.ReplaceAll(arg, "__buildArgs__", buildArgs)
-	return arg
+	return fmt.Sprintf("%s %s", cmd.Base, strings.Join(args, " "))
 }
 
 // Cleanup removes the output directory and releases any locks

@@ -2,204 +2,140 @@ package scip
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCommandExecutor_ExecuteCommand(t *testing.T) {
+func TestCommandExecutor(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "scip-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create a test config file
-	configPath := filepath.Join(tempDir, "test-config.yaml")
-	configContent := `
-languages:
-  - name: typescript
-    detection_files: ["package.json"]
-    tools:
-      - name: scip-typescript
-        commands:
-          - base: "echo"
-            args:
-              - "test"
-              - "__sourcePath__"
-              - "__outputPath__"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
+	executor, err := NewCommandExecutor(tempDir)
+	require.NoError(t, err)
 
-	// Create command executor
-	executor, err := NewCommandExecutor(tempDir, configPath)
-	if err != nil {
-		t.Fatalf("Failed to create command executor: %v", err)
-	}
+	// Test simple command execution
+	output, err := executor.ExecuteCommand(context.Background(), "echo 'test'")
+	require.NoError(t, err)
+	assert.Equal(t, "test\n", output)
 
-	// Test ExecuteCommand
-	ctx := context.Background()
-	output, err := executor.ExecuteCommand(ctx, "echo test")
-	if err != nil {
-		t.Errorf("ExecuteCommand failed: %v", err)
-	}
-	if output != "test\n" {
-		t.Errorf("ExecuteCommand returned wrong output: got %v, want %v", output, "test\n")
-	}
+	// Test command with error
+	_, err = executor.ExecuteCommand(context.Background(), "nonexistent-command")
+	assert.Error(t, err)
 }
 
-func TestCommandExecutor_ExecuteCommandStruct(t *testing.T) {
+func TestBuildCommandString(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "scip-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create a test config file
-	configPath := filepath.Join(tempDir, "test-config.yaml")
-	configContent := `
-languages:
-  - name: typescript
-    detection_files: ["package.json"]
-    tools:
-      - name: scip-typescript
-        commands:
-          - base: "echo"
-            args:
-              - "test"
-              - "__sourcePath__"
-              - "__outputPath__"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
+	executor, err := NewCommandExecutor(tempDir)
+	require.NoError(t, err)
+
+	cmd := &Command{
+		Base: "test-command",
+		Args: []string{
+			"--source",
+			"__sourcePath__",
+			"--output",
+			"__outputPath__",
+			"--build-args",
+			"__buildArgs__",
+		},
 	}
 
-	// Create command executor
-	executor, err := NewCommandExecutor(tempDir, configPath)
-	if err != nil {
-		t.Fatalf("Failed to create command executor: %v", err)
-	}
+	// Test without build args
+	expected := "test-command --source " + tempDir + " --output " + tempDir + " --build-args "
+	result := executor.BuildCommandString(cmd, "", tempDir)
+	assert.Equal(t, expected, result)
 
-	// Test ExecuteCommandStruct
-	ctx := context.Background()
-	cmd := Command{
-		Base: "echo",
-		Args: []CommandArg{"test", "__sourcePath__", "__outputPath__"},
-	}
-	err = executor.ExecuteCommandStruct(ctx, cmd, "")
-	if err != nil {
-		t.Errorf("ExecuteCommandStruct failed: %v", err)
-	}
+	// Test with build args
+	buildArgs := "build arg1 arg2"
+	expected = "test-command --source " + tempDir + " --output " + tempDir + " --build-args " + buildArgs
+	result = executor.BuildCommandString(cmd, buildArgs, tempDir)
+	assert.Equal(t, expected, result)
 }
 
-func TestCommandExecutor_BuildCommandString(t *testing.T) {
+func TestCommandExecutor_Timeout(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "scip-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create a test config file
-	configPath := filepath.Join(tempDir, "test-config.yaml")
-	configContent := `
-languages:
-  - name: typescript
-    detection_files: ["package.json"]
-    tools:
-      - name: scip-typescript
-        commands:
-          - base: "echo"
-            args:
-              - "test"
-              - "__sourcePath__"
-              - "__outputPath__"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
+	executor, err := NewCommandExecutor(tempDir)
+	require.NoError(t, err)
 
-	// Create command executor
-	executor, err := NewCommandExecutor(tempDir, configPath)
-	if err != nil {
-		t.Fatalf("Failed to create command executor: %v", err)
-	}
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1)
+	defer cancel()
 
-	// Test BuildCommandString
-	cmd := Command{
-		Base: "echo",
-		Args: []CommandArg{"test", "__sourcePath__", "__outputPath__"},
-	}
-	expected := "echo test " + tempDir + " " + filepath.Join(tempDir, ".codebase_index")
-	actual := executor.BuildCommandString(cmd, "")
-	if actual != expected {
-		t.Errorf("BuildCommandString returned wrong string: got %v, want %v", actual, expected)
-	}
+	// Test command timeout
+	_, err = executor.ExecuteCommand(ctx, "sleep 2")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 
 func TestCommandExecutor_GenerateIndex(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "scip-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
 	// Create a test repository structure
-	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		t.Fatalf("Failed to create test repo dir: %v", err)
-	}
+	testRepo := filepath.Join(tempDir, "test-repo")
+	err = os.MkdirAll(testRepo, 0755)
+	require.NoError(t, err)
 
-	// Create a test package.json for TypeScript detection
-	packageJSON := `{
-		"name": "test-project",
-		"version": "1.0.0",
-		"dependencies": {}
-	}`
-	if err := os.WriteFile(filepath.Join(repoPath, "package.json"), []byte(packageJSON), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
+	// Create a test Go module
+	err = os.WriteFile(filepath.Join(testRepo, "go.mod"), []byte(`
+		module github.com/test/project
 
-	// Create a test config file
-	configPath := filepath.Join(tempDir, "test-config.yaml")
-	configContent := `
-languages:
-  - name: typescript
-    detection_files: ["package.json"]
-    tools:
-      - name: scip-typescript
-        commands:
-          - base: "echo"
-            args:
-              - "test"
-              - "__sourcePath__"
-              - "__outputPath__"
-`
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
+		go 1.21
+	`), 0644)
+	require.NoError(t, err)
 
-	// Create command executor
-	executor, err := NewCommandExecutor(repoPath, configPath)
+	// Create executor
+	executor, err := NewCommandExecutor(testRepo)
+	require.NoError(t, err)
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Generate index
+	outputPath := filepath.Join(testRepo, ".codebase_index")
+	err = os.MkdirAll(outputPath, 0755)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("scip-go --project-root %s --output %s/index.scip", testRepo, outputPath)
+	_, err = executor.ExecuteCommand(ctx, cmd)
 	if err != nil {
-		t.Fatalf("Failed to create command executor: %v", err)
+		// If scip-go is not installed, skip the test
+		if strings.Contains(err.Error(), "exit status 127") {
+			t.Skip("scip-go command not found, skipping test")
+		}
+		t.Errorf("index command failed: %v", err)
+		return
 	}
 
-	// Test GenerateIndex
-	ctx := context.Background()
-	err = executor.GenerateIndex(ctx)
-	if err != nil {
-		t.Errorf("GenerateIndex failed: %v", err)
-	}
+	// Verify the output directory exists
+	assert.DirExists(t, outputPath)
 
-	// Verify output directory was created
-	outputDir := filepath.Join(repoPath, ".codebase_index")
-	if _, err := os.Stat(outputDir); err != nil {
-		t.Errorf("Output directory was not created: %v", err)
-	}
-} 
+	// Verify the index file exists
+	indexFile := filepath.Join(outputPath, "index.scip")
+	assert.FileExists(t, indexFile)
+
+	// Verify the index file is not empty
+	fileInfo, err := os.Stat(indexFile)
+	require.NoError(t, err)
+	assert.Greater(t, fileInfo.Size(), int64(0))
+}

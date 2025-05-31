@@ -4,36 +4,36 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Config represents the SCIP configuration
 type Config struct {
-	Languages []LanguageConfig `yaml:"languages"`
+	Languages []*LanguageConfig `yaml:"languages"`
 }
 
 // LanguageConfig represents a language configuration
 type LanguageConfig struct {
-	Name            string       `yaml:"name"`
-	DetectionFiles  []string     `yaml:"detection_files"`
-	BuildTools      []BuildTool  `yaml:"build_tools"`
-	Tools           []ToolConfig `yaml:"tools"`
+	Name           string        `yaml:"name"`
+	DetectionFiles []string      `yaml:"detection_files"`
+	BuildTools     []*BuildTool  `yaml:"build_tools,omitempty"`
+	Tools          []*ToolConfig `yaml:"tools"`
 }
 
 // BuildTool represents a build tool configuration
 type BuildTool struct {
-	Name           string    `yaml:"name"`
-	DetectionFiles []string  `yaml:"detection_files"`
-	Priority       int       `yaml:"priority"`
-	BuildCommands  []Command `yaml:"build_commands"`
+	Name           string     `yaml:"name"`
+	DetectionFiles []string   `yaml:"detection_files"`
+	Priority       int        `yaml:"priority"`
+	BuildCommands  []*Command `yaml:"build_commands"`
 }
 
 // ToolConfig represents a tool configuration
 type ToolConfig struct {
-	Name     string    `yaml:"name"`
-	Commands []Command `yaml:"commands"`
+	Name     string     `yaml:"name"`
+	Commands []*Command `yaml:"commands"`
 }
 
 // Command represents a command configuration
@@ -43,17 +43,15 @@ type Command struct {
 }
 
 // LoadConfig loads the SCIP configuration from a file
-func LoadConfig(configPath string) (*Config, error) {
-	// Read config file
-	data, err := os.ReadFile(configPath)
+func LoadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, NewError(ErrCodeConfig, "failed to read config file", err)
+		return nil, fmt.Errorf("CONFIG_ERROR: failed to read config file: %w", err)
 	}
 
-	// Parse config
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, NewError(ErrCodeConfig, "failed to parse config file", err)
+		return nil, fmt.Errorf("CONFIG_ERROR: failed to parse config file: %w", err)
 	}
 
 	return &config, nil
@@ -62,129 +60,81 @@ func LoadConfig(configPath string) (*Config, error) {
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	if len(c.Languages) == 0 {
-		return NewError(ErrCodeConfig, "no languages configured", nil)
+		return fmt.Errorf("CONFIG_ERROR: no languages configured")
 	}
 
 	for _, lang := range c.Languages {
-		if err := lang.Validate(); err != nil {
-			return NewError(ErrCodeConfig, fmt.Sprintf("invalid language config for %s", lang.Name), err)
+		if lang.Name == "" {
+			return fmt.Errorf("CONFIG_ERROR: language name is required")
+		}
+		if len(lang.DetectionFiles) == 0 {
+			return fmt.Errorf("CONFIG_ERROR: detection files are required for language %s", lang.Name)
+		}
+		if len(lang.Tools) == 0 {
+			return fmt.Errorf("CONFIG_ERROR: tools are required for language %s", lang.Name)
 		}
 	}
 
 	return nil
 }
 
-// Validate validates a language configuration
-func (l *LanguageConfig) Validate() error {
-	if l.Name == "" {
-		return fmt.Errorf("language name is required")
+// DetectLanguageAndTool detects the language and tool for a repository
+func (c *Config) DetectLanguageAndTool(repoPath string) (string, string, error) {
+	// Check if repository exists
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return "", "", fmt.Errorf("codebase does not exist: %w", err)
 	}
 
-	if len(l.DetectionFiles) == 0 {
-		return fmt.Errorf("detection files are required")
-	}
-
-	if len(l.Tools) == 0 {
-		return fmt.Errorf("tools are required")
-	}
-
-	for _, tool := range l.Tools {
-		if err := tool.Validate(); err != nil {
-			return fmt.Errorf("invalid tool config for %s: %v", tool.Name, err)
-		}
-	}
-
-	for _, buildTool := range l.BuildTools {
-		if err := buildTool.Validate(); err != nil {
-			return fmt.Errorf("invalid build tool config for %s: %v", buildTool.Name, err)
-		}
-	}
-
-	return nil
-}
-
-// Validate validates a tool configuration
-func (t *ToolConfig) Validate() error {
-	if t.Name == "" {
-		return fmt.Errorf("tool name is required")
-	}
-
-	if len(t.Commands) == 0 {
-		return fmt.Errorf("commands are required")
-	}
-
-	for _, cmd := range t.Commands {
-		if err := cmd.Validate(); err != nil {
-			return fmt.Errorf("invalid command config: %v", err)
-		}
-	}
-
-	return nil
-}
-
-// Validate validates a build tool configuration
-func (b *BuildTool) Validate() error {
-	if b.Name == "" {
-		return fmt.Errorf("build tool name is required")
-	}
-
-	if len(b.DetectionFiles) == 0 {
-		return fmt.Errorf("detection files are required")
-	}
-
-	for _, cmd := range b.BuildCommands {
-		if err := cmd.Validate(); err != nil {
-			return fmt.Errorf("invalid build command config: %v", err)
-		}
-	}
-
-	return nil
-}
-
-// Validate validates a command configuration
-func (c *Command) Validate() error {
-	if c.Base == "" {
-		return fmt.Errorf("command base is required")
-	}
-	return nil
-}
-
-// FindLanguageConfig finds the language configuration for a codebase
-func (c *Config) FindLanguageConfig(codebasePath string) (*LanguageConfig, error) {
+	// Find language config
 	for _, lang := range c.Languages {
-		if found, err := findDetectionFile(codebasePath, lang.DetectionFiles); err == nil && found != "" {
-			return &lang, nil
+		for _, file := range lang.DetectionFiles {
+			if _, err := os.Stat(filepath.Join(repoPath, file)); err == nil {
+				return lang.Name, lang.Tools[0].Name, nil
+			}
 		}
 	}
-	return nil, NewError(ErrCodeLanguage, "no matching language configuration found", nil)
+
+	return "", "", fmt.Errorf("no matching language configuration found")
 }
 
-// FindBuildTool finds the build tool configuration for a language
-func (l *LanguageConfig) FindBuildTool(codebasePath string) (*BuildTool, error) {
-	// Sort build tools by priority
-	sort.Slice(l.BuildTools, func(i, j int) bool {
-		return l.BuildTools[i].Priority < l.BuildTools[j].Priority
-	})
-
-	for _, tool := range l.BuildTools {
-		if found, err := findDetectionFile(codebasePath, tool.DetectionFiles); err == nil && found != "" {
-			return &tool, nil
+// GenerateCommand generates a command for a language and tool
+func (c *Config) GenerateCommand(sourcePath, language, tool string) (*Command, error) {
+	// Find language config
+	var langConfig *LanguageConfig
+	for _, lang := range c.Languages {
+		if lang.Name == language {
+			langConfig = lang
+			break
 		}
 	}
+	if langConfig == nil {
+		return nil, fmt.Errorf("unsupported language: %s", language)
+	}
 
-	return nil, NewError(ErrCodeBuildTool, "no matching build tool configuration found", nil)
-}
-
-// findDetectionFile finds a detection file in the codebase
-func findDetectionFile(codebasePath string, detectionFiles []string) (string, error) {
-	for _, pattern := range detectionFiles {
-		matches, err := filepath.Glob(filepath.Join(codebasePath, pattern))
-		if err != nil {
-			return "", NewError(ErrCodeResource, "failed to search for detection files", err)
-		}
-		if len(matches) > 0 {
-			return matches[0], nil
+	// Find tool config
+	var toolConfig *ToolConfig
+	for _, t := range langConfig.Tools {
+		if t.Name == tool {
+			toolConfig = t
+			break
 		}
 	}
-	return "", nil
+	if toolConfig == nil {
+		return nil, fmt.Errorf("unsupported tool: %s", tool)
+	}
+
+	// Generate command
+	cmd := toolConfig.Commands[0]
+	args := make([]string, len(cmd.Args))
+	for i, arg := range cmd.Args {
+		// Trim spaces from arguments
+		arg = strings.TrimSpace(arg)
+		args[i] = strings.ReplaceAll(arg, "__sourcePath__", sourcePath)
+		args[i] = strings.ReplaceAll(args[i], "__outputPath__", filepath.Join(sourcePath, ".codebase_index"))
+	}
+
+	return &Command{
+		Base: strings.TrimSpace(cmd.Base),
+		Args: args,
+	}, nil
 }

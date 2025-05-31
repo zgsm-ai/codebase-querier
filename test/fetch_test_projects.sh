@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# 获取脚本所在目录的绝对路径
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 目标目录设置为脚本所在目录下的testdata
-TARGET_DIR="$SCRIPT_DIR/testdata"
+TARGET_DIR="/tmp/projects"
 mkdir -p ${TARGET_DIR}
 
 # 使用普通数组和分隔符定义每种语言的多个项目
