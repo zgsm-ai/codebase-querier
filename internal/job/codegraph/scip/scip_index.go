@@ -2,12 +2,8 @@ package scip
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type IndexGenerator interface {

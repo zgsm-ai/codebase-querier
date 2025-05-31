@@ -8,34 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 )
-
-// ErrorCode represents the type of error that occurred
-type ErrorCode int
-
-const (
-	ErrConfigLoad ErrorCode = iota + 1
-	ErrLanguageDetection
-	ErrBuildToolDetection
-	ErrCommandExecution
-	ErrIndexGeneration
-	ErrResourceCleanup
-)
-
-// SCIPError represents a SCIP-specific error
-type SCIPError struct {
-	Code    ErrorCode
-	Message string
-	Err     error
-}
-
-func (e *SCIPError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
-	}
-	return e.Message
-}
 
 // CommandExecutor handles command execution for SCIP indexing
 type CommandExecutor struct {
@@ -57,8 +30,8 @@ func NewCommandExecutor(outputPath string) (*CommandExecutor, error) {
 	}
 
 	return &CommandExecutor{
-		outputPath:  outputPath,
-		processing:  make(map[string]struct{}),
+		outputPath: outputPath,
+		processing: make(map[string]struct{}),
 	}, nil
 }
 
@@ -111,7 +84,8 @@ func (e *CommandExecutor) GenerateIndex(ctx context.Context, codebasePath string
 		LogIndexInfo("Executing build commands for %s", buildTool.Name)
 		for _, cmd := range buildTool.BuildCommands {
 			buildArgs := strings.Join(cmd.Args, " ")
-			if err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, buildArgs)); err != nil {
+			_, err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, buildArgs))
+			if err != nil {
 				return NewError(ErrCodeCommand, "build command failed", err)
 			}
 		}
@@ -121,7 +95,8 @@ func (e *CommandExecutor) GenerateIndex(ctx context.Context, codebasePath string
 	for _, tool := range langConfig.Tools {
 		LogIndexInfo("Executing index commands for tool: %s", tool.Name)
 		for _, cmd := range tool.Commands {
-			if err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, "")); err != nil {
+			_, err := e.ExecuteCommand(ctx, e.BuildCommandString(cmd, ""))
+			if err != nil {
 				return NewError(ErrCodeCommand, "index command failed", err)
 			}
 		}
@@ -168,4 +143,4 @@ func (e *CommandExecutor) Cleanup() error {
 	}
 
 	return nil
-} 
+}

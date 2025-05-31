@@ -2,29 +2,19 @@ package scip
 
 import "fmt"
 
-// ErrorCode represents the type of error
+// ErrorCode represents the type of error that occurred
 type ErrorCode int
 
 const (
-	// ErrCodeUnknown represents an unknown error
-	ErrCodeUnknown ErrorCode = iota
-	// ErrCodeConfig represents configuration related errors
-	ErrCodeConfig
-	// ErrCodeLanguage represents language detection errors
+	ErrCodeConfig ErrorCode = iota + 1
 	ErrCodeLanguage
-	// ErrCodeBuildTool represents build tool detection errors
 	ErrCodeBuildTool
-	// ErrCodeCommand represents command execution errors
 	ErrCodeCommand
-	// ErrCodeTimeout represents timeout errors
-	ErrCodeTimeout
-	// ErrCodeConcurrent represents concurrent processing errors
-	ErrCodeConcurrent
-	// ErrCodeResource represents resource related errors
 	ErrCodeResource
+	ErrCodeConcurrent
 )
 
-// SCIPError represents a SCIP indexing error
+// SCIPError represents a SCIP-specific error
 type SCIPError struct {
 	Code    ErrorCode
 	Message string
@@ -33,9 +23,9 @@ type SCIPError struct {
 
 func (e *SCIPError) Error() string {
 	if e.Err != nil {
-		return fmt.Sprintf("[%d] %s: %v", e.Code, e.Message, e.Err)
+		return fmt.Sprintf("%s: %v", e.Message, e.Err)
 	}
-	return fmt.Sprintf("[%d] %s", e.Code, e.Message)
+	return e.Message
 }
 
 // NewError creates a new SCIPError
@@ -60,5 +50,5 @@ func GetErrorCode(err error) ErrorCode {
 	if scipErr, ok := err.(*SCIPError); ok {
 		return scipErr.Code
 	}
-	return ErrCodeUnknown
-} 
+	return ErrCodeConfig
+}
