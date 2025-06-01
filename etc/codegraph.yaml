@@ -1,14 +1,12 @@
-# SCIP Indexing Commands Configuration (Structured)
-# This file defines the commands used to generate SCIP indices for different languages and build tools
-
 languages:
   - name: typescript
     detection_files: ["tsconfig.json"]
     index:
       name: scip-typescript
       commands:
-        - base: "scip-typescript index"
+        - base: "scip-typescript"
           args:
+            - "index"
             - "--cwd"
             - "__sourcePath__"
             - "--output"
@@ -22,8 +20,9 @@ languages:
     index:
       name: scip-typescript
       commands:
-        - base: "scip-typescript index"
+        - base: "scip-typescript"
           args:
+            - "index"
             - "--cwd"
             - "__sourcePath__"
             - "--output"
@@ -60,16 +59,17 @@ languages:
     index:
       name: scip-java
       commands:
-        - base: "scip-java index"
+        - base: "scip-java"
           args:
+            - "index"
             - "--cwd"
             - "__sourcePath__"
             - "--targetroot"
             - "__outputPath__/build"
             - "--output"
             - "__outputPath__/index.scip"
-            - "--" # Separator for build tool arguments
-            - "__buildArgs__" with the substituted build command arguments
+            - "--"
+            - "__buildArgs__"
 
   - name: python
     detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
@@ -89,8 +89,9 @@ languages:
     index:
       name: scip-python
       commands:
-        - base: "scip-python index"
+        - base: "scip-python"
           args:
+            - "index"
             - "--output"
             - "__outputPath__/index.scip"
             - "--cwd"
@@ -119,8 +120,9 @@ languages:
     index:
       name: scip-dotnet
       commands:
-        - base: "scip-dotnet index"
+        - base: "scip-dotnet"
           args:
+            - "index"
             - "--output"
             - "__outputPath__/index.scip"
             - "--working-directory"
@@ -233,8 +235,9 @@ languages:
     index:
       name: scip-rust
       commands:
-        - base: "rust-analyzer scip"
+        - base: "rust-analyzer"
           args:
+            - "scip"
             - "__sourcePath__"
             - "--output"
             - "__outputPath__/index.scip"

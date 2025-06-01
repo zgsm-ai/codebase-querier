@@ -39,7 +39,7 @@ func NewEmbeddingProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg 
 		svcCtx: svcCtx,
 		msg:    msg,
 		logger: logx.WithContext(ctx),
-	}
+	}, nil
 }
 
 func (t *embeddingProcessor) Process() error {

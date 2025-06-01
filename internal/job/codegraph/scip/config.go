@@ -44,12 +44,12 @@ type Command struct {
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("CONFIG_ERROR: failed to read config file: %w", err)
+		return nil, fmt.Errorf("CONFIG_ERROR: failed to read config file: %v", err)
 	}
 
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("CONFIG_ERROR: failed to parse config file: %w", err)
+		return nil, fmt.Errorf("CONFIG_ERROR: failed to parse config file: %v", err)
 	}
 
 	return &config, nil
