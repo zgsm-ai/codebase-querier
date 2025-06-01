@@ -339,7 +339,7 @@ func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath 
 	return string(content), nil
 }
 
-func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, process func(io.ReadCloser) (bool, error)) error {
+func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {
 	prefix := filepath.Join(codebasePath, dir)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
@@ -355,23 +355,42 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			return fmt.Errorf("failed to list objects: %w", object.Err)
 		}
 
-		// Skip directories
-		if object.Size == 0 && strings.HasSuffix(object.Key, "/") {
+		// 构建 WalkContext
+		walkCtx := &WalkContext{
+			Path:         object.Key,
+			RelativePath: strings.TrimPrefix(object.Key, prefix),
+			Info: &types.FileInfo{
+				Name:    filepath.Base(object.Key),
+				Size:    object.Size,
+				IsDir:   object.Size == 0 && strings.HasSuffix(object.Key, "/"),
+				ModTime: object.LastModified,
+				Mode:    defaultFileMode,
+			},
+			ParentPath: filepath.Dir(object.Key),
+		}
+
+		// 如果是目录，直接调用 walkFn，传入 nil reader
+		if walkCtx.Info.IsDir {
+			err := walkFn(walkCtx, nil)
+			if errors.Is(err, SkipDir) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
+		// 对于文件，获取对象并传入 reader
 		obj, err := m.client.GetObject(ctx, m.cfg.Minio.Bucket, object.Key, minio.GetObjectOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get object %s: %w", object.Key, err)
 		}
 
-		stop, err := process(obj)
+		err = walkFn(walkCtx, obj)
 		obj.Close()
 		if err != nil {
 			return err
-		}
-		if stop {
-			return nil
 		}
 	}
 

@@ -302,7 +302,7 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
-	fullPath := l.getFullPath("", codebasePath, filePath)
+	fullPath := filepath.Join(codebasePath, filePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return "", err
@@ -310,32 +310,44 @@ func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath 
 	return string(content), nil
 }
 
-func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, process func(io.ReadCloser) (bool, error)) error {
-	fullPath := l.getFullPath("", codebasePath, dir)
+func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {
+	fullPath := filepath.Join(codebasePath, dir)
 	return filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if info.IsDir() {
-			return nil
+		// 构建 WalkContext
+		walkCtx := &WalkContext{
+			Path:         path,
+			RelativePath: strings.TrimPrefix(path, fullPath),
+			Info: &types.FileInfo{
+				Name:    info.Name(),
+				Size:    info.Size(),
+				IsDir:   info.IsDir(),
+				ModTime: info.ModTime(),
+				Mode:    info.Mode(),
+			},
+			ParentPath: filepath.Dir(path),
 		}
 
+		// 如果是目录，直接调用 walkFn，传入 nil reader
+		if info.IsDir() {
+			err := walkFn(walkCtx, nil)
+			if errors.Is(err, SkipDir) {
+				return filepath.SkipDir
+			}
+			return err
+		}
+
+		// 对于文件，打开并传入 reader
 		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		stop, err := process(file)
-		if err != nil {
-			return err
-		}
-		if stop {
-			return filepath.SkipAll
-		}
-
-		return nil
+		return walkFn(walkCtx, file)
 	})
 }
 

@@ -2,6 +2,7 @@ package codebase
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -57,9 +58,30 @@ type Store interface {
 	// Walk walks through the codebase and processes each file
 	// dir: the root directory to start walking from
 	// process: function to process each file
-	Walk(ctx context.Context, codebasePath string, dir string, process func(io.ReadCloser) (bool, error)) error
+	Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error
 
 	// BatchDelete deletes multiple files or directories
 	// paths: list of paths to delete
 	BatchDelete(ctx context.Context, codebasePath string, paths []string) error
 }
+
+// WalkContext provides context information during directory traversal
+type WalkContext struct {
+	// Current file or directory being processed
+	Path string
+	// Relative path from the root directory
+	RelativePath string
+	// File information
+	Info *types.FileInfo
+	// Parent directory path
+	ParentPath string
+}
+
+// WalkFunc is the type of the function called for each file or directory
+
+type WalkFunc func(walkCtx *WalkContext, reader io.ReadCloser) error
+
+// SkipDir is used as a return value from WalkFuncs to indicate that
+// the directory named in the call is to be skipped. It is not returned
+// as an error by any function.
+var SkipDir = errors.New("skip this directory")

@@ -8,7 +8,7 @@ CREATE TABLE codebase_indexer.public.codebase
     client_id      VARCHAR(255) NOT NULL, -- User client identifier, e.g., MAC address
     user_id        VARCHAR(255) NOT NULL, -- User identifier, e.g., email or phone number
     name           VARCHAR(255) NOT NULL, -- Codebase name
-    local_path     TEXT         NOT NULL, -- Local path of the project
+    client_path    TEXT         NOT NULL, -- Local path of the project
     path           TEXT         NOT NULL, -- Codebase path
     file_count     INT          NOT NULL,
     total_size     BIGINT       NOT NULL,

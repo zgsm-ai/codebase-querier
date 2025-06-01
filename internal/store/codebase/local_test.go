@@ -2,6 +2,7 @@ package codebase
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -311,6 +312,90 @@ func TestLocalCodebase_Tree(t *testing.T) {
 					assert.Equal(t, tt.want[0].Size, got[0].Size)
 					assert.Equal(t, tt.want[0].IsDir, got[0].IsDir)
 				}
+			}
+		})
+	}
+}
+
+func TestLocalCodebase_Walk(t *testing.T) {
+	tests := []struct {
+		name         string
+		codebasePath string
+		dir          string
+		setupFiles   func(string) error
+		wantPaths    []string
+		wantErr      bool
+	}{
+		{
+			name:         "successful walk",
+			codebasePath: filepath.Join(os.TempDir(), "test-codebase-*", "test-client", "test-path"),
+			dir:          "",
+			setupFiles: func(basePath string) error {
+				// Create test directory structure
+				files := map[string]string{
+					"file1.txt":           "content1",
+					"dir1/file2.txt":      "content2",
+					"dir1/dir2/file3.txt": "content3",
+					".hidden/file4.txt":   "content4",
+				}
+
+				for path, content := range files {
+					fullPath := filepath.Join(basePath, path)
+					if err := os.MkdirAll(filepath.Dir(fullPath), defaultLocalDirMode); err != nil {
+						return err
+					}
+					if err := os.WriteFile(fullPath, []byte(content), defaultLocalFileMode); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			wantPaths: []string{
+				"file1.txt",
+				"dir1/file2.txt",
+				"dir1/dir2/file3.txt",
+			},
+			wantErr: false,
+		},
+		{
+			name:         "empty codebase path",
+			codebasePath: "",
+			dir:          "",
+			setupFiles:   func(string) error { return nil },
+			wantPaths:    nil,
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			codebase, path := setupTestLocalCodebase(t)
+			if err := tt.setupFiles(path); err != nil {
+				t.Fatalf("Failed to setup test files: %v", err)
+			}
+
+			var visitedPaths []string
+			err := codebase.Walk(context.Background(), path, tt.dir, func(walkCtx *WalkContext, reader io.ReadCloser) error {
+				// Skip hidden files and directories
+				if strings.HasPrefix(walkCtx.Info.Name, ".") {
+					if walkCtx.Info.IsDir {
+						return SkipDir
+					}
+					return nil
+				}
+
+				// Only record file paths
+				if !walkCtx.Info.IsDir {
+					visitedPaths = append(visitedPaths, walkCtx.RelativePath)
+				}
+				return nil
+			})
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.wantPaths, visitedPaths)
 			}
 		})
 	}

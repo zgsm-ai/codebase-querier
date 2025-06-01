@@ -3,6 +3,7 @@ package codebase
 import (
 	"context"
 	"github.com/zeromicro/go-zero/core/logx"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -458,6 +459,122 @@ func TestMinioCodebase_Tree(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestMinioCodebase_Walk(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	tests := []struct {
+		name         string
+		codebasePath string
+		dir          string
+		setupMock    func(*mocks.MockMinioClient)
+		wantPaths    []string
+		wantErr      bool
+	}{
+		{
+			name:         "successful walk",
+			codebasePath: "/test/test-client/test-path",
+			dir:          "",
+			setupMock: func(m *mocks.MockMinioClient) {
+				// Create a channel for object listing
+				ch := make(chan minio.ObjectInfo, 4)
+				ch <- minio.ObjectInfo{
+					Key:          "/test/test-client/test-path/file1.txt",
+					Size:         100,
+					LastModified: time.Time{},
+				}
+				ch <- minio.ObjectInfo{
+					Key:          "/test/test-client/test-path/dir1/file2.txt",
+					Size:         200,
+					LastModified: time.Time{},
+				}
+				ch <- minio.ObjectInfo{
+					Key:          "/test/test-client/test-path/dir1/dir2/file3.txt",
+					Size:         300,
+					LastModified: time.Time{},
+				}
+				ch <- minio.ObjectInfo{
+					Key:          "/test/test-client/test-path/.hidden/file4.txt",
+					Size:         400,
+					LastModified: time.Time{},
+				}
+				close(ch)
+
+				// Set up ListObjects expectation
+				m.EXPECT().
+					ListObjects(
+						gomock.Any(),
+						"test-bucket",
+						gomock.Any(),
+					).
+					Return(ch)
+
+				// Set up GetObject expectations for each file
+				for _, key := range []string{
+					"/test/test-client/test-path/file1.txt",
+					"/test/test-client/test-path/dir1/file2.txt",
+					"/test/test-client/test-path/dir1/dir2/file3.txt",
+				} {
+					mockObj := mocks.NewMockStore(ctrl)
+					mockObj.EXPECT().Walk(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+					m.EXPECT().
+						GetObject(
+							gomock.Any(),
+							"test-bucket",
+							key,
+							gomock.Any(),
+						).
+						Return(mockObj, nil)
+				}
+			},
+			wantPaths: []string{
+				"file1.txt",
+				"dir1/file2.txt",
+				"dir1/dir2/file3.txt",
+			},
+			wantErr: false,
+		},
+		{
+			name:         "empty codebase path",
+			codebasePath: "",
+			dir:          "",
+			setupMock:    func(m *mocks.MockMinioClient) {},
+			wantPaths:    nil,
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			tt.setupMock(mockClient)
+
+			var visitedPaths []string
+			err := codebase.Walk(context.Background(), tt.codebasePath, tt.dir, func(walkCtx *WalkContext, reader io.ReadCloser) error {
+				// Skip hidden files and directories
+				if strings.HasPrefix(walkCtx.Info.Name, ".") {
+					if walkCtx.Info.IsDir {
+						return SkipDir
+					}
+					return nil
+				}
+
+				// Only record file paths
+				if !walkCtx.Info.IsDir {
+					visitedPaths = append(visitedPaths, walkCtx.RelativePath)
+				}
+				return nil
+			})
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.wantPaths, visitedPaths)
 			}
 		})
 	}

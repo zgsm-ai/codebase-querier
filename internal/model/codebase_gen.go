@@ -27,7 +27,7 @@ type (
 	codebaseModel interface {
 		Insert(ctx context.Context, data *Codebase) (sql.Result, error)
 		FindOne(ctx context.Context, id int64) (*Codebase, error)
-		FindByClientIdAndPath(ctx context.Context, clientId string, path string) (*Codebase, error)
+		FindByClientIdAndPath(ctx context.Context, clientId string, clientPath string) (*Codebase, error)
 		Update(ctx context.Context, data *Codebase) error
 		Delete(ctx context.Context, id int64) error
 	}
@@ -42,7 +42,7 @@ type (
 		ClientId      string         `db:"client_id"`      // User client identifier, such as MAC address
 		UserId        string         `db:"user_id"`        // User identifier, such as email or phone number
 		Name          string         `db:"name"`           // Name of the codebase repository
-		LocalPath     string         `db:"local_path"`     // Local path of the codebase on the user's machine
+		ClientPath    string         `db:"client_path"`    // Local path of the codebase on the user's machine
 		Path          string         `db:"path"`           // Path of the codebase
 		FileCount     int64          `db:"file_count"`     // Number of files in the codebase
 		TotalSize     int64          `db:"total_size"`     // Total size of the codebase (in bytes)
@@ -81,20 +81,20 @@ func (m *defaultCodebaseModel) FindOne(ctx context.Context, id int64) (*Codebase
 
 func (m *defaultCodebaseModel) Insert(ctx context.Context, data *Codebase) (sql.Result, error) {
 	query := fmt.Sprintf("insert into %s (%s) values ($1, $2, $3, $4, $5, $6, $7, $8)", m.table, codebaseRowsExpectAutoSet)
-	ret, err := m.conn.ExecCtx(ctx, query, data.ClientId, data.UserId, data.Name, data.LocalPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
+	ret, err := m.conn.ExecCtx(ctx, query, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
 	return ret, err
 }
 
 func (m *defaultCodebaseModel) Update(ctx context.Context, data *Codebase) error {
 	query := fmt.Sprintf("update %s set %s where id = $1", m.table, codebaseRowsWithPlaceHolder)
-	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.ClientId, data.UserId, data.Name, data.LocalPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
+	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
 	return err
 }
 
-func (m *defaultCodebaseModel)  FindByClientIdAndPath(ctx context.Context, clientId string, path string) (*Codebase, error) {
-	query := fmt.Sprintf("select %s from %s where client_id = $1 and path = $2 limit 1", codebaseRows, m.table)
+func (m *defaultCodebaseModel) FindByClientIdAndPath(ctx context.Context, clientId string, clientPath string) (*Codebase, error) {
+	query := fmt.Sprintf("select %s from %s where client_id = $1 and client_path = $2 limit 1", codebaseRows, m.table)
 	var resp Codebase
-	err := m.conn.QueryRowCtx(ctx, &resp, query, clientId, path)
+	err := m.conn.QueryRowCtx(ctx, &resp, query, clientId, clientPath)
 	switch err {
 	case nil:
 		return &resp, nil
@@ -104,7 +104,6 @@ func (m *defaultCodebaseModel)  FindByClientIdAndPath(ctx context.Context, clien
 		return nil, err
 	}
 }
-
 
 func (m *defaultCodebaseModel) tableName() string {
 	return m.table
