@@ -12,7 +12,7 @@ import (
 
 func relationHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.RelationRequest
+		var req types.RelationQueryOptions
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return

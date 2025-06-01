@@ -41,7 +41,7 @@ type CodebaseTreeItem struct {
 }
 
 
-type RelationRequest struct {
+type RelationQueryOptions struct {
 	ClientId       string `form:"clientId"`                     // 用户机器ID
 	CodebasePath    string `form:"codebasePath"`                  // 项目绝对路径
 	FilePath       string `form:"filePath"`                     // 文件相对路径
@@ -55,7 +55,7 @@ type RelationRequest struct {
 }
 
 type RelationResponseData struct {
-	List []GraphNode `json:"list"` // 关系树列表
+	List []*GraphNode `json:"list"` // 关系树列表
 }
 
 type SemanticFileItem struct {

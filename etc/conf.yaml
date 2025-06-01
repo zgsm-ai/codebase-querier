@@ -27,6 +27,7 @@ IndexTask:
 
 Cleaner:
   Cron: "0 0 0 * * *"
+  CodebaseExpireDays: 7
 
 Redis:
   Host: 0.0.0.0

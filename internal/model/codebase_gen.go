@@ -28,6 +28,7 @@ type (
 		Insert(ctx context.Context, data *Codebase) (sql.Result, error)
 		FindOne(ctx context.Context, id int64) (*Codebase, error)
 		FindByClientIdAndPath(ctx context.Context, clientId string, clientPath string) (*Codebase, error)
+		FindExpiredCodebase(ctx context.Context, expireDays int) ([]*Codebase, error)
 		Update(ctx context.Context, data *Codebase) error
 		Delete(ctx context.Context, id int64) error
 	}
@@ -44,6 +45,7 @@ type (
 		Name          string         `db:"name"`           // Name of the codebase repository
 		ClientPath    string         `db:"client_path"`    // Local path of the codebase on the user's machine
 		Path          string         `db:"path"`           // Path of the codebase
+		Status        string         `db:"status"`         // Status of the codebase
 		FileCount     int64          `db:"file_count"`     // Number of files in the codebase
 		TotalSize     int64          `db:"total_size"`     // Total size of the codebase (in bytes)
 		ExtraMetadata sql.NullString `db:"extra_metadata"` // Additional metadata about the codebase
@@ -98,6 +100,20 @@ func (m *defaultCodebaseModel) FindByClientIdAndPath(ctx context.Context, client
 	switch err {
 	case nil:
 		return &resp, nil
+	case sqlx.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, err
+	}
+}
+
+func (m *defaultCodebaseModel) FindExpiredCodebase(ctx context.Context, expireDays int) ([]*Codebase, error) {
+	query := fmt.Sprintf("select %s from %s where created_at > ", codebaseRows, m.table)
+	var resp []*Codebase
+	err := m.conn.QueryRowCtx(ctx, &resp, query, expireDays, CodebaseStatusExpired)
+	switch err {
+	case nil:
+		return resp, nil
 	case sqlx.ErrNotFound:
 		return nil, ErrNotFound
 	default:

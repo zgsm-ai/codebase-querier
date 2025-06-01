@@ -29,16 +29,15 @@ type localCodebase struct {
 	mu     sync.RWMutex // 保护并发访问
 }
 
+func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
+	return os.RemoveAll(codebasePath)
+}
+
 func NewLocalCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
 	return &localCodebase{
 		cfg:    cfg,
 		logger: logx.WithContext(ctx),
 	}
-}
-
-// getFullPath 获取完整的文件路径
-func (l *localCodebase) getFullPath(clientId, codebasePath, target string) string {
-	return getFullPath(l.cfg.Local.BasePath, clientId, codebasePath, target)
 }
 
 // Init 初始化一个新的代码库
@@ -48,15 +47,18 @@ func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	// 生成唯一的路径
-	dirPath := getFullPath(l.cfg.Local.BasePath, clientId, clientCodebasePath, "")
-
+	uniquePath, err := generateCodebasePath(l.cfg.Local.BasePath, clientId, clientCodebasePath)
+	if err != nil {
+		return nil, err
+	}
+	codebasePath := filepath.Join(l.cfg.Local.BasePath, uniquePath)
 	// 创建目录
-	err := os.MkdirAll(dirPath, defaultLocalDirMode)
+	err = os.MkdirAll(codebasePath, defaultLocalDirMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create codebase directory: %v", err)
 	}
 
-	return &types.Codebase{FullPath: dirPath}, nil
+	return &types.Codebase{FullPath: codebasePath}, nil
 }
 
 func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.Reader, target string) error {
@@ -109,7 +111,7 @@ func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source i
 	}
 	defer zipReader.Close()
 
-	basePath := l.getFullPath("", codebasePath, target)
+	basePath := filepath.Join(codebasePath, target)
 
 	// Extract each file
 	for _, file := range zipReader.File {

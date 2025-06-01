@@ -9,6 +9,7 @@ CREATE TABLE codebase_indexer.public.codebase
     user_id        VARCHAR(255) NOT NULL, -- User identifier, e.g., email or phone number
     name           VARCHAR(255) NOT NULL, -- Codebase name
     client_path    TEXT         NOT NULL, -- Local path of the project
+    status         VARCHAR(50)  NOT NULL, -- Codebase status: expired, active
     path           TEXT         NOT NULL, -- Codebase path
     file_count     INT          NOT NULL,
     total_size     BIGINT       NOT NULL,
@@ -51,6 +52,9 @@ CREATE SEQUENCE codebase_indexer.public.codebase_id_seq
 ALTER SEQUENCE codebase_indexer.public.codebase_id_seq OWNED BY codebase_indexer.public.codebase.id;
 ALTER TABLE ONLY codebase_indexer.public.codebase ALTER COLUMN id SET DEFAULT nextval('codebase_indexer.public.codebase_id_seq'::regclass);
 ALTER TABLE ONLY codebase_indexer.public.codebase ADD CONSTRAINT codebase_pkey PRIMARY KEY (id);
+-- 唯一索引
+CREATE UNIQUE INDEX idx_codebase_client_id_path ON codebase_indexer.public.codebase (client_id, client_path);
+
 
 -- Synchronization history table
 CREATE TABLE codebase_indexer.public.sync_history

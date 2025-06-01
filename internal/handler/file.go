@@ -19,11 +19,11 @@ func getFileContentHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewGetFileContentLogic(r.Context(), svcCtx)
-		err := l.GetFileContent(&req)
+		content, err := l.GetFileContent(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {
-			response.Ok(w)
+			response.RawText(w, content)
 		}
 	}
 }
@@ -37,7 +37,7 @@ func uploadFilesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewUploadFilesLogic(r.Context(), svcCtx)
-		err := l.UploadFiles(&req)
+		err := l.UploadFiles(&req, r)
 		if err != nil {
 			response.Error(w, err)
 		} else {

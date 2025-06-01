@@ -2,6 +2,11 @@ package logic
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -23,8 +28,24 @@ func NewRelationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Relation
 	}
 }
 
-func (l *RelationLogic) Relation(req *types.RelationRequest) (resp *types.RelationResponseData, err error) {
-	// todo: add your logic here and delete this line
+func (l *RelationLogic) Relation(req *types.RelationQueryOptions) (resp *types.RelationResponseData, err error) {
+	clientId := req.ClientId
+	clientCodebasePath := req.CodebasePath
+	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	if errors.Is(err, model.ErrNotFound) {
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+	}
+	if err != nil {
+		return nil, err
+	}
+	codebasePath := codebase.Path
 
-	return
+	graphStore := codegraph.NewBadgerDBGraph(codebasePath)
+	nodes, err := graphStore.Query(l.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &types.RelationResponseData{
+		List: nodes,
+	}, nil
 }

@@ -51,7 +51,7 @@ func (l *SemanticLogic) SemanticSearch(req *types.SemanticSearchRequest) (resp *
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 	// TODO  向量库隔离
-	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK, vectorstores.WithNameSpace(codebase.LocalPath))
+	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK, vectorstores.WithNameSpace(codebase.ClientPath))
 	if err != nil {
 		return nil, err
 	}

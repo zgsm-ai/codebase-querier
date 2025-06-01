@@ -24,6 +24,7 @@ const (
 	defaultDirMode  = 0755
 	maxRetries      = 3
 	retryDelay      = time.Second
+	filepathSlash   = "/"
 )
 
 var _ Store = &minioCodebase{}
@@ -51,9 +52,26 @@ func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
 	}
 }
 
-// getObjectName 获取完整的对象名称
-func (m *minioCodebase) getObjectName(clientId, codebasePath, target string) string {
-	return getObjectName(clientId, codebasePath, target)
+func (m *minioCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
+	objectsCh := make(chan minio.ObjectInfo)
+	go func() {
+		defer close(objectsCh)
+		objectName := filepath.Join(codebasePath)
+		objectsCh <- minio.ObjectInfo{Key: objectName}
+	}()
+
+	errCh := m.client.RemoveObjects(ctx, m.cfg.Minio.Bucket, objectsCh, minio.RemoveObjectsOptions{})
+	var errs []error
+	for err := range errCh {
+		if err.Err != nil {
+			errs = append(errs, fmt.Errorf("failed to delete object %s: %w", err.ObjectName, err.Err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("batch delete errors: %v", errs)
+	}
+	return nil
 }
 
 // Init 初始化一个新的代码库
@@ -63,16 +81,18 @@ func (m *minioCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	// 生成唯一的路径
-	dirPath := getFullPath(m.cfg.Minio.Bucket, clientId, clientCodebasePath, "") + "/"
-
+	codebasePath, err := generateCodebasePath(m.cfg.Minio.Bucket, clientId, clientCodebasePath)
+	if err != nil {
+		return nil, err
+	}
 	// 在 MinIO 中创建目录（通过创建一个空的目录标记对象）
-	_, err := m.client.PutObject(ctx, m.cfg.Minio.Bucket, dirPath, bytes.NewReader([]byte{}), 0, minio.PutObjectOptions{})
+	_, err = m.client.PutObject(ctx, m.cfg.Minio.Bucket, codebasePath, bytes.NewReader([]byte{}), 0, minio.PutObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create codebase directory: %v", err)
 	}
 
 	return &types.Codebase{
-		FullPath: dirPath,
+		FullPath: codebasePath,
 	}, nil
 }
 

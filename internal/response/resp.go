@@ -28,6 +28,12 @@ func Error(w http.ResponseWriter, e error) {
 	httpx.OkJson(w, wrapResponse(e))
 }
 
+func RawText(w http.ResponseWriter, v any) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(v.([]byte))
+	w.Header().Set("Content-Type", "plain/text")
+}
+
 func JsonCtx(ctx context.Context, w http.ResponseWriter, v any) {
 	httpx.OkJsonCtx(ctx, w, wrapResponse(v))
 }
