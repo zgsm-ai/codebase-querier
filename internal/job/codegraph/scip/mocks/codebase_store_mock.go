@@ -10,6 +10,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	codebase "github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	types "github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -78,6 +79,20 @@ func (mr *MockStoreMockRecorder) Delete(ctx, codebasePath, path interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStore)(nil).Delete), ctx, codebasePath, path)
 }
 
+// DeleteAll mocks base method.
+func (m *MockStore) DeleteAll(ctx context.Context, codebasePath string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAll", ctx, codebasePath)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAll indicates an expected call of DeleteAll.
+func (mr *MockStoreMockRecorder) DeleteAll(ctx, codebasePath interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockStore)(nil).DeleteAll), ctx, codebasePath)
+}
+
 // Exists mocks base method.
 func (m *MockStore) Exists(ctx context.Context, codebasePath, path string) (bool, error) {
 	m.ctrl.T.Helper()
@@ -94,10 +109,10 @@ func (mr *MockStoreMockRecorder) Exists(ctx, codebasePath, path interface{}) *go
 }
 
 // Init mocks base method.
-func (m *MockStore) Init(ctx context.Context, clientId, clientCodebasePath string) (types.Codebase, error) {
+func (m *MockStore) Init(ctx context.Context, clientId, clientCodebasePath string) (*types.Codebase, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Init", ctx, clientId, clientCodebasePath)
-	ret0, _ := ret[0].(types.Codebase)
+	ret0, _ := ret[0].(*types.Codebase)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -197,15 +212,15 @@ func (mr *MockStoreMockRecorder) Unzip(ctx, codebasePath, source, target interfa
 }
 
 // Walk mocks base method.
-func (m *MockStore) Walk(ctx context.Context, codebasePath, dir string, process func(io.ReadCloser) (bool, error)) error {
+func (m *MockStore) Walk(ctx context.Context, codebasePath, dir string, walkFn codebase.WalkFunc) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Walk", ctx, codebasePath, dir, process)
+	ret := m.ctrl.Call(m, "Walk", ctx, codebasePath, dir, walkFn)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Walk indicates an expected call of Walk.
-func (mr *MockStoreMockRecorder) Walk(ctx, codebasePath, dir, process interface{}) *gomock.Call {
+func (mr *MockStoreMockRecorder) Walk(ctx, codebasePath, dir, walkFn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockStore)(nil).Walk), ctx, codebasePath, dir, process)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockStore)(nil).Walk), ctx, codebasePath, dir, walkFn)
 }

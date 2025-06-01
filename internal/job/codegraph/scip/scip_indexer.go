@@ -32,7 +32,7 @@ func NewIndexGenerator(config *Config, codebaseStore codebase.Store) *IndexGener
 func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) error {
 
 	if err := g.codebaseStore.MkDirs(ctx, codebasePath, types.CodebaseIndexDir); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+		return fmt.Errorf("failed to create codebase index directory: %w", err)
 	}
 
 	index, build, err := g.detectLanguageAndTool(ctx, codebasePath)
@@ -45,7 +45,12 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		placeholderOutputPath: indexOutputDir(codebasePath),
 	}
 
-	executor, err := newCommandExecutor(ctx, codebasePath, index, build, placeHolders)
+	executor, err := newCommandExecutor(ctx,
+		codebasePath,
+		index,
+		build,
+		g.config.LogDir,
+		placeHolders)
 	if err != nil {
 		return err
 	}
@@ -62,7 +67,7 @@ func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath
 	// Find language config
 	for _, lang := range c.config.Languages {
 		for _, file := range lang.DetectionFiles {
-			if fileInfo, err := c.codebaseStore.Stat(ctx, codebasePath, filepath.Join(codebasePath, file)); err == nil {
+			if fileInfo, err := c.codebaseStore.Stat(ctx, codebasePath, file); err == nil {
 				if fileInfo.IsDir {
 					continue
 				}

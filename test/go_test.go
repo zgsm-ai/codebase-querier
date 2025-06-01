@@ -13,11 +13,13 @@ import (
 import scipindex "github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/scip"
 
 const testProjectsBaseDir = "/tmp/projects"
+const indexFileName = "index.scip"
 
 func Test_GenerateGoScipIndex(t *testing.T) {
 	// run ./fetch_test_projects.sh to clone real projects from github
 	t.Run("kubernetes", func(t *testing.T) {
-		codebasePath := "go/kubernetes"
+		projectPath := "go/kubernetes"
+		codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
 		storeConf := config.CodeBaseStoreConf{
 			Local: config.LocalStoreConf{
 				BasePath: testProjectsBaseDir,
@@ -29,7 +31,7 @@ func Test_GenerateGoScipIndex(t *testing.T) {
 		generator := scipindex.NewIndexGenerator(scipConf, localCodebase)
 		err = generator.Generate(context.Background(), codebasePath)
 		assert.NoError(t, err)
-		indexFile := filepath.Join(testProjectsBaseDir, codebasePath, types.CodebaseIndexDir, "index.scip")
+		indexFile := filepath.Join(testProjectsBaseDir, projectPath, types.CodebaseIndexDir, indexFileName)
 		fmt.Println(indexFile)
 		assert.FileExists(t, indexFile)
 

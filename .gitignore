@@ -29,3 +29,4 @@ main
 main.exe
 .codebase_index/
 /test/testdata/
+*.iml

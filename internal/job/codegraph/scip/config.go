@@ -8,6 +8,7 @@ import (
 
 // Config represents the SCIP configuration
 type Config struct {
+	LogDir    string            `yaml:"log_dir"`
 	Languages []*LanguageConfig `yaml:"languages"`
 }
 

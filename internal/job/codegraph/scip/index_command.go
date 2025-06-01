@@ -11,21 +11,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // commandExecutor handles command execution for SCIP indexing
 type commandExecutor struct {
 	workDir string
 	// build
-	buildCmds []*exec.Cmd
-	indexCmds []*exec.Cmd
-	logger    logx.Logger
+	buildCmds          []*exec.Cmd
+	indexCmds          []*exec.Cmd
+	logger             logx.Logger
+	indexFileLogWriter io.WriteCloser
 }
 
 // newCommandExecutor creates a new commandExecutor
 func newCommandExecutor(ctx context.Context,
-	workDir string, indexTool *IndexTool,
-	buildTool *BuildTool, placeHolders map[string]string) (*commandExecutor, error) {
+	workDir string,
+	indexTool *IndexTool,
+	buildTool *BuildTool,
+	logDir string,
+	placeHolders map[string]string) (*commandExecutor, error) {
 	if workDir == "" {
 		return nil, fmt.Errorf("working dir is required")
 	}
@@ -33,20 +38,25 @@ func newCommandExecutor(ctx context.Context,
 		return nil, fmt.Errorf("index commands are required")
 	}
 	logger := logx.WithContext(ctx)
-	indexFileLogger, err := newFileLogger(indexLogDir(workDir))
+	indexFileLogger, err := newFileLogWriter(logDir, logFileNamePrefix(workDir))
 	if err != nil {
 		logger.Errorf("failed to create index log writer: %v", err)
 	}
 	var logWriter io.Writer
 	if indexFileLogger != nil {
-		logWriter = indexFileLogger.Writer()
+		logWriter = indexFileLogger
 	}
 	return &commandExecutor{
-		workDir:   workDir,
-		buildCmds: buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
-		indexCmds: buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
-		logger:    logger,
+		workDir:            workDir,
+		buildCmds:          buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
+		indexCmds:          buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
+		logger:             logger,
+		indexFileLogWriter: indexFileLogger,
 	}, nil
+}
+
+func logFileNamePrefix(workDir string) string {
+	return strings.ReplaceAll(workDir, "/", "_")
 }
 
 func buildBuildCmds(buildTool *BuildTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
@@ -106,30 +116,47 @@ func replacePlaceHolder(base string, placeHolders map[string]string) string {
 
 // Execute executes a command string
 func (e *commandExecutor) Execute() error {
+	start := time.Now()
+	defer func() {
+		if e.indexFileLogWriter != nil {
+			if err := e.indexFileLogWriter.Close(); err != nil {
+				e.logger.Errorf("failed to close index log writer: %v", err)
+			}
+		}
+	}()
 
-	e.logger.Debugf("[%s] start to execute command", e.workDir)
+	e.logger.Debugf("[%s] start to execute index command", e.workDir)
+	indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index commands", e.workDir)
 
 	var err error
 
 	for _, cmd := range e.buildCmds {
+		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute build command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			e.logger.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, err)
+			e.logger.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
+			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed:%v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
 			e.logger.Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
+			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution successfully", e.workDir)
 		}
 	}
 
 	for _, cmd := range e.indexCmds {
+		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			e.logger.Errorf("[%s] index command execution failed: %v, err: %s", e.workDir, cmd, err)
+			e.logger.Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
+			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed: %v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
 			e.logger.Debugf("[%s] index command execution successfully: %v", e.workDir, cmd)
+			indexLogInfo(e.indexFileLogWriter, "[%s] index command execution successfully", e.workDir)
 		}
 	}
 
-	e.logger.Debugf("[%s] command executed end", e.workDir)
+	e.logger.Debugf("[%s] index commands executed end, cost: %d ms", e.workDir, time.Since(start).Milliseconds())
+	indexLogInfo(e.indexFileLogWriter,
+		"[%s] index commands executed end, cost: %d ms\n", e.workDir, time.Since(start).Milliseconds())
 	return err
 }
 

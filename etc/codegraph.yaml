@@ -1,3 +1,4 @@
+log_dir: "/tmp/logs"
 languages:
   - name: typescript
     detection_files: ["tsconfig.json"]
@@ -30,19 +31,19 @@ languages:
             - "--infer-tsconfig"
 
   - name: go
-    detection_files: ["go.mod"] # go.mod is a strong indicator for Go Modules projects
+    detection_files: ["go.mod", "go.work"]
     index:
       name: scip-go
       commands:
         - base: "scip-go"
           args:
-            - " --project-root"
-            - "__sourcePath__"
+#            - " --project-root"
+#            - "__sourcePath__"
             - "--output"
             - "__outputPath__/index.scip"
 
   - name: java
-    detection_files: ["pom.xml", "build.gradle"] # Primary detection for Java build tools
+    detection_files: ["pom.xml", "build.gradle"]
     build_tools:
       - name: maven
         detection_files: ["pom.xml"]

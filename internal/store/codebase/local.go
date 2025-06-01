@@ -30,6 +30,13 @@ type localCodebase struct {
 }
 
 func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
 	return os.RemoveAll(codebasePath)
 }
 
@@ -42,7 +49,7 @@ func NewLocalCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
 
 // Init 初始化一个新的代码库
 func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error) {
-	if clientId == "" || clientCodebasePath == "" {
+	if clientId == types.EmptyString || clientCodebasePath == types.EmptyString {
 		return nil, errors.New("clientId and clientCodebasePath cannot be empty")
 	}
 
@@ -62,8 +69,16 @@ func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebas
 }
 
 func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.Reader, target string) error {
-	if codebasePath == "" || target == "" {
+	if codebasePath == types.EmptyString || target == types.EmptyString {
 		return errors.New("codebasePath and target cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	// 构建完整路径
@@ -92,8 +107,16 @@ func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.
 }
 
 func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+
 	// Create a temporary file to store the zip content
-	tmpFile, err := os.CreateTemp("", "codebase-*.zip")
+	tmpFile, err := os.CreateTemp(types.EmptyString, "codebase-*.zip")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -158,8 +181,16 @@ func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source i
 }
 
 func (l *localCodebase) Delete(ctx context.Context, codebasePath string, path string) error {
-	if codebasePath == "" || path == "" {
+	if codebasePath == types.EmptyString || path == types.EmptyString {
 		return errors.New("codebasePath and path cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -167,8 +198,16 @@ func (l *localCodebase) Delete(ctx context.Context, codebasePath string, path st
 }
 
 func (l *localCodebase) MkDirs(ctx context.Context, codebasePath string, path string) error {
-	if codebasePath == "" || path == "" {
+	if codebasePath == types.EmptyString || path == types.EmptyString {
 		return errors.New("codebasePath and path cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -176,8 +215,8 @@ func (l *localCodebase) MkDirs(ctx context.Context, codebasePath string, path st
 }
 
 func (l *localCodebase) Exists(ctx context.Context, codebasePath string, path string) (bool, error) {
-	if codebasePath == "" || path == "" {
-		return false, errors.New("codebasePath and path cannot be empty")
+	if codebasePath == types.EmptyString {
+		return false, errors.New("codebasePath cannot be empty")
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -192,8 +231,16 @@ func (l *localCodebase) Exists(ctx context.Context, codebasePath string, path st
 }
 
 func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path string) (*types.FileInfo, error) {
-	if codebasePath == "" || path == "" {
+	if codebasePath == types.EmptyString || path == types.EmptyString {
 		return nil, errors.New("codebasePath and path cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -212,8 +259,16 @@ func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path stri
 }
 
 func (l *localCodebase) List(ctx context.Context, codebasePath string, dir string, option types.ListOptions) ([]*types.FileInfo, error) {
-	if codebasePath == "" {
+	if codebasePath == types.EmptyString {
 		return nil, errors.New("codebasePath cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, dir)
@@ -250,8 +305,16 @@ func (l *localCodebase) List(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir string, option types.TreeOptions) ([]*types.TreeNode, error) {
-	if codebasePath == "" {
+	if codebasePath == types.EmptyString {
 		return nil, errors.New("codebasePath cannot be empty")
+	}
+
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, dir)
@@ -304,15 +367,31 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return types.EmptyString, err
+	}
+	if !exists {
+		return types.EmptyString, fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+
 	fullPath := filepath.Join(codebasePath, filePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return "", err
+		return types.EmptyString, err
 	}
 	return string(content), nil
 }
 
 func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+
 	fullPath := filepath.Join(codebasePath, dir)
 	return filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -354,6 +433,14 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) BatchDelete(ctx context.Context, codebasePath string, paths []string) error {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(paths))
 
