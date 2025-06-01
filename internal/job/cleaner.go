@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"path/filepath"
 )
 
 type cleaner struct {
@@ -53,8 +54,9 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo clean graph store
-			graph := codegraph.NewBadgerDBGraph(codegraph.WithPath(cb.Path))
-			err := graph.DeleteAll(ctx, cb.Id, cb.Path)
+			graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
+
+			err = graphStore.DeleteAll(ctx, cb.Id, cb.Path)
 			if err != nil {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue

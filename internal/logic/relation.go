@@ -7,6 +7,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
+	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -40,7 +41,10 @@ func (l *RelationLogic) Relation(req *types.RelationQueryOptions) (resp *types.R
 	}
 	codebasePath := codebase.Path
 
-	graphStore := codegraph.NewBadgerDBGraph(codebasePath)
+	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	if err != nil {
+		return nil, err
+	}
 	nodes, err := graphStore.Query(l.ctx, req)
 	if err != nil {
 		return nil, err

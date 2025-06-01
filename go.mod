@@ -3,6 +3,7 @@ module github.com/zgsm-ai/codebase-indexer
 go 1.24.3
 
 require (
+	github.com/dgraph-io/badger/v4 v4.7.0
 	github.com/emirpasic/gods v1.18.1
 	github.com/go-redsync/redsync/v4 v4.13.0
 	github.com/golang-migrate/migrate/v4 v4.18.3
@@ -57,7 +58,6 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgraph-io/badger/v4 v4.7.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect

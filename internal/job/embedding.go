@@ -33,7 +33,7 @@ type embeddingProcessor struct {
 	ignoreFileCnt  int
 }
 
-func NewEmbeddingProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg *types.CodebaseSyncMessage) Processor {
+func NewEmbeddingProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg *types.CodebaseSyncMessage) (Processor, error) {
 	return &embeddingProcessor{
 		ctx:    ctx,
 		svcCtx: svcCtx,

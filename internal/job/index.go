@@ -124,55 +124,61 @@ func (i *indexJob) processMessage(msg *types.Message) {
 
 	embeddingCtx, embeddingTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
 	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
-	embeddingProcessor := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg)
-	codegraphProcessor := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg)
+	embeddingProcessor, err := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg)
+	if err != nil {
+		i.Logger.Errorf("failed to create embedding processor for message %s: %v", msg.ID, err)
+	} else {
+		errEmbeddingSubmit := i.embeddingTaskPool.Submit(func() {
+			defer embeddingTimeoutCancel() // Cancel context when the goroutine finishes
+			processErr := embeddingProcessor.Process()
+			if processErr != nil {
+				// Embedding task failed, log and re-queue the original message body
+				i.Logger.Errorf("embedding processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
+				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+				if produceErr != nil {
+					i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
+				}
+			}
+		})
 
-	errEmbeddingSubmit := i.embeddingTaskPool.Submit(func() {
-		defer embeddingTimeoutCancel() // Cancel context when the goroutine finishes
-		processErr := embeddingProcessor.Process()
-		if processErr != nil {
-			// Embedding task failed, log and re-queue the original message body
-			i.Logger.Errorf("embedding processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
+		if errEmbeddingSubmit != nil {
+			// Submission failed (pool full or closed), log and re-queue the original message body
+			i.Logger.Errorf("failed to submit embedding processor task for message %s: %v. Re-queueing message.", msg.ID, errEmbeddingSubmit)
 			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
 			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
+				i.Logger.Errorf("failed to re-queue message %s after embedding submission failure: %v", msg.ID, produceErr)
 			}
-		}
-	})
-
-	if errEmbeddingSubmit != nil {
-		// Submission failed (pool full or closed), log and re-queue the original message body
-		i.Logger.Errorf("failed to submit embedding processor task for message %s: %v. Re-queueing message.", msg.ID, errEmbeddingSubmit)
-		produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-		if produceErr != nil {
-			i.Logger.Errorf("failed to re-queue message %s after embedding submission failure: %v", msg.ID, produceErr)
 		}
 	}
 
-	errGraphSubmit := i.graphTaskPool.Submit(func() {
-		defer graphTimeoutCancel() // Cancel context when the goroutine finishes
-		processErr := codegraphProcessor.Process()
-		if processErr != nil {
-			// Graph task failed, log and re-queue the original message body
-			i.Logger.Errorf("codegraph processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
+	codegraphProcessor, err := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg)
+	if err != nil {
+		i.Logger.Errorf("failed to create codegraph processor for message %s: %v", msg.ID, err)
+	} else {
+		errGraphSubmit := i.graphTaskPool.Submit(func() {
+			defer graphTimeoutCancel() // Cancel context when the goroutine finishes
+			processErr := codegraphProcessor.Process()
+			if processErr != nil {
+				// Graph task failed, log and re-queue the original message body
+				i.Logger.Errorf("codegraph processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
+				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+				if produceErr != nil {
+					i.Logger.Errorf("failed to re-queue message %s after graph failure: %v", msg.ID, produceErr)
+				}
+			}
+		})
+
+		if errGraphSubmit != nil {
+			// Submission failed (pool full or closed), log and re-queue the original message body
+			i.Logger.Errorf("failed to submit codegraph processor task for message %s: %v. Re-queueing message.", msg.ID, errGraphSubmit)
 			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
 			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %s after graph failure: %v", msg.ID, produceErr)
+				i.Logger.Errorf("failed to re-queue message %s after graph submission failure: %v", msg.ID, produceErr)
 			}
-		}
-	})
-
-	if errGraphSubmit != nil {
-		// Submission failed (pool full or closed), log and re-queue the original message body
-		i.Logger.Errorf("failed to submit codegraph processor task for message %s: %v. Re-queueing message.", msg.ID, errGraphSubmit)
-		produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-		if produceErr != nil {
-			i.Logger.Errorf("failed to re-queue message %s after graph submission failure: %v", msg.ID, produceErr)
 		}
 	}
 
-	ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
-	if ackErr != nil {
+	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
 		i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
 	}
