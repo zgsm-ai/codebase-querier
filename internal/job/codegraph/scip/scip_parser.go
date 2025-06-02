@@ -1,10 +1,12 @@
 package scip
 
 import (
+	"context"
 	"fmt"
-	"os"
 
 	"github.com/sourcegraph/scip/bindings/go/scip"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -63,70 +65,91 @@ type SymbolNode struct {
 	RelationshipsOut map[types.NodeType][]string
 }
 
-// ParseSCIPFileForGraph parses a SCIP index file and returns its relationship graph.
-func ParseSCIPFileForGraph(scipFilePath string) (map[string]*SymbolNode, error) {
+// IndexParser represents the SCIP index generator
+type IndexParser struct {
+	codebaseStore codebase.Store
+	graphStore    codegraph.GraphStore
+}
+
+// NewIndexParser  creates a new SCIP index generator
+func NewIndexParser(codebaseStore codebase.Store, graphStore codegraph.GraphStore) *IndexParser {
+	return &IndexParser{
+		codebaseStore: codebaseStore,
+		graphStore:    graphStore,
+	}
+}
+
+// ParseSCIPFileForGraph parses a SCIP index file and saves its data to graphStore.
+func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, scipFilePath string) error {
 	// Verify file exists
-	if _, err := os.Stat(scipFilePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
+	fileStat, err := i.codebaseStore.Stat(ctx, codebasePath, scipFilePath)
+	if err != nil {
+		return err
+	}
+	if fileStat == nil || fileStat.IsDir {
+		return fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
+	}
+	if fileStat.Size == 0 {
+		return fmt.Errorf("empty SCIP file: %s", scipFilePath)
 	}
 
 	// Open file
-	file, err := os.Open(scipFilePath)
+	file, err := i.codebaseStore.Open(ctx, codebasePath, scipFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open SCIP file: %w", err)
+		return fmt.Errorf("failed to open SCIP file: %w", err)
 	}
 	defer file.Close()
 
-	// Check if file is empty
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file info: %w", err)
-	}
-	if fileInfo.Size() == 0 {
-		return nil, fmt.Errorf("empty SCIP file")
-	}
+	// Collect document information
+	documentCountByPath := make(map[string]int)
+	repeatedDocumentsByPath := make(map[string][]*scip.Document)
+	var nodes []*types.GraphNode
 
-	// Initialize symbol nodes map
-	symbolNodes := make(map[string]*SymbolNode)
-
-	// Create visitor
 	visitor := scip.IndexVisitor{
-		VisitMetadata: func(m *scip.Metadata) {
-			// Store metadata if needed
-		},
 		VisitDocument: func(d *scip.Document) {
+			path := d.RelativePath
+			documentCountByPath[path]++
+
+			// Process repeated documents
+			if count := documentCountByPath[path]; count > 1 {
+				samePathDocs := append(repeatedDocumentsByPath[path], d)
+				repeatedDocumentsByPath[path] = samePathDocs
+
+				// When all documents with the same path are collected, merge them
+				if len(samePathDocs) == count {
+					flattenedDocs := scip.FlattenDocuments(samePathDocs)
+					if len(flattenedDocs) != 1 {
+						return
+					}
+					d = flattenedDocs[0]
+				} else {
+					return
+				}
+			}
+
 			// Process document symbols
 			for _, s := range d.Symbols {
-				// Create or update symbol node
-				node, exists := symbolNodes[s.Symbol]
-				if !exists {
-					node = &SymbolNode{
-						SymbolName:       s.Symbol,
-						SymbolInfo:       s,
-						ReferenceOccs:    make([]*scip.Occurrence, 0),
-						RelationshipsOut: make(map[types.NodeType][]string),
-					}
-					symbolNodes[s.Symbol] = node
-				} else if node.SymbolInfo == nil {
-					node.SymbolInfo = s
-				}
-
 				// Process relationships
 				for _, rel := range s.Relationships {
-					var relType types.NodeType
+					var nodeType types.NodeType
 					switch {
 					case rel.IsImplementation:
-						relType = types.NodeTypeImplementation
+						nodeType = types.NodeTypeImplementation
 					case rel.IsReference:
-						relType = types.NodeTypeReference
+						nodeType = types.NodeTypeReference
 					case rel.IsTypeDefinition:
-						relType = types.NodeTypeDefinition
+						nodeType = types.NodeTypeDefinition
 					default:
 						continue
 					}
 
-					// Add relationship
-					node.RelationshipsOut[relType] = append(node.RelationshipsOut[relType], rel.Symbol)
+					node := &types.GraphNode{
+						FilePath:   d.RelativePath,
+						SymbolName: rel.Symbol,
+						Position:   types.Position{}, // No position information
+						NodeType:   nodeType,
+					}
+					nodes = append(nodes, node)
 				}
 			}
 
@@ -136,69 +159,29 @@ func ParseSCIPFileForGraph(scipFilePath string) (map[string]*SymbolNode, error) 
 					continue
 				}
 
-				// Create or update symbol node
-				node, exists := symbolNodes[occ.Symbol]
-				if !exists {
-					node = &SymbolNode{
-						SymbolName:       occ.Symbol,
-						ReferenceOccs:    make([]*scip.Occurrence, 0),
-						RelationshipsOut: make(map[types.NodeType][]string),
-					}
-					symbolNodes[occ.Symbol] = node
-				}
-
+				nodeType := types.NodeTypeReference
 				if scip.SymbolRole_Definition.Matches(occ) {
-					node.DefinitionOcc = occ
-				} else {
-					node.ReferenceOccs = append(node.ReferenceOccs, occ)
-				}
-			}
-		},
-		VisitExternalSymbol: func(s *scip.SymbolInformation) {
-			// Create or update symbol node
-			node, exists := symbolNodes[s.Symbol]
-			if !exists {
-				node = &SymbolNode{
-					SymbolName:       s.Symbol,
-					SymbolInfo:       s,
-					ReferenceOccs:    make([]*scip.Occurrence, 0),
-					RelationshipsOut: make(map[types.NodeType][]string),
-				}
-				symbolNodes[s.Symbol] = node
-			} else if node.SymbolInfo == nil {
-				node.SymbolInfo = s
-			}
-
-			// Process relationships
-			for _, rel := range s.Relationships {
-				// Determine relationship type
-				var relType types.NodeType
-				switch {
-				case rel.IsImplementation:
-					relType = types.NodeTypeImplementation
-				case rel.IsReference:
-					relType = types.NodeTypeReference
-				case rel.IsTypeDefinition:
-					relType = types.NodeTypeDefinition
-				default:
-					continue
+					nodeType = types.NodeTypeDefinition
 				}
 
-				// Add relationship
-				node.RelationshipsOut[relType] = append(node.RelationshipsOut[relType], rel.Symbol)
+				node := &types.GraphNode{
+					FilePath:   d.RelativePath,
+					SymbolName: occ.Symbol,
+					Position:   toPosition(occ.Range),
+					NodeType:   nodeType,
+				}
+				nodes = append(nodes, node)
 			}
 		},
 	}
 
-	// Parse SCIP file
 	if err := visitor.ParseStreaming(file); err != nil {
-		return nil, fmt.Errorf("failed to parse SCIP file: %w", err)
+		return fmt.Errorf("failed to parse SCIP file: %w", err)
 	}
 
-	// Verify that we parsed some symbols
-	if len(symbolNodes) == 0 {
-		return nil, fmt.Errorf("no symbols found in SCIP file")
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes found in SCIP file")
 	}
 
-	return symbolNodes, nil
+	return i.graphStore.Save(ctx, 0, codebasePath, nodes)
 }

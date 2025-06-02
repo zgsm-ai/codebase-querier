@@ -12,6 +12,7 @@ import (
 const (
 	placeholderSourcePath = "__sourcePath__"
 	placeholderOutputPath = "__outputPath__"
+	indexFileName         = "index.scip"
 )
 
 // IndexGenerator represents the SCIP index generator

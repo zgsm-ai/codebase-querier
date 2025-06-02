@@ -36,20 +36,32 @@ type minioCodebase struct {
 	mu     sync.RWMutex
 }
 
-func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
+func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error) {
+	exists, err := m.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+	objectName := filepath.Join(codebasePath, filePath)
+	return m.client.GetObject(ctx, m.cfg.Minio.Bucket, objectName, minio.GetObjectOptions{})
+}
+
+func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store, error) {
 	client, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKeyID, cfg.Minio.SecretAccessKey, ""),
 		Secure: cfg.Minio.UseSSL,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("failed to create minio client: %v", err))
+		return nil, fmt.Errorf("failed to create minio client: %v", err)
 	}
 
 	return &minioCodebase{
 		cfg:    cfg,
 		client: NewMinioClientWrapper(client),
 		logger: logx.WithContext(ctx),
-	}
+	}, nil
 }
 
 func (m *minioCodebase) DeleteAll(ctx context.Context, codebasePath string) error {

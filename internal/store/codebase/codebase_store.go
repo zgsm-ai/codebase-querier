@@ -3,9 +3,8 @@ package codebase
 import (
 	"context"
 	"errors"
-	"io"
-
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"io"
 )
 
 // Store defines the interface for codebase storage operations
@@ -54,6 +53,11 @@ type Store interface {
 	// filePath: the path to the file to read
 	// option: optional parameters for reading
 	Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error)
+
+	// Open reads the content of a file
+	// filePath: the path to the file to read
+	// option: optional parameters for reading
+	Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error)
 
 	// Walk walks through the codebase and processes each file
 	// dir: the root directory to start walking from

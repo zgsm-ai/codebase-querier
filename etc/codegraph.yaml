@@ -242,3 +242,7 @@ languages:
             - "__sourcePath__"
             - "--output"
             - "__outputPath__/index.scip"
+          env:
+            - "CARGO_NET_OFFLINE=true"
+            - "NUM_JOBS=32"
+            - "CARGO_BUILD_JOBS=32"

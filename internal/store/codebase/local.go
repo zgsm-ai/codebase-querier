@@ -29,6 +29,17 @@ type localCodebase struct {
 	mu     sync.RWMutex // 保护并发访问
 }
 
+func (l *localCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error) {
+	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+	return os.Open(filepath.Join(codebasePath, filePath))
+}
+
 func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
@@ -40,11 +51,11 @@ func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 	return os.RemoveAll(codebasePath)
 }
 
-func NewLocalCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) Store {
+func NewLocalCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store, error) {
 	return &localCodebase{
 		cfg:    cfg,
 		logger: logx.WithContext(ctx),
-	}
+	}, nil
 }
 
 // Init 初始化一个新的代码库
