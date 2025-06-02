@@ -3,22 +3,23 @@ package codegraph
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"path/filepath"
+	"strings"
 )
 
 const dbName = "badger.db"
 
-type badgerDBGraph struct {
+// BadgerDBGraph implements GraphStore using BadgerDB
+type BadgerDBGraph struct {
 	path string
 	db   *badger.DB
 }
 
 func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
-	b := &badgerDBGraph{}
+	b := &BadgerDBGraph{}
 	for _, opt := range opts {
 		opt(b)
 	}
@@ -58,16 +59,16 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 	return b, nil
 }
 
-type GraphOption func(*badgerDBGraph)
+type GraphOption func(*BadgerDBGraph)
 
 func WithPath(basePath string) GraphOption {
-	return func(b *badgerDBGraph) {
+	return func(b *BadgerDBGraph) {
 		b.path = basePath
 	}
 }
 
 // BatchWrite 批量写入文档和符号
-func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error {
+func (b BadgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error {
 	wb := b.db.NewWriteBatch()
 	defer wb.Cancel()
 
@@ -97,7 +98,10 @@ func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols
 }
 
 // Query 实现查询接口
-func (b badgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
+func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
+	if opts.MaxLayer <= 0 {
+		opts.MaxLayer = 1
+	}
 	// 1. 获取文档
 	var doc *Document
 	err := b.db.View(func(txn *badger.Txn) error {
@@ -114,15 +118,29 @@ func (b badgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	if err != nil {
 		return nil, err
 	}
+	if doc == nil {
+		return nil, fmt.Errorf("document not found: %s", opts.FilePath)
+	}
 
 	var nodes []*types.GraphNode
 
 	// 2. 根据查询条件构建树
 	if opts.SymbolName != "" {
+		var fullSymbolName string
+		for _, sy := range doc.Symbols {
+			if strings.Contains(sy, opts.SymbolName) {
+				fullSymbolName = sy
+				break
+			}
+		}
+		if fullSymbolName == "" {
+			return nil, fmt.Errorf("symbol not found: %s", opts.SymbolName)
+		}
+
 		// 按符号名查询
 		var symbol *Symbol
 		err := b.db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get(SymKey(opts.SymbolName))
+			item, err := txn.Get(SymKey(fullSymbolName))
 			if err != nil {
 				return err
 			}
@@ -154,7 +172,7 @@ func (b badgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 }
 
 // buildSymbolTree 构建符号树
-func (b badgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.GraphNode {
+func (b BadgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.GraphNode {
 	if maxLayer <= 0 {
 		return nil
 	}
@@ -223,7 +241,7 @@ func (b badgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.Gr
 }
 
 // buildPositionTree 构建位置树
-func (b badgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxLayer int) []*types.GraphNode {
+func (b BadgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxLayer int) []*types.GraphNode {
 	var nodes []*types.GraphNode
 
 	// 遍历文件中的符号
@@ -288,7 +306,7 @@ func (b badgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxL
 }
 
 // Close 关闭数据库连接
-func (b badgerDBGraph) Close() error {
+func (b BadgerDBGraph) Close() error {
 	if err := b.db.RunValueLogGC(0.5); err != nil {
 		_ = fmt.Errorf("failed to run value log GC, err:%v", err)
 	}
@@ -296,7 +314,7 @@ func (b badgerDBGraph) Close() error {
 }
 
 // DeleteAll 删除所有数据并执行一次清理
-func (b badgerDBGraph) DeleteAll(ctx context.Context) error {
+func (b BadgerDBGraph) DeleteAll(ctx context.Context) error {
 	// 删除所有数据
 	if err := b.db.DropAll(); err != nil {
 		return err
@@ -307,7 +325,7 @@ func (b badgerDBGraph) DeleteAll(ctx context.Context) error {
 }
 
 // Document operations
-func (b badgerDBGraph) WriteDocument(ctx context.Context, doc *Document) error {
+func (b BadgerDBGraph) WriteDocument(ctx context.Context, doc *Document) error {
 	docBytes, err := SerializeDocument(doc)
 	if err != nil {
 		return err
@@ -317,7 +335,7 @@ func (b badgerDBGraph) WriteDocument(ctx context.Context, doc *Document) error {
 	})
 }
 
-func (b badgerDBGraph) GetDocument(ctx context.Context, path string) (*Document, error) {
+func (b BadgerDBGraph) GetDocument(ctx context.Context, path string) (*Document, error) {
 	var doc *Document
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(DocKey(path))
@@ -333,14 +351,14 @@ func (b badgerDBGraph) GetDocument(ctx context.Context, path string) (*Document,
 	return doc, err
 }
 
-func (b badgerDBGraph) DeleteDocument(ctx context.Context, path string) error {
+func (b BadgerDBGraph) DeleteDocument(ctx context.Context, path string) error {
 	return b.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete(DocKey(path))
 	})
 }
 
 // Symbol operations
-func (b badgerDBGraph) WriteSymbol(ctx context.Context, symbol *Symbol) error {
+func (b BadgerDBGraph) WriteSymbol(ctx context.Context, symbol *Symbol) error {
 	symbolBytes, err := SerializeSymbol(symbol)
 	if err != nil {
 		return err
@@ -350,7 +368,7 @@ func (b badgerDBGraph) WriteSymbol(ctx context.Context, symbol *Symbol) error {
 	})
 }
 
-func (b badgerDBGraph) GetSymbol(ctx context.Context, name string) (*Symbol, error) {
+func (b BadgerDBGraph) GetSymbol(ctx context.Context, name string) (*Symbol, error) {
 	var symbol *Symbol
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(SymKey(name))
@@ -366,14 +384,14 @@ func (b badgerDBGraph) GetSymbol(ctx context.Context, name string) (*Symbol, err
 	return symbol, err
 }
 
-func (b badgerDBGraph) DeleteSymbol(ctx context.Context, name string) error {
+func (b BadgerDBGraph) DeleteSymbol(ctx context.Context, name string) error {
 	return b.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete(SymKey(name))
 	})
 }
 
 // Position operations
-func (b badgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) ([]Occurrence, error) {
+func (b BadgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) ([]Occurrence, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
 		return nil, err
@@ -385,7 +403,7 @@ func (b badgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) 
 	return positions, nil
 }
 
-func (b badgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) ([]Occurrence, error) {
+func (b BadgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) ([]Occurrence, error) {
 	doc, err := b.GetDocument(ctx, filePath)
 	if err != nil {
 		return nil, err
@@ -415,7 +433,7 @@ func (b badgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) 
 	return positions, nil
 }
 
-func (b badgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string, startLine, endLine int) ([]Occurrence, error) {
+func (b BadgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string, startLine, endLine int) ([]Occurrence, error) {
 	positions, err := b.GetPositionsByFile(ctx, filePath)
 	if err != nil {
 		return nil, err
@@ -434,7 +452,7 @@ func (b badgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string,
 }
 
 // BuildSymbolTree Tree operations
-func (b badgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*types.GraphNode, error) {
+func (b BadgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*types.GraphNode, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
 		return nil, err
@@ -478,7 +496,7 @@ func (b badgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*typ
 	return root, nil
 }
 
-func (b badgerDBGraph) GetSymbolReferences(ctx context.Context, symbol string) ([]*types.GraphNode, error) {
+func (b BadgerDBGraph) GetSymbolReferences(ctx context.Context, symbol string) ([]*types.GraphNode, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
 		return nil, err
@@ -495,7 +513,7 @@ func (b badgerDBGraph) GetSymbolReferences(ctx context.Context, symbol string) (
 	return nodes, nil
 }
 
-func (b badgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) ([]*types.GraphNode, error) {
+func (b BadgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) ([]*types.GraphNode, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
 		return nil, err
@@ -510,4 +528,9 @@ func (b badgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 		})
 	}
 	return nodes, nil
+}
+
+// DB returns the underlying BadgerDB instance
+func (b BadgerDBGraph) DB() *badger.DB {
+	return b.db
 }

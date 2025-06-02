@@ -228,7 +228,7 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 	// 创建文档
 	document := &codegraph.Document{
 		Path:    doc.RelativePath,
-		Content: doc.Text, // 直接使用 []byte
+		Content: doc.Text,
 		Symbols: make([]string, 0, len(doc.Symbols)),
 	}
 
