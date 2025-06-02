@@ -10,7 +10,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-const dbName = "codegraph.db"
+const dbName = "badger.db"
 
 type badgerDBGraph struct {
 	path string
