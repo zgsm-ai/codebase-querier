@@ -3,6 +3,7 @@ package scip
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -65,13 +66,20 @@ type SymbolNode struct {
 	RelationshipsOut map[types.NodeType][]string
 }
 
+// FirstPassResult stores the results of the first parsing phase
+type FirstPassResult struct {
+	Metadata              *scip.Metadata
+	ExternalSymbolsByName map[string]*scip.SymbolInformation
+	DocumentCountByPath   map[string]int
+}
+
 // IndexParser represents the SCIP index generator
 type IndexParser struct {
 	codebaseStore codebase.Store
 	graphStore    codegraph.GraphStore
 }
 
-// NewIndexParser  creates a new SCIP index generator
+// NewIndexParser creates a new SCIP index generator
 func NewIndexParser(codebaseStore codebase.Store, graphStore codegraph.GraphStore) *IndexParser {
 	return &IndexParser{
 		codebaseStore: codebaseStore,
@@ -100,77 +108,67 @@ func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, s
 	}
 	defer file.Close()
 
-	// Collect document information
-	documentCountByPath := make(map[string]int)
+	// 第一阶段：收集元数据和外部符号信息
+	firstPass, err := i.collectMetadataAndSymbols(file)
+	if err != nil {
+		return fmt.Errorf("failed to collect metadata and symbols: %w", err)
+	}
+
+	// 重置文件指针
+	if seeker, ok := file.(io.Seeker); ok {
+		if _, err := seeker.Seek(0, 0); err != nil {
+			return fmt.Errorf("failed to reset file pointer: %w", err)
+		}
+	}
+
+	// 第二阶段：流式处理文档
 	repeatedDocumentsByPath := make(map[string][]*scip.Document)
-	var nodes []*types.GraphNode
+	var processErr error
 
 	visitor := scip.IndexVisitor{
 		VisitDocument: func(d *scip.Document) {
-			path := d.RelativePath
-			documentCountByPath[path]++
+			if processErr != nil {
+				return
+			}
 
-			// Process repeated documents
-			if count := documentCountByPath[path]; count > 1 {
-				samePathDocs := append(repeatedDocumentsByPath[path], d)
+			path := d.RelativePath
+			document := d
+
+			// 处理重复文档
+			if count := firstPass.DocumentCountByPath[path]; count > 1 {
+				samePathDocs := append(repeatedDocumentsByPath[path], document)
 				repeatedDocumentsByPath[path] = samePathDocs
 
-				// When all documents with the same path are collected, merge them
+				// 当收集到所有相同路径的文档时，合并它们
 				if len(samePathDocs) == count {
 					flattenedDocs := scip.FlattenDocuments(samePathDocs)
 					if len(flattenedDocs) != 1 {
 						return
 					}
-					d = flattenedDocs[0]
+					document = flattenedDocs[0]
 				} else {
 					return
 				}
 			}
 
-			// Process document symbols
-			for _, s := range d.Symbols {
-				// Process relationships
-				for _, rel := range s.Relationships {
-					var nodeType types.NodeType
-					switch {
-					case rel.IsImplementation:
-						nodeType = types.NodeTypeImplementation
-					case rel.IsReference:
-						nodeType = types.NodeTypeReference
-					case rel.IsTypeDefinition:
-						nodeType = types.NodeTypeDefinition
-					default:
-						continue
-					}
-
-					node := &types.GraphNode{
-						FilePath:   d.RelativePath,
-						SymbolName: rel.Symbol,
-						Position:   types.Position{}, // No position information
-						NodeType:   nodeType,
-					}
-					nodes = append(nodes, node)
-				}
+			// 为每个文档创建新的事务
+			if err := i.graphStore.BeginWrite(ctx); err != nil {
+				processErr = fmt.Errorf("failed to begin transaction for document %s: %w", path, err)
+				return
 			}
 
-			// Process occurrences
-			for _, occ := range d.Occurrences {
-				if occ.Symbol == types.EmptyString {
-					continue
-				}
+			// 处理文档
+			if err := i.processDocument(ctx, document, firstPass.ExternalSymbolsByName); err != nil {
+				_ = i.graphStore.RollbackWrite(ctx)
+				processErr = fmt.Errorf("failed to process document %s: %w", path, err)
+				return
+			}
 
-				nodeType := types.NodeTypeReference
-				if scip.SymbolRole_Definition.Matches(occ) {
-					nodeType = types.NodeTypeDefinition
-				}
-
-				node := &types.GraphNode{
-					FilePath:   d.RelativePath,
-					SymbolName: occ.Symbol,
-					Position:   toPosition(occ.Range),
-					NodeType:   nodeType,
-				}
-				nodes = append(nodes, node)
+			// 提交当前文档的事务
+			if err := i.graphStore.CommitWrite(ctx); err != nil {
+				_ = i.graphStore.RollbackWrite(ctx)
+				processErr = fmt.Errorf("failed to commit transaction for document %s: %w", path, err)
+				return
 			}
 		},
 	}
@@ -179,9 +177,145 @@ func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, s
 		return fmt.Errorf("failed to parse SCIP file: %w", err)
 	}
 
-	if len(nodes) == 0 {
-		return fmt.Errorf("no nodes found in SCIP file")
+	if processErr != nil {
+		return processErr
 	}
 
-	return i.graphStore.Save(ctx, 0, codebasePath, nodes)
+	return nil
+}
+
+// collectMetadataAndSymbols performs the first pass to collect metadata and external symbols
+func (i *IndexParser) collectMetadataAndSymbols(file io.Reader) (*FirstPassResult, error) {
+	result := &FirstPassResult{
+		ExternalSymbolsByName: make(map[string]*scip.SymbolInformation),
+		DocumentCountByPath:   make(map[string]int),
+	}
+
+	visitor := scip.IndexVisitor{
+		VisitMetadata: func(m *scip.Metadata) {
+			result.Metadata = m
+		},
+		VisitDocument: func(d *scip.Document) {
+			result.DocumentCountByPath[d.RelativePath]++
+		},
+		VisitExternalSymbol: func(s *scip.SymbolInformation) {
+			result.ExternalSymbolsByName[s.Symbol] = s
+		},
+	}
+
+	if err := visitor.ParseStreaming(file); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// processDocument processes a single document and writes it to the store
+func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, externalSymbolsByName map[string]*scip.SymbolInformation) error {
+	// 创建文档
+	document := &codegraph.Document{
+		Path:    doc.RelativePath,
+		Symbols: make([]string, 0, len(doc.Symbols)),
+	}
+
+	// 处理符号和关系
+	symbols := make(map[string]*codegraph.Symbol)
+	for _, s := range doc.Symbols {
+		// 创建或获取符号
+		if _, ok := symbols[s.Symbol]; !ok {
+			symbols[s.Symbol] = &codegraph.Symbol{
+				Name: s.Symbol,
+			}
+		}
+
+		// 处理关系
+		for _, rel := range s.Relationships {
+			var nodeType types.NodeType
+			switch {
+			case rel.IsImplementation:
+				nodeType = types.NodeTypeImplementation
+			case rel.IsReference:
+				nodeType = types.NodeTypeReference
+			case rel.IsTypeDefinition:
+				nodeType = types.NodeTypeDefinition
+			default:
+				continue
+			}
+
+			pos := codegraph.Position{
+				FilePath:    doc.RelativePath,
+				NodeType:    nodeType,
+				StartLine:   0, // 关系没有位置信息
+				StartColumn: 0,
+				EndLine:     0,
+				EndColumn:   0,
+			}
+
+			switch nodeType {
+			case types.NodeTypeImplementation:
+				symbols[s.Symbol].Implementations = append(symbols[s.Symbol].Implementations, pos)
+			case types.NodeTypeReference:
+				symbols[s.Symbol].References = append(symbols[s.Symbol].References, pos)
+			case types.NodeTypeDefinition:
+				symbols[s.Symbol].Definitions = append(symbols[s.Symbol].Definitions, pos)
+			}
+		}
+
+		document.Symbols = append(document.Symbols, s.Symbol)
+	}
+
+	// 处理出现
+	for _, occ := range doc.Occurrences {
+		if occ.Symbol == types.EmptyString {
+			continue
+		}
+
+		// 创建或获取符号
+		if _, ok := symbols[occ.Symbol]; !ok {
+			symbols[occ.Symbol] = &codegraph.Symbol{
+				Name: occ.Symbol,
+			}
+		}
+
+		// 确定节点类型
+		nodeType := types.NodeTypeReference
+		if scip.SymbolRole_Definition.Matches(occ) {
+			nodeType = types.NodeTypeDefinition
+		}
+
+		// 使用 toPosition 函数安全地处理范围信息
+		typesPos := toPosition(occ.Range)
+		pos := codegraph.Position{
+			FilePath:    doc.RelativePath,
+			NodeType:    nodeType,
+			StartLine:   typesPos.StartLine,
+			StartColumn: typesPos.StartColumn,
+			EndLine:     typesPos.EndLine,
+			EndColumn:   typesPos.EndColumn,
+		}
+
+		// 添加到相应的位置列表
+		switch nodeType {
+		case types.NodeTypeDefinition:
+			symbols[occ.Symbol].Definitions = append(symbols[occ.Symbol].Definitions, pos)
+		case types.NodeTypeReference:
+			symbols[occ.Symbol].References = append(symbols[occ.Symbol].References, pos)
+		}
+
+		document.Symbols = append(document.Symbols, occ.Symbol)
+	}
+
+	// 写入文档
+	if err := i.graphStore.WriteDocument(ctx, document); err != nil {
+		return fmt.Errorf("failed to write document: %w", err)
+	}
+
+	// 写入符号
+	for _, symbol := range symbols {
+		if err := i.graphStore.WriteSymbol(ctx, symbol); err != nil {
+			return fmt.Errorf("failed to write symbol: %w", err)
+		}
+	}
+
+	return nil
 }

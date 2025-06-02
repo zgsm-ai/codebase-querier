@@ -58,3 +58,13 @@ func TestParseGoScipIndex(t *testing.T) {
 	assert.NoError(t, err)
 	//fmt.Printf("graph: %v", graph)
 }
+
+func TestDeleteBadgerDBGraph(t *testing.T) {
+	projectPath := "go/kubernetes"
+	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	assert.NoError(t, err)
+	err = graph.DeleteAll(context.Background())
+	assert.NoError(t, err)
+	fmt.Printf("graph: %v", graph)
+}
