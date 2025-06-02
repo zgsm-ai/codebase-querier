@@ -44,6 +44,9 @@ type GraphStore interface {
 	GetSymbol(ctx context.Context, name string) (*Symbol, error)
 	DeleteSymbol(ctx context.Context, name string) error
 
+	// Batch operations
+	BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error
+
 	// Position operations
 	GetPositionsBySymbol(ctx context.Context, symbol string) ([]Position, error)
 	GetPositionsByFile(ctx context.Context, filePath string) ([]Position, error)
@@ -53,11 +56,6 @@ type GraphStore interface {
 	BuildSymbolTree(ctx context.Context, symbol string) (*types.GraphNode, error)
 	GetSymbolReferences(ctx context.Context, symbol string) ([]*types.GraphNode, error)
 	GetSymbolDefinitions(ctx context.Context, symbol string) ([]*types.GraphNode, error)
-
-	// Transaction operations
-	BeginWrite(ctx context.Context) error
-	CommitWrite(ctx context.Context) error
-	RollbackWrite(ctx context.Context) error
 
 	// Database operations
 	Close() error

@@ -15,11 +15,6 @@ const dbName = "badger.db"
 type badgerDBGraph struct {
 	path string
 	db   *badger.DB
-	txn  *badger.Txn // 当前事务
-}
-
-func (b badgerDBGraph) Close() error {
-	return b.db.Close()
 }
 
 func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
@@ -33,26 +28,25 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 
 	// 值日志配置
 	badgerOpts.ValueLogFileSize = 1 << 30 // 1GB
-	badgerOpts.ValueLogMaxEntries = 1000000
-	badgerOpts.ValueThreshold = 32 // 小于32字节的值直接存储在LSM树中
+	badgerOpts.ValueThreshold = 32        // 小于32字节的值直接存储在LSM树中
 
 	// 内存表配置
-	badgerOpts.NumMemtables = 1
-	badgerOpts.MaxLevels = 7 // 使用默认的7层
-	badgerOpts.NumLevelZeroTables = 5
-	badgerOpts.NumLevelZeroTablesStall = 10
+	badgerOpts.NumMemtables = 4              // 增加内存表数量
+	badgerOpts.NumLevelZeroTables = 50       // 增加L0层表数量
+	badgerOpts.NumLevelZeroTablesStall = 100 // 增加L0层表数量阈值
 
 	// 其他优化
-	badgerOpts.BlockSize = 4 * 1024 // 4KB
-	badgerOpts.BloomFalsePositive = 0.1
-	badgerOpts.SyncWrites = false
-	badgerOpts.DetectConflicts = false
-	badgerOpts.Compression = options.None
-	badgerOpts.CompactL0OnClose = true
-	badgerOpts.VerifyValueChecksum = false
+	badgerOpts.BlockSize = 4 * 1024        // 4KB
+	badgerOpts.BloomFalsePositive = 0.01   // 降低误判率
+	badgerOpts.SyncWrites = false          // 异步写入
+	badgerOpts.DetectConflicts = false     // 禁用冲突检测
+	badgerOpts.Compression = options.ZSTD  // 使用ZSTD压缩
+	badgerOpts.ZSTDCompressionLevel = 3    // 压缩级别
+	badgerOpts.CompactL0OnClose = true     // 关闭时压缩L0层
+	badgerOpts.VerifyValueChecksum = false // 禁用校验和验证
 
 	// 设置索引缓存大小
-	badgerOpts.IndexCacheSize = 100 << 20 // 100MB
+	badgerOpts.IndexCacheSize = 256 << 20 // 256MB
 
 	// Open database
 	badgerDB, err := badger.Open(badgerOpts)
@@ -72,16 +66,45 @@ func WithPath(basePath string) GraphOption {
 	}
 }
 
+// BatchWrite performs batch write operations
+func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error {
+	wb := b.db.NewWriteBatch()
+	defer wb.Cancel()
+
+	// Write documents
+	for _, doc := range docs {
+		docBytes, err := SerializeDocument(doc)
+		if err != nil {
+			return err
+		}
+		if err := wb.Set(DocKey(doc.Path), docBytes); err != nil {
+			return err
+		}
+	}
+
+	// Write symbols
+	for _, symbol := range symbols {
+		symbolBytes, err := SerializeSymbol(symbol)
+		if err != nil {
+			return err
+		}
+		if err := wb.Set(SymKey(symbol.Name), symbolBytes); err != nil {
+			return err
+		}
+	}
+
+	return wb.Flush()
+}
+
 // Document operations
 func (b badgerDBGraph) WriteDocument(ctx context.Context, doc *Document) error {
-	if b.txn == nil {
-		return fmt.Errorf("no active transaction")
-	}
 	docBytes, err := SerializeDocument(doc)
 	if err != nil {
 		return err
 	}
-	return b.txn.Set(DocKey(doc.Path), docBytes)
+	return b.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(DocKey(doc.Path), docBytes)
+	})
 }
 
 func (b badgerDBGraph) GetDocument(ctx context.Context, path string) (*Document, error) {
@@ -108,14 +131,13 @@ func (b badgerDBGraph) DeleteDocument(ctx context.Context, path string) error {
 
 // Symbol operations
 func (b badgerDBGraph) WriteSymbol(ctx context.Context, symbol *Symbol) error {
-	if b.txn == nil {
-		return fmt.Errorf("no active transaction")
-	}
 	symbolBytes, err := SerializeSymbol(symbol)
 	if err != nil {
 		return err
 	}
-	return b.txn.Set(SymKey(symbol.Name), symbolBytes)
+	return b.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(SymKey(symbol.Name), symbolBytes)
+	})
 }
 
 func (b badgerDBGraph) GetSymbol(ctx context.Context, name string) (*Symbol, error) {
@@ -197,7 +219,7 @@ func (b badgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string,
 	return filtered, nil
 }
 
-// Tree operations
+// BuildSymbolTree Tree operations
 func (b badgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*types.GraphNode, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
@@ -276,37 +298,19 @@ func (b badgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 	return nodes, nil
 }
 
-// Transaction operations
-func (b *badgerDBGraph) BeginWrite(ctx context.Context) error {
-	if b.txn != nil {
-		return fmt.Errorf("transaction already exists")
-	}
-	b.txn = b.db.NewTransaction(true)
-	return nil
-}
-
-func (b *badgerDBGraph) CommitWrite(ctx context.Context) error {
-	if b.txn == nil {
-		return fmt.Errorf("no active transaction")
-	}
-	err := b.txn.Commit()
-	b.txn = nil
-	return err
-}
-
-func (b *badgerDBGraph) RollbackWrite(ctx context.Context) error {
-	if b.txn == nil {
-		return fmt.Errorf("no active transaction")
-	}
-	b.txn.Discard()
-	b.txn = nil
-	return nil
-}
-
 // Database operations
 func (b badgerDBGraph) DeleteAll(ctx context.Context) error {
 	if err := b.db.DropAll(); err != nil {
 		return fmt.Errorf("failed to drop database: %w", err)
 	}
 	return nil
+}
+
+func (b badgerDBGraph) Close() error {
+	if err := b.db.RunValueLogGC(0.5); err != nil {
+		fmt.Printf("badgerDBGraph GC failed: %v\n", err)
+	} else {
+		fmt.Printf("badgerDBGraph GC successfully.\n")
+	}
+	return b.db.Close()
 }

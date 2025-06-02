@@ -56,6 +56,7 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
 	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	defer graph.Close()
 	assert.NoError(t, err)
 	parser := scipindex.NewIndexParser(localCodebase, graph)
 	err = parser.ParseSCIPFileForGraph(context.Background(), codebasePath, indexFile)
@@ -102,5 +103,4 @@ func TestDeleteBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	err = graph.DeleteAll(context.Background())
 	assert.NoError(t, err)
-	fmt.Printf("graph: %v", graph)
 }

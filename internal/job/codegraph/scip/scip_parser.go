@@ -125,6 +125,11 @@ func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, s
 	repeatedDocumentsByPath := make(map[string][]*scip.Document)
 	var processErr error
 
+	// 批量写入的缓冲区
+	batchSize := 1000
+	pendingDocs := make([]*codegraph.Document, 0, batchSize)
+	pendingSymbols := make([]*codegraph.Symbol, 0, batchSize)
+
 	visitor := scip.IndexVisitor{
 		VisitDocument: func(d *scip.Document) {
 			if processErr != nil {
@@ -151,24 +156,25 @@ func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, s
 				}
 			}
 
-			// 为每个文档创建新的事务
-			if err := i.graphStore.BeginWrite(ctx); err != nil {
-				processErr = fmt.Errorf("failed to begin transaction for document %s: %w", path, err)
-				return
-			}
-
 			// 处理文档
-			if err := i.processDocument(ctx, document, firstPass.ExternalSymbolsByName); err != nil {
-				_ = i.graphStore.RollbackWrite(ctx)
+			doc, symbols, err := i.processDocument(ctx, document, firstPass.ExternalSymbolsByName)
+			if err != nil {
 				processErr = fmt.Errorf("failed to process document %s: %w", path, err)
 				return
 			}
 
-			// 提交当前文档的事务
-			if err := i.graphStore.CommitWrite(ctx); err != nil {
-				_ = i.graphStore.RollbackWrite(ctx)
-				processErr = fmt.Errorf("failed to commit transaction for document %s: %w", path, err)
-				return
+			// 添加到待处理列表
+			pendingDocs = append(pendingDocs, doc)
+			pendingSymbols = append(pendingSymbols, symbols...)
+
+			// 当达到批量大小时执行批量写入
+			if len(pendingDocs) >= batchSize {
+				if err := i.graphStore.BatchWrite(ctx, pendingDocs, pendingSymbols); err != nil {
+					processErr = fmt.Errorf("failed to batch write documents: %w", err)
+					return
+				}
+				pendingDocs = pendingDocs[:0]
+				pendingSymbols = pendingSymbols[:0]
 			}
 		},
 	}
@@ -179,6 +185,13 @@ func (i *IndexParser) ParseSCIPFileForGraph(ctx context.Context, codebasePath, s
 
 	if processErr != nil {
 		return processErr
+	}
+
+	// 写入剩余的文档和符号
+	if len(pendingDocs) > 0 {
+		if err := i.graphStore.BatchWrite(ctx, pendingDocs, pendingSymbols); err != nil {
+			return fmt.Errorf("failed to batch write remaining documents: %w", err)
+		}
 	}
 
 	return nil
@@ -210,8 +223,8 @@ func (i *IndexParser) collectMetadataAndSymbols(file io.Reader) (*FirstPassResul
 	return result, nil
 }
 
-// processDocument processes a single document and writes it to the store
-func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, externalSymbolsByName map[string]*scip.SymbolInformation) error {
+// processDocument processes a single document and returns the document and its symbols
+func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, externalSymbolsByName map[string]*scip.SymbolInformation) (*codegraph.Document, []*codegraph.Symbol, error) {
 	// 创建文档
 	document := &codegraph.Document{
 		Path:    doc.RelativePath,
@@ -305,17 +318,11 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 		document.Symbols = append(document.Symbols, occ.Symbol)
 	}
 
-	// 写入文档
-	if err := i.graphStore.WriteDocument(ctx, document); err != nil {
-		return fmt.Errorf("failed to write document: %w", err)
-	}
-
-	// 写入符号
+	// 将符号转换为切片
+	symbolSlice := make([]*codegraph.Symbol, 0, len(symbols))
 	for _, symbol := range symbols {
-		if err := i.graphStore.WriteSymbol(ctx, symbol); err != nil {
-			return fmt.Errorf("failed to write symbol: %w", err)
-		}
+		symbolSlice = append(symbolSlice, symbol)
 	}
 
-	return nil
+	return document, symbolSlice, nil
 }
