@@ -8,68 +8,48 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-// Document represents a document in the codebase
+// Document 表示代码库中的一个文件
 type Document struct {
-	Path    string   `json:"path"`    // 文档路径
-	Symbols []string `json:"symbols"` // 文档中的符号列表
+	Path    string   `json:"path"`    // 文件路径
+	Content string   `json:"content"` // 文件内容
+	Symbols []string `json:"symbols"` // 文件中的符号列表
 }
 
-// Symbol represents a symbol in the codebase
+// Symbol 表示代码库中的一个符号
 type Symbol struct {
-	Name            string     `json:"name"`            // 符号名
-	Definitions     []Position `json:"definitions"`     // 定义位置
-	References      []Position `json:"references"`      // 引用位置
-	Implementations []Position `json:"implementations"` // 实现位置
+	Name            string       `json:"name"`            // 符号名
+	Definitions     []Occurrence `json:"definitions"`     // 定义位置列表
+	References      []Occurrence `json:"references"`      // 引用位置列表
+	Implementations []Occurrence `json:"implementations"` // 实现位置列表
 }
 
-// Position represents a position in a document
-type Position struct {
-	FilePath    string         `json:"file_path"`    // 文件路径
-	StartLine   int            `json:"start_line"`   // 开始行
-	StartColumn int            `json:"start_column"` // 开始列
-	EndLine     int            `json:"end_line"`     // 结束行
-	EndColumn   int            `json:"end_column"`   // 结束列
-	NodeType    types.NodeType `json:"node_type"`    // 节点类型
+// Occurrence 表示符号在文件中的出现位置
+type Occurrence struct {
+	FilePath string         `json:"file_path"` // 文件路径
+	Range    []int32        `json:"range"`     // 范围信息 [startLine,startCol,endLine,endCol]
+	NodeType types.NodeType `json:"node_type"` // 节点类型
 }
 
-// GraphStore defines the interface for graph storage
+// GraphStore 定义图存储接口
 type GraphStore interface {
-	// Document operations
-	WriteDocument(ctx context.Context, doc *Document) error
-	GetDocument(ctx context.Context, path string) (*Document, error)
-	DeleteDocument(ctx context.Context, path string) error
-
-	// Symbol operations
-	WriteSymbol(ctx context.Context, symbol *Symbol) error
-	GetSymbol(ctx context.Context, name string) (*Symbol, error)
-	DeleteSymbol(ctx context.Context, name string) error
-
-	// Batch operations
+	// 批量写入接口
 	BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error
 
-	// Position operations
-	GetPositionsBySymbol(ctx context.Context, symbol string) ([]Position, error)
-	GetPositionsByFile(ctx context.Context, filePath string) ([]Position, error)
-	GetPositionsByRange(ctx context.Context, filePath string, startLine, endLine int) ([]Position, error)
+	// 查询接口
+	Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error)
 
-	// Tree operations
-	BuildSymbolTree(ctx context.Context, symbol string) (*types.GraphNode, error)
-	GetSymbolReferences(ctx context.Context, symbol string) ([]*types.GraphNode, error)
-	GetSymbolDefinitions(ctx context.Context, symbol string) ([]*types.GraphNode, error)
-
-	// Database operations
+	// 数据库操作
 	Close() error
 	DeleteAll(ctx context.Context) error
 }
 
-// Key prefixes for different types of data
+// 键前缀
 const (
 	DocPrefix = "doc:" // 文档数据前缀
 	SymPrefix = "sym:" // 符号数据前缀
-	PosPrefix = "pos:" // 位置数据前缀
 )
 
-// Key generation functions
+// 键生成函数
 func DocKey(path string) []byte {
 	return []byte(fmt.Sprintf("%s%s", DocPrefix, path))
 }
@@ -78,11 +58,7 @@ func SymKey(name string) []byte {
 	return []byte(fmt.Sprintf("%s%s", SymPrefix, name))
 }
 
-func PosKey(filePath string, line, col int) []byte {
-	return []byte(fmt.Sprintf("%s%s:%d:%d", PosPrefix, filePath, line, col))
-}
-
-// Helper functions for serialization
+// 序列化函数
 func SerializeDocument(doc *Document) ([]byte, error) {
 	return json.Marshal(doc)
 }
@@ -107,24 +83,29 @@ func DeserializeSymbol(data []byte) (*Symbol, error) {
 	return &symbol, nil
 }
 
-// Helper function to convert Position to types.Position
-func ToTypesPosition(pos Position) types.Position {
+// 辅助函数：将 Occurrence 转换为 types.Position
+func ToTypesPosition(occ Occurrence) types.Position {
+	if len(occ.Range) < 4 {
+		return types.Position{}
+	}
 	return types.Position{
-		StartLine:   pos.StartLine,
-		StartColumn: pos.StartColumn,
-		EndLine:     pos.EndLine,
-		EndColumn:   pos.EndColumn,
+		StartLine:   int(occ.Range[0]) + 1,
+		StartColumn: int(occ.Range[1]) + 1,
+		EndLine:     int(occ.Range[2]) + 1,
+		EndColumn:   int(occ.Range[3]) + 1,
 	}
 }
 
-// Helper function to convert types.Position to Position
-func FromTypesPosition(pos types.Position, filePath string, nodeType types.NodeType) Position {
-	return Position{
-		FilePath:    filePath,
-		StartLine:   pos.StartLine,
-		StartColumn: pos.StartColumn,
-		EndLine:     pos.EndLine,
-		EndColumn:   pos.EndColumn,
-		NodeType:    nodeType,
+// 辅助函数：将 types.Position 转换为 Occurrence
+func FromTypesPosition(pos types.Position, filePath string, nodeType types.NodeType) Occurrence {
+	return Occurrence{
+		FilePath: filePath,
+		Range: []int32{
+			int32(pos.StartLine - 1),
+			int32(pos.StartColumn - 1),
+			int32(pos.EndLine - 1),
+			int32(pos.EndColumn - 1),
+		},
+		NodeType: nodeType,
 	}
 }

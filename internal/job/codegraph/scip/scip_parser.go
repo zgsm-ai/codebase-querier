@@ -228,6 +228,7 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 	// 创建文档
 	document := &codegraph.Document{
 		Path:    doc.RelativePath,
+		Content: doc.Text, // 直接使用 []byte
 		Symbols: make([]string, 0, len(doc.Symbols)),
 	}
 
@@ -255,22 +256,19 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 				continue
 			}
 
-			pos := codegraph.Position{
-				FilePath:    doc.RelativePath,
-				NodeType:    nodeType,
-				StartLine:   0, // 关系没有位置信息
-				StartColumn: 0,
-				EndLine:     0,
-				EndColumn:   0,
+			occ := codegraph.Occurrence{
+				FilePath: doc.RelativePath,
+				Range:    []int32{0, 0, 0, 0}, // 关系没有位置信息
+				NodeType: nodeType,
 			}
 
 			switch nodeType {
 			case types.NodeTypeImplementation:
-				symbols[s.Symbol].Implementations = append(symbols[s.Symbol].Implementations, pos)
+				symbols[s.Symbol].Implementations = append(symbols[s.Symbol].Implementations, occ)
 			case types.NodeTypeReference:
-				symbols[s.Symbol].References = append(symbols[s.Symbol].References, pos)
+				symbols[s.Symbol].References = append(symbols[s.Symbol].References, occ)
 			case types.NodeTypeDefinition:
-				symbols[s.Symbol].Definitions = append(symbols[s.Symbol].Definitions, pos)
+				symbols[s.Symbol].Definitions = append(symbols[s.Symbol].Definitions, occ)
 			}
 		}
 
@@ -296,23 +294,19 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 			nodeType = types.NodeTypeDefinition
 		}
 
-		// 使用 toPosition 函数安全地处理范围信息
-		typesPos := toPosition(occ.Range)
-		pos := codegraph.Position{
-			FilePath:    doc.RelativePath,
-			NodeType:    nodeType,
-			StartLine:   typesPos.StartLine,
-			StartColumn: typesPos.StartColumn,
-			EndLine:     typesPos.EndLine,
-			EndColumn:   typesPos.EndColumn,
+		// 创建出现记录
+		occurrence := codegraph.Occurrence{
+			FilePath: doc.RelativePath,
+			Range:    occ.Range,
+			NodeType: nodeType,
 		}
 
 		// 添加到相应的位置列表
 		switch nodeType {
 		case types.NodeTypeDefinition:
-			symbols[occ.Symbol].Definitions = append(symbols[occ.Symbol].Definitions, pos)
+			symbols[occ.Symbol].Definitions = append(symbols[occ.Symbol].Definitions, occurrence)
 		case types.NodeTypeReference:
-			symbols[occ.Symbol].References = append(symbols[occ.Symbol].References, pos)
+			symbols[occ.Symbol].References = append(symbols[occ.Symbol].References, occurrence)
 		}
 
 		document.Symbols = append(document.Symbols, occ.Symbol)

@@ -91,7 +91,12 @@ func TestQueryBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	fmt.Printf("time: %v seconds", time.Since(start).Seconds())
 	// 4. 执行查询
-	references, err := graph.GetSymbolReferences(context.Background(), "ErrPodCompleted")
+	references, err := graph.Query(context.Background(), &types.RelationQueryOptions{
+		FilePath:   "cmd/kubeadm/app/util/endpoint.go",
+		StartLine:  36,
+		EndLine:    36,
+		SymbolName: "GetControlPlaneEndpoint",
+	})
 	assert.NoError(t, err)
 	fmt.Printf("references: %v", references)
 }

@@ -66,12 +66,12 @@ func WithPath(basePath string) GraphOption {
 	}
 }
 
-// BatchWrite performs batch write operations
+// BatchWrite 批量写入文档和符号
 func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols []*Symbol) error {
 	wb := b.db.NewWriteBatch()
 	defer wb.Cancel()
 
-	// Write documents
+	// 写入文档
 	for _, doc := range docs {
 		docBytes, err := SerializeDocument(doc)
 		if err != nil {
@@ -82,7 +82,7 @@ func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols
 		}
 	}
 
-	// Write symbols
+	// 写入符号
 	for _, symbol := range symbols {
 		symbolBytes, err := SerializeSymbol(symbol)
 		if err != nil {
@@ -94,6 +94,216 @@ func (b badgerDBGraph) BatchWrite(ctx context.Context, docs []*Document, symbols
 	}
 
 	return wb.Flush()
+}
+
+// Query 实现查询接口
+func (b badgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
+	// 1. 获取文档
+	var doc *Document
+	err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(DocKey(opts.FilePath))
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var err error
+			doc, err = DeserializeDocument(val)
+			return err
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var nodes []*types.GraphNode
+
+	// 2. 根据查询条件构建树
+	if opts.SymbolName != "" {
+		// 按符号名查询
+		var symbol *Symbol
+		err := b.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(SymKey(opts.SymbolName))
+			if err != nil {
+				return err
+			}
+			return item.Value(func(val []byte) error {
+				var err error
+				symbol, err = DeserializeSymbol(val)
+				return err
+			})
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// 构建符号树
+		nodes = b.buildSymbolTree(symbol, opts.MaxLayer)
+	} else {
+		// 按位置查询
+		nodes = b.buildPositionTree(doc, opts.StartLine, opts.EndLine, opts.MaxLayer)
+	}
+
+	// 3. 如果需要，添加代码内容
+	if opts.IncludeContent == 1 {
+		for _, node := range nodes {
+			node.Content = doc.Content
+		}
+	}
+
+	return nodes, nil
+}
+
+// buildSymbolTree 构建符号树
+func (b badgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.GraphNode {
+	if maxLayer <= 0 {
+		return nil
+	}
+
+	var nodes []*types.GraphNode
+
+	// 处理定义
+	for _, def := range symbol.Definitions {
+		node := &types.GraphNode{
+			FilePath:   def.FilePath,
+			SymbolName: symbol.Name,
+			Position:   ToTypesPosition(def),
+			NodeType:   def.NodeType,
+			Children:   make([]*types.GraphNode, 0),
+		}
+		nodes = append(nodes, node)
+	}
+
+	// 处理引用
+	for _, ref := range symbol.References {
+		node := &types.GraphNode{
+			FilePath:   ref.FilePath,
+			SymbolName: symbol.Name,
+			Position:   ToTypesPosition(ref),
+			NodeType:   ref.NodeType,
+			Children:   make([]*types.GraphNode, 0),
+		}
+		nodes = append(nodes, node)
+	}
+
+	// 处理实现
+	for _, impl := range symbol.Implementations {
+		node := &types.GraphNode{
+			FilePath:   impl.FilePath,
+			SymbolName: symbol.Name,
+			Position:   ToTypesPosition(impl),
+			NodeType:   impl.NodeType,
+			Children:   make([]*types.GraphNode, 0),
+		}
+		nodes = append(nodes, node)
+	}
+
+	// 递归处理子节点
+	if maxLayer > 1 {
+		for _, node := range nodes {
+			var childSymbol *Symbol
+			err := b.db.View(func(txn *badger.Txn) error {
+				item, err := txn.Get(SymKey(node.SymbolName))
+				if err != nil {
+					return err
+				}
+				return item.Value(func(val []byte) error {
+					var err error
+					childSymbol, err = DeserializeSymbol(val)
+					return err
+				})
+			})
+			if err != nil {
+				continue
+			}
+			node.Children = b.buildSymbolTree(childSymbol, maxLayer-1)
+		}
+	}
+
+	return nodes
+}
+
+// buildPositionTree 构建位置树
+func (b badgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxLayer int) []*types.GraphNode {
+	var nodes []*types.GraphNode
+
+	// 遍历文件中的符号
+	for _, symbolName := range doc.Symbols {
+		var symbol *Symbol
+		err := b.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(SymKey(symbolName))
+			if err != nil {
+				return err
+			}
+			return item.Value(func(val []byte) error {
+				var err error
+				symbol, err = DeserializeSymbol(val)
+				return err
+			})
+		})
+		if err != nil {
+			continue
+		}
+
+		// 检查符号是否在指定范围内
+		for _, def := range symbol.Definitions {
+			if def.FilePath == doc.Path {
+				pos := ToTypesPosition(def)
+				if pos.StartLine >= startLine && pos.EndLine <= endLine {
+					node := &types.GraphNode{
+						FilePath:   def.FilePath,
+						SymbolName: symbol.Name,
+						Position:   pos,
+						NodeType:   def.NodeType,
+						Children:   make([]*types.GraphNode, 0),
+					}
+					nodes = append(nodes, node)
+				}
+			}
+		}
+	}
+
+	// 递归处理子节点
+	if maxLayer > 1 {
+		for _, node := range nodes {
+			var childSymbol *Symbol
+			err := b.db.View(func(txn *badger.Txn) error {
+				item, err := txn.Get(SymKey(node.SymbolName))
+				if err != nil {
+					return err
+				}
+				return item.Value(func(val []byte) error {
+					var err error
+					childSymbol, err = DeserializeSymbol(val)
+					return err
+				})
+			})
+			if err != nil {
+				continue
+			}
+			node.Children = b.buildSymbolTree(childSymbol, maxLayer-1)
+		}
+	}
+
+	return nodes
+}
+
+// Close 关闭数据库连接
+func (b badgerDBGraph) Close() error {
+	if err := b.db.RunValueLogGC(0.5); err != nil {
+		_ = fmt.Errorf("failed to run value log GC, err:%v", err)
+	}
+	return b.db.Close()
+}
+
+// DeleteAll 删除所有数据并执行一次清理
+func (b badgerDBGraph) DeleteAll(ctx context.Context) error {
+	// 删除所有数据
+	if err := b.db.DropAll(); err != nil {
+		return err
+	}
+
+	// 执行一次压缩
+	return b.db.RunValueLogGC(0.1)
 }
 
 // Document operations
@@ -163,24 +373,24 @@ func (b badgerDBGraph) DeleteSymbol(ctx context.Context, name string) error {
 }
 
 // Position operations
-func (b badgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) ([]Position, error) {
+func (b badgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) ([]Occurrence, error) {
 	sym, err := b.GetSymbol(ctx, symbol)
 	if err != nil {
 		return nil, err
 	}
-	var positions []Position
+	var positions []Occurrence
 	positions = append(positions, sym.Definitions...)
 	positions = append(positions, sym.References...)
 	positions = append(positions, sym.Implementations...)
 	return positions, nil
 }
 
-func (b badgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) ([]Position, error) {
+func (b badgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) ([]Occurrence, error) {
 	doc, err := b.GetDocument(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
-	var positions []Position
+	var positions []Occurrence
 	for _, symbol := range doc.Symbols {
 		sym, err := b.GetSymbol(ctx, symbol)
 		if err != nil {
@@ -205,15 +415,19 @@ func (b badgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) 
 	return positions, nil
 }
 
-func (b badgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string, startLine, endLine int) ([]Position, error) {
+func (b badgerDBGraph) GetPositionsByRange(ctx context.Context, filePath string, startLine, endLine int) ([]Occurrence, error) {
 	positions, err := b.GetPositionsByFile(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
-	var filtered []Position
+	var filtered []Occurrence
 	for _, pos := range positions {
-		if pos.StartLine >= startLine && pos.EndLine <= endLine {
-			filtered = append(filtered, pos)
+		if len(pos.Range) >= 4 {
+			start := int(pos.Range[0]) + 1
+			end := int(pos.Range[2]) + 1
+			if start >= startLine && end <= endLine {
+				filtered = append(filtered, pos)
+			}
 		}
 	}
 	return filtered, nil
@@ -296,21 +510,4 @@ func (b badgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 		})
 	}
 	return nodes, nil
-}
-
-// Database operations
-func (b badgerDBGraph) DeleteAll(ctx context.Context) error {
-	if err := b.db.DropAll(); err != nil {
-		return fmt.Errorf("failed to drop database: %w", err)
-	}
-	return nil
-}
-
-func (b badgerDBGraph) Close() error {
-	if err := b.db.RunValueLogGC(0.5); err != nil {
-		fmt.Printf("badgerDBGraph GC failed: %v\n", err)
-	} else {
-		fmt.Printf("badgerDBGraph GC successfully.\n")
-	}
-	return b.db.Close()
 }
