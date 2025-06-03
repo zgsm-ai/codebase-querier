@@ -29,7 +29,7 @@ func NewUploadFilesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Uploa
 }
 
 func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Request) error {
-	// todo: add your logic here and delete this line
+	// TODO 删除的处理
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 	codebaseName := req.CodebaseName

@@ -77,6 +77,7 @@ func (i *indexJob) Start() {
 	}
 
 	i.Logger.Info("index job started.")
+	// TODO 多消息合并，避免重复处理，尤其是代码图构建，间隔一定时间再触发下次构建。
 
 	// 轮询消息
 	for {
