@@ -29,7 +29,7 @@ type localCodebase struct {
 	mu     sync.RWMutex // 保护并发访问
 }
 
-func (l *localCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error) {
+func (l *localCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadSeekCloser, error) {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
 		return nil, err
@@ -262,6 +262,7 @@ func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path stri
 
 	return &types.FileInfo{
 		Name:    info.Name(),
+		Path:    fullPath,
 		Size:    info.Size(),
 		IsDir:   info.IsDir(),
 		ModTime: info.ModTime(),

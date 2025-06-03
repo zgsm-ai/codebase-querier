@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
+	"sort"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
+	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
@@ -52,6 +53,8 @@ func NewBadgerDBGraph(ctx context.Context, opts ...GraphOption) (GraphStore, err
 
 	// 设置索引缓存大小
 	badgerOpts.IndexCacheSize = 256 << 20 // 256MB
+
+	badgerOpts = badgerOpts.WithLoggingLevel(badger.WARNING)
 
 	// Open database
 	badgerDB, err := badger.Open(badgerOpts)
@@ -128,47 +131,165 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	}
 
 	var nodes []*types.GraphNode
-
-	// 2. 根据查询条件构建树
 	if opts.SymbolName != "" {
-		var fullSymbolName string
-		for _, sy := range doc.Symbols {
-			if strings.Contains(sy.Name, opts.SymbolName) {
-				fullSymbolName = sy.Name
-				break
-			}
-		}
-		if fullSymbolName == "" {
-			return nil, fmt.Errorf("symbol not found: %s", opts.SymbolName)
-		}
+		nodes = b.queryOccurrencesForSymbol(ctx, doc, opts)
+	} else {
+		nodes = b.queryOccurrencesForPosition(ctx, doc, opts)
+	}
 
-		// 按符号名查询
-		var symbol *Symbol
+	b.buildChildrenForNodes(nodes, opts.MaxLayer)
+	return nodes, nil
+}
+
+// buildChildrenForNodes 递归构建子节点
+func (b BadgerDBGraph) buildChildrenForNodes(nodes []*types.GraphNode, maxLayer int) {
+	if maxLayer <= 1 {
+		return
+	}
+	for _, node := range nodes {
+		var childSymbol *Symbol
 		err := b.db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get(SymKey(fullSymbolName))
+			item, err := txn.Get(SymKey(node.SymbolName))
 			if err != nil {
 				return err
 			}
 			return item.Value(func(val []byte) error {
 				var err error
-				symbol, err = DeserializeSymbol(val)
+				childSymbol, err = DeserializeSymbol(val)
 				return err
 			})
 		})
-		if err != nil {
-			return nil, err
+		if err != nil || childSymbol == nil {
+			continue
 		}
-
-		// 构建符号树
-		nodes = b.buildSymbolTree(symbol, opts.MaxLayer)
-	} else {
-		// 按位置查询
-		nodes = b.buildPositionTree(doc, opts.StartLine, opts.EndLine, opts.MaxLayer)
+		node.Children = b.buildSymbolTree(childSymbol, maxLayer-1)
 	}
+}
 
-	// 3. 如果需要，添加代码内容
+// queryOccurrencesForSymbol 按 symbol 查询 occurrence
+func (b BadgerDBGraph) queryOccurrencesForSymbol(ctx context.Context, doc *Document, opts *types.RelationQueryOptions) []*types.GraphNode {
+	var nodes []*types.GraphNode
+	for _, symbolInDoc := range doc.Symbols {
+		if symbolInDoc.Name != opts.SymbolName {
+			continue
+		}
+		symbol := b.getSymbolByName(ctx, symbolInDoc.Name)
+		if symbol == nil {
+			continue
+		}
+		nodes = append(nodes, b.handleOccurrencesForQuery(doc, symbol, opts)...)
+	}
+	return nodes
+}
 
-	return nodes, nil
+// queryOccurrencesForPosition 按位置查询 occurrence
+func (b BadgerDBGraph) queryOccurrencesForPosition(ctx context.Context, doc *Document, opts *types.RelationQueryOptions) []*types.GraphNode {
+	var nodes []*types.GraphNode
+	for _, symbolInDoc := range doc.Symbols {
+		symbol := b.getSymbolByName(ctx, symbolInDoc.Name)
+		if symbol == nil {
+			continue
+		}
+		nodes = append(nodes, b.handleOccurrencesForQuery(doc, symbol, opts)...)
+	}
+	return nodes
+}
+
+// handleOccurrencesForQuery 处理 occurrence 并构建 GraphNode
+func (b BadgerDBGraph) handleOccurrencesForQuery(doc *Document, symbol *Symbol, opts *types.RelationQueryOptions) []*types.GraphNode {
+	var nodes []*types.GraphNode
+	for nodeType, occs := range symbol.Occurrences {
+		if opts.StartLine > 0 && opts.StartColumn > 0 && opts.EndLine > 0 && opts.EndColumn > 0 {
+			targetRange := []int32{
+				int32(opts.StartLine - 1), int32(opts.StartColumn - 1),
+				int32(opts.EndLine - 1), int32(opts.EndColumn - 1),
+			}
+			occ := findOccurrenceByRange(occs, targetRange)
+			if occ != nil && occ.FilePath == doc.Path {
+				node := &types.GraphNode{
+					FilePath:   occ.FilePath,
+					SymbolName: symbol.Name,
+					Position:   ToTypesPosition(*occ),
+					NodeType:   nodeType,
+					Children:   make([]*types.GraphNode, 0),
+				}
+				nodes = append(nodes, node)
+			}
+			continue
+		}
+		for _, occ := range occs {
+			if occ.FilePath != doc.Path {
+				continue
+			}
+			if matchOccurrence(occ, opts) {
+				node := &types.GraphNode{
+					FilePath:   occ.FilePath,
+					SymbolName: symbol.Name,
+					Position:   ToTypesPosition(occ),
+					NodeType:   nodeType,
+					Children:   make([]*types.GraphNode, 0),
+				}
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	return nodes
+}
+
+// getSymbolByName 获取 symbol
+func (b BadgerDBGraph) getSymbolByName(ctx context.Context, name string) *Symbol {
+	var symbol *Symbol
+	err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(SymKey(name))
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var err error
+			symbol, err = DeserializeSymbol(val)
+			return err
+		})
+	})
+	if err != nil || symbol == nil {
+		return nil
+	}
+	return symbol
+}
+
+// occurrence 匹配辅助函数
+func matchOccurrence(occ Occurrence, opts *types.RelationQueryOptions) bool {
+	if len(occ.Range) < 3 {
+		return false
+	}
+	occR := scip.NewRangeUnchecked(occ.Range)
+	// 1-based to 0-based
+	startLine := opts.StartLine - 1
+	startCol := opts.StartColumn - 1
+	endLine := opts.EndLine - 1
+	endCol := opts.EndColumn - 1
+
+	// 优先级1：精确区间匹配
+	if opts.StartLine > 0 && opts.StartColumn > 0 && opts.EndLine > 0 && opts.EndColumn > 0 {
+		queryR := scip.Range{
+			Start: scip.Position{Line: int32(startLine), Character: int32(startCol)},
+			End:   scip.Position{Line: int32(endLine), Character: int32(endCol)},
+		}
+		return occR.CompareStrict(queryR) == 0
+	}
+	// 优先级2：点在区间内
+	if opts.StartLine > 0 && opts.StartColumn > 0 {
+		pos := scip.Position{Line: int32(startLine), Character: int32(startCol)}
+		return occR.Contains(pos)
+	}
+	// 优先级3：行号范围重叠
+	if opts.StartLine > 0 && opts.EndLine > 0 {
+		queryR := scip.Range{
+			Start: scip.Position{Line: int32(startLine), Character: 0},
+			End:   scip.Position{Line: int32(endLine), Character: 0},
+		}
+		return occR.Intersects(queryR)
+	}
+	return false
 }
 
 // buildSymbolTree 构建符号树
@@ -337,6 +458,9 @@ func (b BadgerDBGraph) DeleteDocument(ctx context.Context, path string) error {
 
 // Symbol operations
 func (b BadgerDBGraph) WriteSymbol(ctx context.Context, symbol *Symbol) error {
+	for _, occs := range symbol.Occurrences {
+		sortOccurrencesByRange(occs)
+	}
 	symbolBytes, err := SerializeSymbol(symbol)
 	if err != nil {
 		return err
@@ -433,7 +557,7 @@ func (b BadgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*typ
 
 	root := &types.GraphNode{
 		SymbolName: symbol,
-		NodeType:   types.NodeTypeDefinition,
+		NodeType:   types.SymbolRoleDefinition,
 	}
 
 	// Add all occurrences as children
@@ -457,12 +581,12 @@ func (b BadgerDBGraph) GetSymbolReferences(ctx context.Context, symbol string) (
 		return nil, err
 	}
 	var nodes []*types.GraphNode
-	for _, occ := range sym.Occurrences[types.NodeTypeReference] {
+	for _, occ := range sym.Occurrences[types.SymbolRoleReference] {
 		nodes = append(nodes, &types.GraphNode{
 			FilePath:   occ.FilePath,
 			SymbolName: symbol,
 			Position:   ToTypesPosition(occ),
-			NodeType:   types.NodeTypeReference,
+			NodeType:   types.SymbolRoleReference,
 		})
 	}
 	return nodes, nil
@@ -474,12 +598,12 @@ func (b BadgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 		return nil, err
 	}
 	var nodes []*types.GraphNode
-	for _, occ := range sym.Occurrences[types.NodeTypeDefinition] {
+	for _, occ := range sym.Occurrences[types.SymbolRoleDefinition] {
 		nodes = append(nodes, &types.GraphNode{
 			FilePath:   occ.FilePath,
 			SymbolName: symbol,
 			Position:   ToTypesPosition(occ),
-			NodeType:   types.NodeTypeDefinition,
+			NodeType:   types.SymbolRoleDefinition,
 		})
 	}
 	return nodes, nil
@@ -488,4 +612,46 @@ func (b BadgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 // DB returns the underlying BadgerDB instance
 func (b BadgerDBGraph) DB() *badger.DB {
 	return b.db
+}
+
+// sortOccurrencesByRange 对 occurrence 按 range 排序
+func sortOccurrencesByRange(occurrences []Occurrence) {
+	sort.Slice(occurrences, func(i, j int) bool {
+		a, b := occurrences[i].Range, occurrences[j].Range
+		for k := 0; k < len(a) && k < len(b); k++ {
+			if a[k] != b[k] {
+				return a[k] < b[k]
+			}
+		}
+		return len(a) < len(b)
+	})
+}
+
+// findOccurrenceByRange 二分查找 occurrence
+func findOccurrenceByRange(occurrences []Occurrence, target []int32) *Occurrence {
+	low, high := 0, len(occurrences)-1
+	for low <= high {
+		mid := (low + high) / 2
+		cmp := compareRange(occurrences[mid].Range, target)
+		if cmp == 0 {
+			return &occurrences[mid]
+		} else if cmp < 0 {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	return nil
+}
+
+func compareRange(a, b []int32) int {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] != b[i] {
+			if a[i] < b[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return len(a) - len(b)
 }

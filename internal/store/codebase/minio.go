@@ -36,7 +36,7 @@ type minioCodebase struct {
 	mu     sync.RWMutex
 }
 
-func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error) {
+func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadSeekCloser, error) {
 	exists, err := m.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
 		return nil, err
@@ -206,6 +206,7 @@ func (m *minioCodebase) Stat(ctx context.Context, codebasePath string, path stri
 
 	return &types.FileInfo{
 		Name:    filepath.Base(objectName),
+		Path:    objectName,
 		Size:    info.Size,
 		IsDir:   info.Size == 0 && strings.HasSuffix(objectName, "/"),
 		ModTime: info.LastModified,

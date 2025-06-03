@@ -20,7 +20,6 @@ test/testdata
 # vendor/
 
 
-
 # env file
 .env
 .vscode
@@ -32,3 +31,4 @@ main.exe
 *.iml
 *.scip
 /codebase-indexer-demo/
+/example/

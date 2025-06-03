@@ -57,12 +57,13 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 	ctx := context.Background()
 	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
 	assert.NoError(t, err)
+	//indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
 	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
 	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
-	parser := scipindex.NewIndexParser(localCodebase, graph)
-	err = parser.ParseSCIPFileForGraph(ctx, codebasePath, indexFile)
+	parser := scipindex.NewIndexParser(ctx, localCodebase, graph)
+	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
 	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
 }
@@ -73,7 +74,8 @@ func TestQueryBadgerDB(t *testing.T) {
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
 
 	// 1. 初始化存储
-	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	ctx := context.Background()
+	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
 	defer graph.Close()
 
@@ -83,13 +85,13 @@ func TestQueryBadgerDB(t *testing.T) {
 			BasePath: testProjectsBaseDir,
 		},
 	}
-	localCodebase, err := codebase.NewLocalCodebase(context.Background(), storeConf)
+	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
 	assert.NoError(t, err)
 
 	// 3. 解析和写入数据
 	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
-	parser := scipindex.NewIndexParser(localCodebase, graph)
-	err = parser.ParseSCIPFileForGraph(context.Background(), codebasePath, indexFile)
+	parser := scipindex.NewIndexParser(ctx, localCodebase, graph)
+	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
 	t.Logf("store time: %f seconds", time.Since(start).Seconds())
 
@@ -114,7 +116,7 @@ func TestQueryBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Logf("\nQuerying for file: %s\n", targetPath)
-	references, err := graph.Query(context.Background(), &types.RelationQueryOptions{
+	references, err := graph.Query(ctx, &types.RelationQueryOptions{
 		FilePath:   targetPath,
 		StartLine:  36,
 		EndLine:    36,

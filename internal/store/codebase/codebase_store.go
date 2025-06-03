@@ -57,7 +57,7 @@ type Store interface {
 	// Open reads the content of a file
 	// filePath: the path to the file to read
 	// option: optional parameters for reading
-	Open(ctx context.Context, codebasePath string, filePath string) (io.ReadCloser, error)
+	Open(ctx context.Context, codebasePath string, filePath string) (io.ReadSeekCloser, error)
 
 	// Walk walks through the codebase and processes each file
 	// dir: the root directory to start walking from
