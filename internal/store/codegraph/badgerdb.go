@@ -3,36 +3,40 @@ package codegraph
 import (
 	"context"
 	"fmt"
-	badger "github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/badger/v4/options"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
 	"strings"
+	"time"
+
+	badger "github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
 const dbName = "badger.db"
 
 // BadgerDBGraph implements GraphStore using BadgerDB
 type BadgerDBGraph struct {
-	path string
-	db   *badger.DB
+	basePath string
+	db       *badger.DB
+	logger   logx.Logger
 }
 
-func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
+func NewBadgerDBGraph(ctx context.Context, opts ...GraphOption) (GraphStore, error) {
 	b := &BadgerDBGraph{}
 	for _, opt := range opts {
 		opt(b)
 	}
 
 	// 自定义 BadgerDB 配置
-	badgerOpts := badger.DefaultOptions(filepath.Join(b.path, dbName))
+	badgerOpts := badger.DefaultOptions(filepath.Join(b.basePath, dbName))
 
 	// 值日志配置
-	badgerOpts.ValueLogFileSize = 1 << 30 // 1GB
-	badgerOpts.ValueThreshold = 32        // 小于32字节的值直接存储在LSM树中
+	badgerOpts.ValueLogFileSize = 1 << 30 // 512 << 20 512MB // 1 << 30 1GB
+	badgerOpts.ValueThreshold = 128       // 小于128字节的值直接存储在LSM树中
 
 	// 内存表配置
-	badgerOpts.NumMemtables = 4              // 增加内存表数量
+	badgerOpts.NumMemtables = 2              // 增加内存表数量
 	badgerOpts.NumLevelZeroTables = 50       // 增加L0层表数量
 	badgerOpts.NumLevelZeroTablesStall = 100 // 增加L0层表数量阈值
 
@@ -56,6 +60,7 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 	}
 
 	b.db = badgerDB
+	b.logger = logx.WithContext(ctx)
 	return b, nil
 }
 
@@ -63,7 +68,7 @@ type GraphOption func(*BadgerDBGraph)
 
 func WithPath(basePath string) GraphOption {
 	return func(b *BadgerDBGraph) {
-		b.path = basePath
+		b.basePath = basePath
 	}
 }
 
@@ -128,8 +133,8 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	if opts.SymbolName != "" {
 		var fullSymbolName string
 		for _, sy := range doc.Symbols {
-			if strings.Contains(sy, opts.SymbolName) {
-				fullSymbolName = sy
+			if strings.Contains(sy.Name, opts.SymbolName) {
+				fullSymbolName = sy.Name
 				break
 			}
 		}
@@ -162,11 +167,6 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	}
 
 	// 3. 如果需要，添加代码内容
-	if opts.IncludeContent == 1 {
-		for _, node := range nodes {
-			node.Content = doc.Content
-		}
-	}
 
 	return nodes, nil
 }
@@ -179,43 +179,19 @@ func (b BadgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.Gr
 
 	var nodes []*types.GraphNode
 
-	// 处理定义
-	for _, def := range symbol.Definitions {
-		node := &types.GraphNode{
-			FilePath:   def.FilePath,
-			SymbolName: symbol.Name,
-			Position:   ToTypesPosition(def),
-			NodeType:   def.NodeType,
-			Children:   make([]*types.GraphNode, 0),
+	for nodeType, occs := range symbol.Occurrences {
+		for _, occ := range occs {
+			node := &types.GraphNode{
+				FilePath:   occ.FilePath,
+				SymbolName: symbol.Name,
+				Position:   ToTypesPosition(occ),
+				NodeType:   nodeType,
+				Children:   make([]*types.GraphNode, 0),
+			}
+			nodes = append(nodes, node)
 		}
-		nodes = append(nodes, node)
 	}
 
-	// 处理引用
-	for _, ref := range symbol.References {
-		node := &types.GraphNode{
-			FilePath:   ref.FilePath,
-			SymbolName: symbol.Name,
-			Position:   ToTypesPosition(ref),
-			NodeType:   ref.NodeType,
-			Children:   make([]*types.GraphNode, 0),
-		}
-		nodes = append(nodes, node)
-	}
-
-	// 处理实现
-	for _, impl := range symbol.Implementations {
-		node := &types.GraphNode{
-			FilePath:   impl.FilePath,
-			SymbolName: symbol.Name,
-			Position:   ToTypesPosition(impl),
-			NodeType:   impl.NodeType,
-			Children:   make([]*types.GraphNode, 0),
-		}
-		nodes = append(nodes, node)
-	}
-
-	// 递归处理子节点
 	if maxLayer > 1 {
 		for _, node := range nodes {
 			var childSymbol *Symbol
@@ -244,8 +220,8 @@ func (b BadgerDBGraph) buildSymbolTree(symbol *Symbol, maxLayer int) []*types.Gr
 func (b BadgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxLayer int) []*types.GraphNode {
 	var nodes []*types.GraphNode
 
-	// 遍历文件中的符号
-	for _, symbolName := range doc.Symbols {
+	for _, symbolInDoc := range doc.Symbols {
+		symbolName := symbolInDoc.Name
 		var symbol *Symbol
 		err := b.db.View(func(txn *badger.Txn) error {
 			item, err := txn.Get(SymKey(symbolName))
@@ -262,25 +238,25 @@ func (b BadgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxL
 			continue
 		}
 
-		// 检查符号是否在指定范围内
-		for _, def := range symbol.Definitions {
-			if def.FilePath == doc.Path {
-				pos := ToTypesPosition(def)
-				if pos.StartLine >= startLine && pos.EndLine <= endLine {
-					node := &types.GraphNode{
-						FilePath:   def.FilePath,
-						SymbolName: symbol.Name,
-						Position:   pos,
-						NodeType:   def.NodeType,
-						Children:   make([]*types.GraphNode, 0),
+		for nodeType, occs := range symbol.Occurrences {
+			for _, occ := range occs {
+				if occ.FilePath == doc.Path {
+					pos := ToTypesPosition(occ)
+					if pos.StartLine >= startLine && pos.EndLine <= endLine {
+						node := &types.GraphNode{
+							FilePath:   occ.FilePath,
+							SymbolName: symbol.Name,
+							Position:   pos,
+							NodeType:   nodeType,
+							Children:   make([]*types.GraphNode, 0),
+						}
+						nodes = append(nodes, node)
 					}
-					nodes = append(nodes, node)
 				}
 			}
 		}
 	}
 
-	// 递归处理子节点
 	if maxLayer > 1 {
 		for _, node := range nodes {
 			var childSymbol *Symbol
@@ -307,9 +283,11 @@ func (b BadgerDBGraph) buildPositionTree(doc *Document, startLine, endLine, maxL
 
 // Close 关闭数据库连接
 func (b BadgerDBGraph) Close() error {
+	start := time.Now()
 	if err := b.db.RunValueLogGC(0.5); err != nil {
 		_ = fmt.Errorf("failed to run value log GC, err:%v", err)
 	}
+	b.logger.Debugf("badger db %s GC took %d ms", b.basePath, time.Since(start).Milliseconds())
 	return b.db.Close()
 }
 
@@ -324,7 +302,7 @@ func (b BadgerDBGraph) DeleteAll(ctx context.Context) error {
 	return b.db.RunValueLogGC(0.1)
 }
 
-// Document operations
+// WriteDocument Document operations
 func (b BadgerDBGraph) WriteDocument(ctx context.Context, doc *Document) error {
 	docBytes, err := SerializeDocument(doc)
 	if err != nil {
@@ -397,9 +375,11 @@ func (b BadgerDBGraph) GetPositionsBySymbol(ctx context.Context, symbol string) 
 		return nil, err
 	}
 	var positions []Occurrence
-	positions = append(positions, sym.Definitions...)
-	positions = append(positions, sym.References...)
-	positions = append(positions, sym.Implementations...)
+	for _, occs := range sym.Occurrences {
+		for _, pos := range occs {
+			positions = append(positions, pos)
+		}
+	}
 	return positions, nil
 }
 
@@ -409,24 +389,17 @@ func (b BadgerDBGraph) GetPositionsByFile(ctx context.Context, filePath string) 
 		return nil, err
 	}
 	var positions []Occurrence
-	for _, symbol := range doc.Symbols {
-		sym, err := b.GetSymbol(ctx, symbol)
+	for _, symbolInDoc := range doc.Symbols {
+		symbolName := symbolInDoc.Name
+		sym, err := b.GetSymbol(ctx, symbolName)
 		if err != nil {
 			continue
 		}
-		for _, pos := range sym.Definitions {
-			if pos.FilePath == filePath {
-				positions = append(positions, pos)
-			}
-		}
-		for _, pos := range sym.References {
-			if pos.FilePath == filePath {
-				positions = append(positions, pos)
-			}
-		}
-		for _, pos := range sym.Implementations {
-			if pos.FilePath == filePath {
-				positions = append(positions, pos)
+		for _, occs := range sym.Occurrences {
+			for _, pos := range occs {
+				if pos.FilePath == filePath {
+					positions = append(positions, pos)
+				}
 			}
 		}
 	}
@@ -463,34 +436,16 @@ func (b BadgerDBGraph) BuildSymbolTree(ctx context.Context, symbol string) (*typ
 		NodeType:   types.NodeTypeDefinition,
 	}
 
-	// Add definitions
-	for _, def := range sym.Definitions {
-		root.Children = append(root.Children, &types.GraphNode{
-			FilePath:   def.FilePath,
-			SymbolName: symbol,
-			Position:   ToTypesPosition(def),
-			NodeType:   types.NodeTypeDefinition,
-		})
-	}
-
-	// Add references
-	for _, ref := range sym.References {
-		root.Children = append(root.Children, &types.GraphNode{
-			FilePath:   ref.FilePath,
-			SymbolName: symbol,
-			Position:   ToTypesPosition(ref),
-			NodeType:   types.NodeTypeReference,
-		})
-	}
-
-	// Add implementations
-	for _, impl := range sym.Implementations {
-		root.Children = append(root.Children, &types.GraphNode{
-			FilePath:   impl.FilePath,
-			SymbolName: symbol,
-			Position:   ToTypesPosition(impl),
-			NodeType:   types.NodeTypeImplementation,
-		})
+	// Add all occurrences as children
+	for nodeType, occs := range sym.Occurrences {
+		for _, occ := range occs {
+			root.Children = append(root.Children, &types.GraphNode{
+				FilePath:   occ.FilePath,
+				SymbolName: symbol,
+				Position:   ToTypesPosition(occ),
+				NodeType:   nodeType,
+			})
+		}
 	}
 
 	return root, nil
@@ -502,11 +457,11 @@ func (b BadgerDBGraph) GetSymbolReferences(ctx context.Context, symbol string) (
 		return nil, err
 	}
 	var nodes []*types.GraphNode
-	for _, ref := range sym.References {
+	for _, occ := range sym.Occurrences[types.NodeTypeReference] {
 		nodes = append(nodes, &types.GraphNode{
-			FilePath:   ref.FilePath,
+			FilePath:   occ.FilePath,
 			SymbolName: symbol,
-			Position:   ToTypesPosition(ref),
+			Position:   ToTypesPosition(occ),
 			NodeType:   types.NodeTypeReference,
 		})
 	}
@@ -519,11 +474,11 @@ func (b BadgerDBGraph) GetSymbolDefinitions(ctx context.Context, symbol string) 
 		return nil, err
 	}
 	var nodes []*types.GraphNode
-	for _, def := range sym.Definitions {
+	for _, occ := range sym.Occurrences[types.NodeTypeDefinition] {
 		nodes = append(nodes, &types.GraphNode{
-			FilePath:   def.FilePath,
+			FilePath:   occ.FilePath,
 			SymbolName: symbol,
-			Position:   ToTypesPosition(def),
+			Position:   ToTypesPosition(occ),
 			NodeType:   types.NodeTypeDefinition,
 		})
 	}

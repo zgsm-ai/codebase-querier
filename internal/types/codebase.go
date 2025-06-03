@@ -1,13 +1,16 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type Codebase struct {
 	FullPath string
 }
 
-const SyncMedataDir = ".sync_metadata"
-const CodebaseIndexDir = ".codebase_index"
+const CodebaseIndexDir = ".shenma"
+const SyncMedataDir = ".shenma_sync"
+const Index = "index"
 
 // SyncMetadata 代码变更事件结构体
 type SyncMetadata struct {

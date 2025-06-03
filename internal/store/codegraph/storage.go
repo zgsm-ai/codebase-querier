@@ -10,17 +10,23 @@ import (
 
 // Document 表示代码库中的一个文件
 type Document struct {
-	Path    string   `json:"path"`    // 文件路径
-	Content string   `json:"content"` // 文件内容
-	Symbols []string `json:"symbols"` // 文件中的符号列表
+	Path    string        `json:"basePath"` // 文件路径
+	Symbols []SymbolInDoc `json:"symbols"`  // 文件中的符号列表（含位置信息等）
+}
+
+// SymbolInDoc 表示文档中的一个符号及其位置信息
+// 参考 SCIP Occurrence 结构
+type SymbolInDoc struct {
+	Name     string         `json:"name"`      // 符号名
+	NodeType types.NodeType `json:"node_type"` // 节点类型（定义/引用/实现）
+	Range    []int32        `json:"range"`     // [startLine, startCol, endLine, endCol]
 }
 
 // Symbol 表示代码库中的一个符号
 type Symbol struct {
-	Name            string       `json:"name"`            // 符号名
-	Definitions     []Occurrence `json:"definitions"`     // 定义位置列表
-	References      []Occurrence `json:"references"`      // 引用位置列表
-	Implementations []Occurrence `json:"implementations"` // 实现位置列表
+	Name        string                          `json:"name"`        // 符号名
+	Content     string                          `json:"content"`     // 符号内容（代码片段）
+	Occurrences map[types.NodeType][]Occurrence `json:"occurrences"` // 各类型出现位置
 }
 
 // Occurrence 表示符号在文件中的出现位置

@@ -225,24 +225,19 @@ func (i *IndexParser) collectMetadataAndSymbols(file io.Reader) (*FirstPassResul
 
 // processDocument processes a single document and returns the document and its symbols
 func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, externalSymbolsByName map[string]*scip.SymbolInformation) (*codegraph.Document, []*codegraph.Symbol, error) {
-	// 创建文档
 	document := &codegraph.Document{
 		Path:    doc.RelativePath,
-		Content: doc.Text,
-		Symbols: make([]string, 0, len(doc.Symbols)),
+		Symbols: make([]codegraph.SymbolInDoc, 0, len(doc.Occurrences)),
 	}
 
-	// 处理符号和关系
 	symbols := make(map[string]*codegraph.Symbol)
 	for _, s := range doc.Symbols {
-		// 创建或获取符号
 		if _, ok := symbols[s.Symbol]; !ok {
 			symbols[s.Symbol] = &codegraph.Symbol{
-				Name: s.Symbol,
+				Name:        s.Symbol,
+				Occurrences: make(map[types.NodeType][]codegraph.Occurrence),
 			}
 		}
-
-		// 处理关系
 		for _, rel := range s.Relationships {
 			var nodeType types.NodeType
 			switch {
@@ -255,68 +250,86 @@ func (i *IndexParser) processDocument(ctx context.Context, doc *scip.Document, e
 			default:
 				continue
 			}
-
 			occ := codegraph.Occurrence{
 				FilePath: doc.RelativePath,
-				Range:    []int32{0, 0, 0, 0}, // 关系没有位置信息
+				Range:    []int32{0, 0, 0, 0},
 				NodeType: nodeType,
 			}
-
-			switch nodeType {
-			case types.NodeTypeImplementation:
-				symbols[s.Symbol].Implementations = append(symbols[s.Symbol].Implementations, occ)
-			case types.NodeTypeReference:
-				symbols[s.Symbol].References = append(symbols[s.Symbol].References, occ)
-			case types.NodeTypeDefinition:
-				symbols[s.Symbol].Definitions = append(symbols[s.Symbol].Definitions, occ)
-			}
+			symbols[s.Symbol].Occurrences[nodeType] = append(symbols[s.Symbol].Occurrences[nodeType], occ)
 		}
-
-		document.Symbols = append(document.Symbols, s.Symbol)
 	}
 
-	// 处理出现
 	for _, occ := range doc.Occurrences {
 		if occ.Symbol == types.EmptyString {
 			continue
 		}
-
-		// 创建或获取符号
 		if _, ok := symbols[occ.Symbol]; !ok {
 			symbols[occ.Symbol] = &codegraph.Symbol{
-				Name: occ.Symbol,
+				Name:        occ.Symbol,
+				Occurrences: make(map[types.NodeType][]codegraph.Occurrence),
 			}
 		}
-
-		// 确定节点类型
 		nodeType := types.NodeTypeReference
 		if scip.SymbolRole_Definition.Matches(occ) {
 			nodeType = types.NodeTypeDefinition
 		}
-
-		// 创建出现记录
 		occurrence := codegraph.Occurrence{
 			FilePath: doc.RelativePath,
 			Range:    occ.Range,
 			NodeType: nodeType,
 		}
-
-		// 添加到相应的位置列表
-		switch nodeType {
-		case types.NodeTypeDefinition:
-			symbols[occ.Symbol].Definitions = append(symbols[occ.Symbol].Definitions, occurrence)
-		case types.NodeTypeReference:
-			symbols[occ.Symbol].References = append(symbols[occ.Symbol].References, occurrence)
-		}
-
-		document.Symbols = append(document.Symbols, occ.Symbol)
+		symbols[occ.Symbol].Occurrences[nodeType] = append(symbols[occ.Symbol].Occurrences[nodeType], occurrence)
+		document.Symbols = append(document.Symbols, codegraph.SymbolInDoc{
+			Name:     occ.Symbol,
+			NodeType: nodeType,
+			Range:    occ.Range,
+		})
 	}
 
-	// 将符号转换为切片
+	for _, occ := range doc.Occurrences {
+		if symbol, ok := symbols[occ.Symbol]; ok && symbol.Content == "" && len(occ.Range) == 4 {
+			startLine := int(occ.Range[0])
+			endLine := int(occ.Range[2])
+			lines := splitLines(doc.Text)
+			if startLine >= 0 && endLine < len(lines) && startLine <= endLine {
+				content := joinLines(lines[startLine : endLine+1])
+				symbol.Content = content
+			}
+		}
+	}
+
 	symbolSlice := make([]*codegraph.Symbol, 0, len(symbols))
 	for _, symbol := range symbols {
 		symbolSlice = append(symbolSlice, symbol)
 	}
 
 	return document, symbolSlice, nil
+}
+
+// splitLines splits text into lines
+func splitLines(text string) []string {
+	lines := make([]string, 0)
+	start := 0
+	for i, c := range text {
+		if c == '\n' {
+			lines = append(lines, text[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(text) {
+		lines = append(lines, text[start:])
+	}
+	return lines
+}
+
+// joinLines joins lines with newline
+func joinLines(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	res := lines[0]
+	for i := 1; i < len(lines); i++ {
+		res += "\n" + lines[i]
+	}
+	return res
 }

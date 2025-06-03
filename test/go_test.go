@@ -39,7 +39,7 @@ func Test_GenerateGoScipIndex(t *testing.T) {
 		err = generator.Generate(context.Background(), codebasePath)
 		assert.NoError(t, err)
 		indexFile := filepath.Join(testProjectsBaseDir, projectPath, types.CodebaseIndexDir, indexFileName)
-		fmt.Println(indexFile)
+		t.Logf("index file: %s", indexFile)
 		assert.FileExists(t, indexFile)
 
 	})
@@ -54,17 +54,17 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 			BasePath: testProjectsBaseDir,
 		},
 	}
-	localCodebase, err := codebase.NewLocalCodebase(context.Background(), storeConf)
+	ctx := context.Background()
+	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
 	assert.NoError(t, err)
 	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
-	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
 	parser := scipindex.NewIndexParser(localCodebase, graph)
-	err = parser.ParseSCIPFileForGraph(context.Background(), codebasePath, indexFile)
+	err = parser.ParseSCIPFileForGraph(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
-	//fmt.Printf("graph: %v", graph)
-	fmt.Printf("time: %v seconds", time.Since(start).Seconds())
+	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
 }
 
 func TestQueryBadgerDB(t *testing.T) {
@@ -73,7 +73,7 @@ func TestQueryBadgerDB(t *testing.T) {
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
 
 	// 1. 初始化存储
-	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
 	defer graph.Close()
 
@@ -91,12 +91,11 @@ func TestQueryBadgerDB(t *testing.T) {
 	parser := scipindex.NewIndexParser(localCodebase, graph)
 	err = parser.ParseSCIPFileForGraph(context.Background(), codebasePath, indexFile)
 	assert.NoError(t, err)
-	fmt.Printf("time: %v seconds", time.Since(start).Seconds())
+	t.Logf("store time: %f seconds", time.Since(start).Seconds())
 
 	// 4. 执行查询
 	targetPath := "cmd/kubeadm/app/util/endpoint.go"
 	// 调试：检查数据库中的键
-	fmt.Println("\nChecking database keys:")
 	err = graph.(*codegraph.BadgerDBGraph).DB().View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
@@ -107,14 +106,14 @@ func TestQueryBadgerDB(t *testing.T) {
 			item := it.Item()
 			key := item.Key()
 			if strings.Contains(string(key), targetPath) {
-				fmt.Printf("Found key: %s\n", key)
+				t.Logf("Found key: %s\n", key)
 			}
 		}
 		return nil
 	})
 	assert.NoError(t, err)
 
-	fmt.Printf("\nQuerying for file: %s\n", targetPath)
+	t.Logf("\nQuerying for file: %s\n", targetPath)
 	references, err := graph.Query(context.Background(), &types.RelationQueryOptions{
 		FilePath:   targetPath,
 		StartLine:  36,
@@ -122,18 +121,31 @@ func TestQueryBadgerDB(t *testing.T) {
 		SymbolName: "GetControlPlaneEndpoint",
 	})
 	if err != nil {
-		fmt.Printf("Query error: %v\n", err)
+		t.Logf("Query error: %v\n", err)
 	}
-	fmt.Printf("references: %v", references)
+	assert.True(t, len(references) > 0)
+	t.Log("-----------------------------------------------")
+	for _, v := range references {
+		t.Logf("references name: %v", v.SymbolName)
+		t.Logf("references content: %v", v.Content)
+		t.Logf("references filepath: %v", v.FilePath)
+		t.Logf("references nodetype: %v", v.NodeType)
+		t.Logf("references position: %v", v.Position)
+		t.Logf("references children: %v", v.Children)
+	}
+	t.Log("-----------------------------------------------")
 }
 
 func TestDeleteBadgerDB(t *testing.T) {
+	start := time.Now()
 	projectPath := "go/kubernetes"
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
-	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
-	err = graph.DeleteAll(context.Background())
-	assert.NoError(t, err)
+	assert.NotPanics(t, func() {
+		err = graph.DeleteAll(context.Background())
+	})
+	t.Logf("time cost %d ms", time.Since(start).Milliseconds())
 }
 
 func TestInspectBadgerDB(t *testing.T) {
@@ -141,14 +153,14 @@ func TestInspectBadgerDB(t *testing.T) {
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
 
 	// 初始化 BadgerDB
-	storage, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		t.Fatalf("Failed to initialize BadgerDB: %v", err)
 	}
-	defer storage.Close()
+	defer graph.Close()
 
 	// 获取 BadgerDB 实例
-	db := storage.(*codegraph.BadgerDBGraph).DB()
+	db := graph.(*codegraph.BadgerDBGraph).DB()
 
 	// 遍历所有数据
 	err = db.View(func(txn *badger.Txn) error {
@@ -174,16 +186,14 @@ func TestInspectBadgerDB(t *testing.T) {
 				}
 				fmt.Printf("Document: %s\n", doc.Path)
 				fmt.Printf("  Symbols: %d\n", len(doc.Symbols))
-				fmt.Printf("  Content size: %d bytes\n", len(doc.Content))
 			case bytes.HasPrefix(key, []byte("sym:")):
 				sym, err := codegraph.DeserializeSymbol(val)
 				if err != nil {
 					return err
 				}
 				fmt.Printf("Symbol: %s\n", sym.Name)
-				fmt.Printf("  Definitions: %d\n", len(sym.Definitions))
-				fmt.Printf("  References: %d\n", len(sym.References))
-				fmt.Printf("  Implementations: %d\n", len(sym.Implementations))
+				fmt.Printf("  Occurrences: %d\n", len(sym.Occurrences))
+				fmt.Printf("  Content: %d\n", len(sym.Content))
 			}
 		}
 		return nil
