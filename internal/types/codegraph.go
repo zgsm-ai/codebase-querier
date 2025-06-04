@@ -35,7 +35,7 @@ type GraphNode struct {
 	SymbolName string       `json:"symbolName"`
 	Position   Position     `json:"position"`
 	Content    string       `json:"content"`
-	NodeType   SymbolRole   `json:"nodeType"`
+	NodeType   string       `json:"nodeType"`
 	Children   []*GraphNode `json:"children"`
 	Parent     *GraphNode   `json:"parent"`
 }

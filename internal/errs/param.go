@@ -2,13 +2,18 @@ package errs
 
 import "fmt"
 
-var ErrorInvalidParamFmt = "invalid request params: %s %v"
-var ErrorRecordNotFoundFmt = "%s not found by %s"
+var errorInvalidParamFmt = "invalid request params: %s %v"
+var errorRecordNotFoundFmt = "%s not found by %s"
+var errorMissingParamFmt = "missing required param: %s"
 
 func NewInvalidParamErr(name string, value interface{}) error {
-	return fmt.Errorf(ErrorInvalidParamFmt, name, value)
+	return fmt.Errorf(errorInvalidParamFmt, name, value)
 }
 
 func NewRecordNotFoundErr(name string, value interface{}) error {
-	return fmt.Errorf(ErrorRecordNotFoundFmt, name, value)
+	return fmt.Errorf(errorRecordNotFoundFmt, name, value)
+}
+
+func NewMissingParamError(name string) error {
+	return fmt.Errorf(errorMissingParamFmt, name)
 }

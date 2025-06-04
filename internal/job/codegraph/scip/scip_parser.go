@@ -3,8 +3,8 @@ package scip
 import (
 	"context"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -15,13 +15,14 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-const parseBatchSize = 1000
+const writeBatchSize = 500
 
-// ParsedMetadata scip parsed metadata.
-type ParsedMetadata struct {
+// scipMetadata scip parsed metadata.
+type scipMetadata struct {
 	Metadata              *scip.Metadata
 	ExternalSymbolsByName map[string]*scip.SymbolInformation
-	docCountByPath        map[string]int
+	SymbolNamePath        map[string]string
+	DocCountByPath        map[string]int
 }
 
 // IndexParser represents the SCIP index generator
@@ -40,39 +41,15 @@ func NewIndexParser(ctx context.Context, codebaseStore codebase.Store, graphStor
 	}
 }
 
-// getOrCreateSymbol returns the symbol from the map or creates it if not present.
-func getOrCreateSymbol(symbols map[string]*codegraph.Symbol, name string, contents []string) *codegraph.Symbol {
-	sym, ok := symbols[name]
-	if !ok {
-		sym = &codegraph.Symbol{
-			Name:        name,
-			Occurrences: make(map[types.SymbolRole][]codegraph.Occurrence),
-		}
-		symbols[name] = sym
-	}
-	if len(contents) > 0 {
-		sym.Content += strings.Join(contents, types.EmptyString) // 它自带了\n
-	}
-	return sym
-}
-
-// newOccurrence constructs a new Occurrence.
-func newOccurrence(filePath string, rng []int32, nodeType types.SymbolRole) codegraph.Occurrence {
-	return codegraph.Occurrence{
-		FilePath: filePath,
-		Range:    rng,
-		NodeType: nodeType,
-	}
-}
-
 // visitDocument handles a single SCIP document during streaming parse.
-func (i *IndexParser) visitDocument(metadata *ParsedMetadata,
+func (i *IndexParser) visitDocument(
+	ctx context.Context,
+	metadata *scipMetadata,
 	duplicateDocs map[string][]*scip.Document,
-	pendingDocs *[]*codegraph.Document,
-	pendingSymbols *[]*codegraph.Symbol) func(d *scip.Document) {
+	pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
 	return func(document *scip.Document) {
 		path := document.RelativePath
-		if count := metadata.docCountByPath[path]; count > 1 {
+		if count := metadata.DocCountByPath[path]; count > 1 {
 			samePathDocs := append(duplicateDocs[path], document)
 			duplicateDocs[path] = samePathDocs
 			if len(samePathDocs) == count {
@@ -86,13 +63,21 @@ func (i *IndexParser) visitDocument(metadata *ParsedMetadata,
 				return
 			}
 		}
-		doc, symbols, err := i.processDocument(document, metadata.ExternalSymbolsByName)
+		doc, err := i.processDocument(document, metadata)
 		if err != nil {
 			i.logger.Errorf("failed to process document %s: %w", path, err)
 			return
 		}
 		*pendingDocs = append(*pendingDocs, doc)
-		*pendingSymbols = append(*pendingSymbols, symbols...)
+
+		// 到达一定批次，写入数据
+		if len(*pendingDocs) >= writeBatchSize {
+			if err := i.graphStore.BatchWrite(ctx, *pendingDocs); err != nil {
+				logx.Errorf("failed to batch write remaining documents: %w", err)
+			}
+			// 处理完，清空
+			*pendingDocs = (*pendingDocs)[:0]
+		}
 	}
 }
 
@@ -115,22 +100,23 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	}
 	defer file.Close()
 
+	// 需要维护全局的 symbolName-> doc_path 的映射
+
 	metadata, err := i.parseMetadata(file)
 	if err != nil {
 		return fmt.Errorf("failed to collect metadata and symbols: %w", err)
 	}
-	i.logger.Debugf("parsed %s files cnt: %d", codebasePath, len(metadata.docCountByPath))
+	i.logger.Debugf("parsed %s files cnt: %d", codebasePath, len(metadata.DocCountByPath))
 
 	if _, err := file.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to reset file pointer: %w", err)
 	}
 
 	duplicateDocs := make(map[string][]*scip.Document)
-	pendingDocs := make([]*codegraph.Document, 0, parseBatchSize)
-	pendingSymbols := make([]*codegraph.Symbol, 0, parseBatchSize)
+	pendingDocs := make([]*codegraphpb.Document, 0, writeBatchSize)
 
 	visitor := scip.IndexVisitor{
-		VisitDocument: i.visitDocument(metadata, duplicateDocs, &pendingDocs, &pendingSymbols),
+		VisitDocument: i.visitDocument(ctx, metadata, duplicateDocs, &pendingDocs),
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {
@@ -138,7 +124,7 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	}
 
 	if len(pendingDocs) > 0 {
-		if err := i.graphStore.BatchWrite(ctx, pendingDocs, pendingSymbols); err != nil {
+		if err := i.graphStore.BatchWrite(ctx, pendingDocs); err != nil {
 			return fmt.Errorf("failed to batch write remaining documents: %w", err)
 		}
 	}
@@ -147,10 +133,11 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 }
 
 // parseMetadata performs the first pass to collect metadata and external symbols.
-func (i *IndexParser) parseMetadata(file io.Reader) (*ParsedMetadata, error) {
-	result := &ParsedMetadata{
+func (i *IndexParser) parseMetadata(file io.Reader) (*scipMetadata, error) {
+	result := &scipMetadata{
 		ExternalSymbolsByName: make(map[string]*scip.SymbolInformation),
-		docCountByPath:        make(map[string]int),
+		DocCountByPath:        make(map[string]int),
+		SymbolNamePath:        make(map[string]string),
 	}
 
 	visitor := scip.IndexVisitor{
@@ -158,7 +145,10 @@ func (i *IndexParser) parseMetadata(file io.Reader) (*ParsedMetadata, error) {
 			result.Metadata = m
 		},
 		VisitDocument: func(d *scip.Document) {
-			result.docCountByPath[d.RelativePath]++
+			result.DocCountByPath[d.RelativePath]++
+			for _, occ := range d.Occurrences {
+				result.SymbolNamePath[occ.Symbol] = d.RelativePath
+			}
 		},
 		VisitExternalSymbol: func(s *scip.SymbolInformation) {
 			result.ExternalSymbolsByName[s.Symbol] = s
@@ -173,131 +163,97 @@ func (i *IndexParser) parseMetadata(file io.Reader) (*ParsedMetadata, error) {
 }
 
 // processDocument processes a single document and returns the document and its symbols.
-func (i *IndexParser) processDocument(doc *scip.Document, externalSymbolsByName map[string]*scip.SymbolInformation) (*codegraph.Document, []*codegraph.Symbol, error) {
-	addMissingExternalSymbols(doc, externalSymbolsByName)
-	normalizeDocumentOrder(doc)
-	relativePath := doc.RelativePath
-	_ = scip.CanonicalizeDocument(doc)
-	document := &codegraph.Document{
-		Path:    relativePath,
-		Symbols: make([]*codegraph.SymbolInDoc, 0, len(doc.Occurrences)),
+func (i *IndexParser) processDocument(doc *scip.Document, metadata *scipMetadata) (*codegraphpb.Document, error) {
+
+	addMissingExternalSymbols(doc, metadata.ExternalSymbolsByName)
+	_ = scip.CanonicalizeDocument(doc) // 包含了排序
+	document := &codegraphpb.Document{
+		Path: doc.RelativePath,
 	}
-
-	symbols := make(map[string]*codegraph.Symbol)
-
-	populateSymbolsFromOccurrences(doc, relativePath, symbols, document)
-	populateRelationships(doc, symbols)
-	populateSymbolContent(doc, symbols)
-
-	symbolSlice := make([]*codegraph.Symbol, 0, len(symbols))
-	for _, symbol := range symbols {
-		symbolSlice = append(symbolSlice, symbol)
-	}
-
-	return document, symbolSlice, nil
+	document.Symbols = populateSymbolsAndOccurrences(doc, metadata.SymbolNamePath)
+	return document, nil
 }
 
-// populateSymbolsFromOccurrences processes Occurrences and fills symbols and document.Symbols.
-func populateSymbolsFromOccurrences(doc *scip.Document, relativePath string, symbols map[string]*codegraph.Symbol, document *codegraph.Document) {
+// populateSymbolsAndOccurrences processes Occurrences and fills symbols and document.Symbols.
+func populateSymbolsAndOccurrences(doc *scip.Document, symbolNamePath map[string]string) []*codegraphpb.Symbol {
+	// doc 的 symbols 和 occurrences 的 relative path 都是doc的path，只有relation的path是别的doc
+	populatedSymbols := make([]*codegraphpb.Symbol, len(doc.Occurrences))
+	symbols := make(map[string]*codegraphpb.Symbol)
+	// 先遍历 symbols，放入map
+	for _, sym := range doc.Symbols {
+		symbolName := sym.Symbol
+		relations := sym.Relationships
+		rels := make([]*codegraphpb.Relation, len(relations))
+		if len(relations) > 0 {
+			for _, rel := range relations {
+				relationSymbolName := rel.Symbol
+				rels = append(rels, &codegraphpb.Relation{
+					Name:         relationSymbolName,
+					RelationType: getRelationShipTypeFromRelation(rel),
+					FilePath:     symbolNamePath[relationSymbolName],
+				})
+			}
+		}
+		symbols[symbolName] = &codegraphpb.Symbol{
+			Name:      symbolName,
+			Content:   strings.Join(sym.Documentation, types.EmptyString),
+			Role:      codegraphpb.RelationType_RELATION_TYPE_UNKNOWN,
+			Range:     nil,
+			Relations: rels,
+		}
+	}
+
+	// 然后遍历 occurrences，如果symbol存在，填充它的 position，
 	for _, occ := range doc.Occurrences {
 		if occ.Symbol == "" {
 			continue
 		}
 		sym, ok := symbols[occ.Symbol]
 		if !ok {
-			sym = &codegraph.Symbol{
-				Name:        occ.Symbol,
-				Occurrences: make(map[types.SymbolRole][]codegraph.Occurrence),
+			// 不存在
+			sym = &codegraphpb.Symbol{
+				Name:      occ.Symbol,
+				Role:      getRelationShipTypeFromOccurrence(occ), // 不是definition,就是refer
+				Relations: nil,
 			}
 			symbols[occ.Symbol] = sym
+		} else {
+			// TODO 存在，将它删除，用于调试
+			delete(symbols, occ.Symbol)
 		}
-		role := getSymbolRoleFromOccurrence(occ)
-		occurrence := codegraph.Occurrence{
-			FilePath: relativePath,
-			Range:    occ.Range,
-			NodeType: role,
-		}
-		sym.Occurrences[role] = append(sym.Occurrences[role], occurrence)
-		document.Symbols = append(document.Symbols, &codegraph.SymbolInDoc{
-			Name:  occ.Symbol,
-			Role:  role,
-			Range: occ.Range,
-		})
+		// 填充range
+		sym.Range = occ.Range
+		populatedSymbols = append(populatedSymbols, sym)
 	}
-	// occurrence 排序
-	for _, sym := range symbols {
-		for _, occs := range sym.Occurrences {
-			codegraphSortOccurrencesByRange(occs)
-		}
+	if len(symbols) > 0 {
+		// TODO
+		logx.Errorf("doc %s symbols is not empty after populate.", doc.RelativePath)
 	}
+	return populatedSymbols
 }
 
-// codegraphSortOccurrencesByRange 用于 scip_parser 里 occurrence 排序，避免与 badgerdb.go 重名
-func codegraphSortOccurrencesByRange(occurrences []codegraph.Occurrence) {
-	sort.Slice(occurrences, func(i, j int) bool {
-		a, b := occurrences[i].Range, occurrences[j].Range
-		for k := 0; k < len(a) && k < len(b); k++ {
-			if a[k] != b[k] {
-				return a[k] < b[k]
-			}
-		}
-		return len(a) < len(b)
-	})
+func getRelationShipTypeFromRelation(rel *scip.Relationship) codegraphpb.RelationType {
+	relationType := codegraphpb.RelationType_RELATION_TYPE_UNKNOWN
+	if rel.IsDefinition {
+		relationType = codegraphpb.RelationType_RELATION_DEFINITION
+	} else if rel.IsReference {
+		relationType = codegraphpb.RelationType_RELATION_REFERENCE
+	} else if rel.IsImplementation {
+		relationType = codegraphpb.RelationType_RELATION_IMPLEMENTATION
+	} else if rel.IsTypeDefinition {
+		relationType = codegraphpb.RelationType_RELATION_TYPE_DEFINITION
+	} else {
+		logx.Errorf("unknown relation type: %v", rel)
+	}
+	return relationType
 }
 
-// getSymbolRoleFromOccurrence returns the SymbolRole for an occurrence.
-func getSymbolRoleFromOccurrence(occ *scip.Occurrence) types.SymbolRole {
+// getRelationShipTypeFromOccurrence returns the SymbolRole for an occurrence.
+func getRelationShipTypeFromOccurrence(occ *scip.Occurrence) codegraphpb.RelationType {
 	if scip.SymbolRole_Definition.Matches(occ) {
-		return types.SymbolRoleDefinition
+		return codegraphpb.RelationType_RELATION_DEFINITION
 	}
-	return types.SymbolRoleReference
-}
-
-// populateRelationships processes SymbolInformation.Relationships for implementation/type_definition.
-func populateRelationships(doc *scip.Document, symbols map[string]*codegraph.Symbol) {
-	for _, s := range doc.Symbols {
-		sym, ok := symbols[s.Symbol]
-		if !ok {
-			continue
-		}
-		defOccs := sym.Occurrences[types.SymbolRoleDefinition]
-		if len(defOccs) == 0 {
-			continue
-		}
-		for _, rel := range s.Relationships {
-			if rel.IsImplementation {
-				target := getOrCreateOrSetSymbol(symbols, rel.Symbol)
-				target.Occurrences[types.SymbolRoleImplementation] = append(target.Occurrences[types.SymbolRoleImplementation], defOccs...)
-			}
-			if rel.IsTypeDefinition {
-				target := getOrCreateOrSetSymbol(symbols, rel.Symbol)
-				target.Occurrences[types.SymbolRoleTypeDefinition] = append(target.Occurrences[types.SymbolRoleTypeDefinition], defOccs...)
-			}
-		}
-	}
-}
-
-// getOrCreateOrSetSymbol returns the symbol from the map or creates it if not present.
-func getOrCreateOrSetSymbol(symbols map[string]*codegraph.Symbol, name string) *codegraph.Symbol {
-	sym, ok := symbols[name]
-	if !ok {
-		sym = &codegraph.Symbol{
-			Name:        name,
-			Occurrences: make(map[types.SymbolRole][]codegraph.Occurrence),
-		}
-		symbols[name] = sym
-	}
-	return sym
-}
-
-// populateSymbolContent fills Symbol.Content from SymbolInformation.Documentation.
-func populateSymbolContent(doc *scip.Document, symbols map[string]*codegraph.Symbol) {
-	for _, s := range doc.Symbols {
-		sym, ok := symbols[s.Symbol]
-		if ok && sym.Content == "" && len(s.Documentation) > 0 {
-			sym.Content = strings.Join(s.Documentation, "\n")
-		}
-	}
+	return codegraphpb.RelationType_RELATION_REFERENCE
 }
 
 // addMissingExternalSymbols 注入外部符号
@@ -324,39 +280,5 @@ func addMissingExternalSymbols(doc *scip.Document, externalSymbolsByName map[str
 				defSet[sym] = struct{}{}
 			}
 		}
-	}
-}
-
-// sortOccurrencesByRange 对 occurrence 按 range 排序
-func sortOccurrencesByRange(occurrences []*scip.Occurrence) {
-	sort.Slice(occurrences, func(i, j int) bool {
-		a, b := occurrences[i].Range, occurrences[j].Range
-		for k := 0; k < len(a) && k < len(b); k++ {
-			if a[k] != b[k] {
-				return a[k] < b[k]
-			}
-		}
-		return len(a) < len(b)
-	})
-}
-
-// normalizeDocumentOrder 对 symbol/occurrence/relationship 排序
-func normalizeDocumentOrder(doc *scip.Document) {
-	sort.Slice(doc.Symbols, func(i, j int) bool {
-		return doc.Symbols[i].Symbol < doc.Symbols[j].Symbol
-	})
-	sort.Slice(doc.Occurrences, func(i, j int) bool {
-		a, b := doc.Occurrences[i].Range, doc.Occurrences[j].Range
-		for k := 0; k < len(a) && k < len(b); k++ {
-			if a[k] != b[k] {
-				return a[k] < b[k]
-			}
-		}
-		return len(a) < len(b)
-	})
-	for _, s := range doc.Symbols {
-		sort.Slice(s.Relationships, func(i, j int) bool {
-			return s.Relationships[i].Symbol < s.Relationships[j].Symbol
-		})
 	}
 }

@@ -194,7 +194,7 @@ func TestInspectBadgerDB(t *testing.T) {
 					return err
 				}
 				fmt.Printf("Symbol: %s\n", sym.Name)
-				fmt.Printf("  Occurrences: %d\n", len(sym.Occurrences))
+				fmt.Printf("  Relations: %d\n", len(sym.Relations))
 				fmt.Printf("  Content: %d\n", len(sym.Content))
 			}
 		}
