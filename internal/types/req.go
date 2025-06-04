@@ -118,25 +118,3 @@ type ReadOptions struct {
 }
 
 
-// ToPosition 辅助函数：将 ranges 转换为 types.Position
-func ToPosition(ranges []int32) Position {
-	if len(ranges) != 3 && len(ranges) != 4 {
-		return Position{}
-	}
-	if len(ranges) == 3 {
-		return Position{
-			StartLine:   int(ranges[0]) + 1,
-			StartColumn: int(ranges[1]) + 1,
-			EndLine:     int(ranges[0]) + 1,
-			EndColumn:   int(ranges[2]) + 1,
-		}
-	} else {
-		return Position{
-			StartLine:   int(ranges[0]) + 1,
-			StartColumn: int(ranges[1]) + 1,
-			EndLine:     int(ranges[2]) + 1,
-			EndColumn:   int(ranges[3]) + 1,
-		}
-	}
-
-}

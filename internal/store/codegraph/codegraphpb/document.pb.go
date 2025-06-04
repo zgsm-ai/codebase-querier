@@ -86,7 +86,8 @@ type Relation struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`                                                // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
 	FilePath      string                 `protobuf:"bytes,2,opt,name=filePath,proto3" json:"filePath,omitempty"`                                        // 文件路径
 	Range         []int32                `protobuf:"varint,3,rep,packed,name=range,proto3" json:"range,omitempty"`                                      // 范围信息 [startLine,startCol,endLine,endCol]
-	RelationType  RelationType           `protobuf:"varint,4,opt,name=relationType,proto3,enum=codegraphpb.RelationType" json:"relationType,omitempty"` // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
+	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`                                          // 符号内容（代码片段）
+	RelationType  RelationType           `protobuf:"varint,5,opt,name=relationType,proto3,enum=codegraphpb.RelationType" json:"relationType,omitempty"` // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -142,6 +143,13 @@ func (x *Relation) GetRange() []int32 {
 	return nil
 }
 
+func (x *Relation) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
 func (x *Relation) GetRelationType() RelationType {
 	if x != nil {
 		return x.RelationType
@@ -153,13 +161,14 @@ func (x *Relation) GetRelationType() RelationType {
 type Symbol struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`       // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
-	Content string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"` // 符号内容（代码片段）
+	Path    string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`       // 所在文件的相对路径
+	Content string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"` // 符号内容（代码片段）
 	// Role 在这里表示这个 Symbol 出现点在该文件中的角色 (比如是定义点、引用点)
 	// 假设 types.SymbolRole 可以映射到 Protobuf enum，或者直接使用 RelationType
 	// 为了简单和统一，我们在这里复用 RelationType 来表示出现点的角色
-	Role          RelationType `protobuf:"varint,3,opt,name=role,proto3,enum=codegraphpb.RelationType" json:"role,omitempty"`
-	Range         []int32      `protobuf:"varint,4,rep,packed,name=range,proto3" json:"range,omitempty"` // [startLine, startCol, endLine, endCol] 这个 Symbol 出现点自身的位置
-	Relations     []*Relation  `protobuf:"bytes,5,rep,name=relations,proto3" json:"relations,omitempty"` // 与这个 Symbol 出现点相关的其他出现点或符号关系
+	Role          RelationType `protobuf:"varint,4,opt,name=role,proto3,enum=codegraphpb.RelationType" json:"role,omitempty"`
+	Range         []int32      `protobuf:"varint,5,rep,packed,name=range,proto3" json:"range,omitempty"` // [startLine, startCol, endLine, endCol] 这个 Symbol 出现点自身的位置
+	Relations     []*Relation  `protobuf:"bytes,6,rep,name=relations,proto3" json:"relations,omitempty"` // 与这个 Symbol 出现点相关的其他出现点或符号关系
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -197,6 +206,13 @@ func (*Symbol) Descriptor() ([]byte, []int) {
 func (x *Symbol) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *Symbol) GetPath() string {
+	if x != nil {
+		return x.Path
 	}
 	return ""
 }
@@ -286,18 +302,20 @@ var File_internal_store_codegraph_document_proto protoreflect.FileDescriptor
 
 const file_internal_store_codegraph_document_proto_rawDesc = "" +
 	"\n" +
-	"'internal/store/codegraph/document.proto\x12\vcodegraphpb\"\x8f\x01\n" +
+	"'internal/store/codegraph/document.proto\x12\vcodegraphpb\"\xa9\x01\n" +
 	"\bRelation\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bfilePath\x18\x02 \x01(\tR\bfilePath\x12\x14\n" +
-	"\x05range\x18\x03 \x03(\x05R\x05range\x12=\n" +
-	"\frelationType\x18\x04 \x01(\x0e2\x19.codegraphpb.RelationTypeR\frelationType\"\xb0\x01\n" +
+	"\x05range\x18\x03 \x03(\x05R\x05range\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x12=\n" +
+	"\frelationType\x18\x05 \x01(\x0e2\x19.codegraphpb.RelationTypeR\frelationType\"\xc4\x01\n" +
 	"\x06Symbol\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\x12-\n" +
-	"\x04role\x18\x03 \x01(\x0e2\x19.codegraphpb.RelationTypeR\x04role\x12\x14\n" +
-	"\x05range\x18\x04 \x03(\x05R\x05range\x123\n" +
-	"\trelations\x18\x05 \x03(\v2\x15.codegraphpb.RelationR\trelations\"M\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\x12-\n" +
+	"\x04role\x18\x04 \x01(\x0e2\x19.codegraphpb.RelationTypeR\x04role\x12\x14\n" +
+	"\x05range\x18\x05 \x03(\x05R\x05range\x123\n" +
+	"\trelations\x18\x06 \x03(\v2\x15.codegraphpb.RelationR\trelations\"M\n" +
 	"\bDocument\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12-\n" +
 	"\asymbols\x18\x02 \x03(\v2\x13.codegraphpb.SymbolR\asymbols*\x95\x01\n" +

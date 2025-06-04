@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -97,29 +96,11 @@ func TestQueryBadgerDB(t *testing.T) {
 
 	// 4. 执行查询
 	targetPath := "cmd/kubeadm/app/util/endpoint.go"
-	// 调试：检查数据库中的键
-	err = graph.(*codegraph.BadgerDBGraph).DB().View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchSize = 10
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			key := item.Key()
-			if strings.Contains(string(key), targetPath) {
-				t.Logf("Found key: %s\n", key)
-			}
-		}
-		return nil
-	})
-	assert.NoError(t, err)
-
 	t.Logf("\nQuerying for file: %s\n", targetPath)
 	references, err := graph.Query(ctx, &types.RelationQueryOptions{
 		FilePath:   targetPath,
-		StartLine:  36,
-		EndLine:    36,
+		StartLine:  37,
+		EndLine:    37,
 		SymbolName: "GetControlPlaneEndpoint",
 	})
 	if err != nil {
@@ -133,7 +114,7 @@ func TestQueryBadgerDB(t *testing.T) {
 		t.Logf("references filepath: %v", v.FilePath)
 		t.Logf("references nodetype: %v", v.NodeType)
 		t.Logf("references position: %v", v.Position)
-		t.Logf("references children: %v", v.Children)
+		t.Logf("references children cnt: %v", len(v.Children))
 	}
 	t.Log("-----------------------------------------------")
 }
@@ -142,7 +123,8 @@ func TestDeleteBadgerDB(t *testing.T) {
 	start := time.Now()
 	projectPath := "go/kubernetes"
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
-	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(context.Background(),
+		codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
 	assert.NotPanics(t, func() {
 		err = graph.DeleteAll(context.Background())
@@ -188,14 +170,8 @@ func TestInspectBadgerDB(t *testing.T) {
 				}
 				fmt.Printf("Document: %s\n", doc.Path)
 				fmt.Printf("  Symbols: %d\n", len(doc.Symbols))
-			case bytes.HasPrefix(key, []byte("sym:")):
-				sym, err := codegraph.DeserializeSymbol(val)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("Symbol: %s\n", sym.Name)
-				fmt.Printf("  Relations: %d\n", len(sym.Relations))
-				fmt.Printf("  Content: %d\n", len(sym.Content))
+			default:
+				fmt.Printf(" unexpected Content: %s\n", string(key))
 			}
 		}
 		return nil

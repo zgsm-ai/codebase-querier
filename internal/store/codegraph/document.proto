@@ -19,19 +19,21 @@ message Relation {
   string name = 1; // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
   string filePath = 2; // 文件路径
   repeated int32 range = 3; // 范围信息 [startLine,startCol,endLine,endCol]
-  RelationType relationType = 4; // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
+  string content = 4; // 符号内容（代码片段）
+  RelationType relationType = 5; // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
 }
 
 // Symbol 表示代码库中的一个符号出现（作为图谱的节点）
 message Symbol {
   string name = 1; // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
-  string content = 2; // 符号内容（代码片段）
+  string path = 2; // 所在文件的相对路径
+  string content = 3; // 符号内容（代码片段）
   // Role 在这里表示这个 Symbol 出现点在该文件中的角色 (比如是定义点、引用点)
   // 假设 types.SymbolRole 可以映射到 Protobuf enum，或者直接使用 RelationType
   // 为了简单和统一，我们在这里复用 RelationType 来表示出现点的角色
-  RelationType role = 3;
-  repeated int32 range = 4; // [startLine, startCol, endLine, endCol] 这个 Symbol 出现点自身的位置
-  repeated Relation relations = 5; // 与这个 Symbol 出现点相关的其他出现点或符号关系
+  RelationType role = 4;
+  repeated int32 range = 5; // [startLine, startCol, endLine, endCol] 这个 Symbol 出现点自身的位置
+  repeated Relation relations = 6; // 与这个 Symbol 出现点相关的其他出现点或符号关系
 }
 
 // Document 表示代码库中的一个文件

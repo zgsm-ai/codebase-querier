@@ -19,10 +19,10 @@ const writeBatchSize = 500
 
 // scipMetadata scip parsed metadata.
 type scipMetadata struct {
-	Metadata              *scip.Metadata
-	ExternalSymbolsByName map[string]*scip.SymbolInformation
-	SymbolNamePath        map[string]string
-	DocCountByPath        map[string]int
+	Metadata                 *scip.Metadata
+	ExternalSymbolsByName    map[string]*scip.SymbolInformation
+	AllOccurrenceDefinitions map[string]*codegraphpb.Symbol
+	DocCountByPath           map[string]int
 }
 
 // IndexParser represents the SCIP index generator
@@ -54,7 +54,7 @@ func (i *IndexParser) visitDocument(
 			duplicateDocs[path] = samePathDocs
 			if len(samePathDocs) == count {
 				flattenedDocs := scip.FlattenDocuments(samePathDocs)
-				delete(duplicateDocs, path) //TODO 这是干啥的
+				delete(duplicateDocs, path)
 				if len(flattenedDocs) != 1 {
 					return
 				}
@@ -70,14 +70,14 @@ func (i *IndexParser) visitDocument(
 		}
 		*pendingDocs = append(*pendingDocs, doc)
 
-		// 到达一定批次，写入数据
-		if len(*pendingDocs) >= writeBatchSize {
-			if err := i.graphStore.BatchWrite(ctx, *pendingDocs); err != nil {
-				logx.Errorf("failed to batch write remaining documents: %w", err)
-			}
-			// 处理完，清空
-			*pendingDocs = (*pendingDocs)[:0]
-		}
+		//// 到达一定批次，写入数据 处理完所有才能入库
+		//if len(*pendingDocs) >= writeBatchSize {
+		//	if err := i.graphStore.BatchWrite(ctx, *pendingDocs); err != nil {
+		//		logx.Errorf("failed to batch write remaining documents: %w", err)
+		//	}
+		//	// 处理完，清空
+		//	*pendingDocs = (*pendingDocs)[:0]
+		//}
 	}
 }
 
@@ -102,7 +102,7 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 
 	// 需要维护全局的 symbolName-> doc_path 的映射
 
-	metadata, err := i.parseMetadata(file)
+	metadata, err := i.prepareVisit(file)
 	if err != nil {
 		return fmt.Errorf("failed to collect metadata and symbols: %w", err)
 	}
@@ -113,18 +113,18 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	}
 
 	duplicateDocs := make(map[string][]*scip.Document)
-	pendingDocs := make([]*codegraphpb.Document, 0, writeBatchSize)
+	processedDocs := make([]*codegraphpb.Document, 0, writeBatchSize)
 
 	visitor := scip.IndexVisitor{
-		VisitDocument: i.visitDocument(ctx, metadata, duplicateDocs, &pendingDocs),
+		VisitDocument: i.visitDocument(ctx, metadata, duplicateDocs, &processedDocs),
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {
 		return fmt.Errorf("failed to parse SCIP file: %w", err)
 	}
-
-	if len(pendingDocs) > 0 {
-		if err := i.graphStore.BatchWrite(ctx, pendingDocs); err != nil {
+	// todo 只能等处理完所有docs，才入库。否则信息不全
+	if len(processedDocs) > 0 {
+		if err := i.graphStore.BatchWrite(ctx, processedDocs); err != nil {
 			return fmt.Errorf("failed to batch write remaining documents: %w", err)
 		}
 	}
@@ -132,12 +132,12 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	return nil
 }
 
-// parseMetadata performs the first pass to collect metadata and external symbols.
-func (i *IndexParser) parseMetadata(file io.Reader) (*scipMetadata, error) {
+// prepareVisit performs the first pass to collect metadata and external symbols.
+func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
 	result := &scipMetadata{
-		ExternalSymbolsByName: make(map[string]*scip.SymbolInformation),
-		DocCountByPath:        make(map[string]int),
-		SymbolNamePath:        make(map[string]string),
+		ExternalSymbolsByName:    make(map[string]*scip.SymbolInformation),
+		DocCountByPath:           make(map[string]int),
+		AllOccurrenceDefinitions: make(map[string]*codegraphpb.Symbol),
 	}
 
 	visitor := scip.IndexVisitor{
@@ -146,8 +146,22 @@ func (i *IndexParser) parseMetadata(file io.Reader) (*scipMetadata, error) {
 		},
 		VisitDocument: func(d *scip.Document) {
 			result.DocCountByPath[d.RelativePath]++
+			// 处理occurrences
 			for _, occ := range d.Occurrences {
-				result.SymbolNamePath[occ.Symbol] = d.RelativePath
+				// 跳过local
+				if scip.IsLocalSymbol(occ.Symbol) {
+					continue
+				}
+				symbolRole := getSymbolRoleFromOccurrence(occ)
+				if symbolRole == codegraphpb.RelationType_RELATION_DEFINITION {
+					// 只保存定义，symbol 会在多个文件中重复出现，因为有引用的存在
+					result.AllOccurrenceDefinitions[occ.Symbol] = &codegraphpb.Symbol{
+						Name:  occ.Symbol,
+						Path:  d.RelativePath,
+						Role:  symbolRole,
+						Range: occ.Range,
+					}
+				}
 			}
 		},
 		VisitExternalSymbol: func(s *scip.SymbolInformation) {
@@ -164,22 +178,24 @@ func (i *IndexParser) parseMetadata(file io.Reader) (*scipMetadata, error) {
 
 // processDocument processes a single document and returns the document and its symbols.
 func (i *IndexParser) processDocument(doc *scip.Document, metadata *scipMetadata) (*codegraphpb.Document, error) {
-
+	// TODO go package 并不属于某个filePath，需要在内存中处理完所有关系，才能入库。
+	// TODO 这种 带#的找不到definition k8s.io/apiserver/pkg/apis/audit`/Event#RequestURI.  role 8 definition not found in allSymbolDefinitions
 	addMissingExternalSymbols(doc, metadata.ExternalSymbolsByName)
 	_ = scip.CanonicalizeDocument(doc) // 包含了排序
 	document := &codegraphpb.Document{
 		Path: doc.RelativePath,
 	}
-	document.Symbols = populateSymbolsAndOccurrences(doc, metadata.SymbolNamePath)
+	document.Symbols = populateSymbolsAndOccurrences(doc, metadata.AllOccurrenceDefinitions)
 	return document, nil
 }
 
 // populateSymbolsAndOccurrences processes Occurrences and fills symbols and document.Symbols.
-func populateSymbolsAndOccurrences(doc *scip.Document, symbolNamePath map[string]string) []*codegraphpb.Symbol {
+func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[string]*codegraphpb.Symbol) []*codegraphpb.Symbol {
+	//TODO 这些symbol ，都是根据名字关联的
 	// doc 的 symbols 和 occurrences 的 relative path 都是doc的path，只有relation的path是别的doc
-	populatedSymbols := make([]*codegraphpb.Symbol, len(doc.Occurrences))
-	symbols := make(map[string]*codegraphpb.Symbol)
-	// 先遍历 symbols，放入map
+	populatedSymbols := make([]*codegraphpb.Symbol, 0, len(doc.Occurrences))
+	relativePath := doc.RelativePath
+	// 先遍历 symbols，这里都是definition，提取它的relations 和documentation
 	for _, sym := range doc.Symbols {
 		symbolName := sym.Symbol
 		relations := sym.Relationships
@@ -187,48 +203,80 @@ func populateSymbolsAndOccurrences(doc *scip.Document, symbolNamePath map[string
 		if len(relations) > 0 {
 			for _, rel := range relations {
 				relationSymbolName := rel.Symbol
-				rels = append(rels, &codegraphpb.Relation{
+				defSymbol, ok := allSymbolDefinitions[relationSymbolName]
+				relation := &codegraphpb.Relation{
 					Name:         relationSymbolName,
 					RelationType: getRelationShipTypeFromRelation(rel),
-					FilePath:     symbolNamePath[relationSymbolName],
-				})
+				}
+				if ok {
+					relation.FilePath = defSymbol.Path
+				} else { // TODO 第三方库（包括标准库）
+					// logx.Errorf("relation defSymbol %s definition not found in allSymbolDefinitions", relationSymbolName)
+				}
+				rels = append(rels, relation)
 			}
 		}
-		symbols[symbolName] = &codegraphpb.Symbol{
-			Name:      symbolName,
-			Content:   strings.Join(sym.Documentation, types.EmptyString),
-			Role:      codegraphpb.RelationType_RELATION_TYPE_UNKNOWN,
-			Range:     nil,
-			Relations: rels,
+		symbolDef, ok := allSymbolDefinitions[symbolName]
+		if ok {
+			symbolDef.Content = strings.Join(sym.Documentation, types.EmptyString)
+			symbolDef.Relations = append(symbolDef.Relations, rels...)
+		} else { //TODO 带冒号的: scip-go gomod k8s.io/kubernetes . `k8s.io/kubernetes/cluster/images/etcd-version-monitor`/gatherer:MetricFamily. 项目内一些奇怪的东西，应该在prepareVisit中被访问的
+			//logx.Errorf("symbols defSymbol %s definition not found in allSymbolDefinitions", symbolName)
+			//symbolDef = &codegraphpb.Symbol{
+			//	Name: symbolName,
+			//	Role: codegraphpb.RelationType_RELATION_DEFINITION,
+			//	Path: relativePath,
+			//}
 		}
 	}
 
-	// 然后遍历 occurrences，如果symbol存在，填充它的 position，
+	// 遍历 occurrences，如果是定义，则直接取全局的，填充它的range；如果不是定义，则是引用，当前relation增加一个定义的关系，它的定义的relation增加一个引用指向它。
 	for _, occ := range doc.Occurrences {
-		if occ.Symbol == "" {
+		occName := occ.Symbol
+		// empty or  local variable
+		if occName == types.EmptyString || scip.IsLocalSymbol(occName) {
 			continue
 		}
-		sym, ok := symbols[occ.Symbol]
-		if !ok {
-			// 不存在
-			sym = &codegraphpb.Symbol{
-				Name:      occ.Symbol,
-				Role:      getRelationShipTypeFromOccurrence(occ), // 不是definition,就是refer
-				Relations: nil,
-			}
-			symbols[occ.Symbol] = sym
-		} else {
-			// TODO 存在，将它删除，用于调试
-			delete(symbols, occ.Symbol)
+
+		symbolRole := getSymbolRoleFromOccurrence(occ)
+
+		symbolDef, ok := allSymbolDefinitions[occName]
+		if !ok { //TODO import或使用标准库的位置 not found，属于reference: scip-go gomod github.com/golang/go/src go1.24.0 os/Args.; 带#的：scip-go gomod github.com/golang/go/src go1.24.0 sync/WaitGroup#Done().；
+			// preVisit() 已经将所有的occurrence 遍历过了，如果这里找不到，理论上只能是引用，不可能是定义, 而且是第三方库（包括go标准库）的引用。
+			// logx.Debugf("occurrence symbol %s  role %d definition not found in allSymbolDefinitions", occName, occ.SymbolRoles)
 		}
-		// 填充range
-		sym.Range = occ.Range
-		populatedSymbols = append(populatedSymbols, sym)
+		var occurSymbol *codegraphpb.Symbol
+		// 当前是定义，则直接指向全局即可
+		if symbolRole == codegraphpb.RelationType_RELATION_DEFINITION {
+			occurSymbol = symbolDef
+		} else {
+			// 当前是引用，创建一个新的，
+			occurSymbol = &codegraphpb.Symbol{
+				Name:  occName,
+				Role:  symbolRole,
+				Path:  relativePath,
+				Range: occ.Range,
+			}
+			if symbolDef != nil {
+				// 引用->定义
+				occurSymbol.Relations = append([]*codegraphpb.Relation(nil), &codegraphpb.Relation{
+					Name:         symbolDef.Name,
+					FilePath:     symbolDef.Path,
+					Range:        symbolDef.Range,
+					RelationType: codegraphpb.RelationType_RELATION_DEFINITION,
+				})
+				// 定义 -> 引用
+				symbolDef.Relations = append(symbolDef.Relations, &codegraphpb.Relation{
+					Name:         occurSymbol.Name,
+					FilePath:     relativePath,
+					Range:        occ.Range,
+					RelationType: codegraphpb.RelationType_RELATION_REFERENCE,
+				})
+			}
+		}
+		populatedSymbols = append(populatedSymbols, occurSymbol)
 	}
-	if len(symbols) > 0 {
-		// TODO
-		logx.Errorf("doc %s symbols is not empty after populate.", doc.RelativePath)
-	}
+
 	return populatedSymbols
 }
 
@@ -243,13 +291,13 @@ func getRelationShipTypeFromRelation(rel *scip.Relationship) codegraphpb.Relatio
 	} else if rel.IsTypeDefinition {
 		relationType = codegraphpb.RelationType_RELATION_TYPE_DEFINITION
 	} else {
-		logx.Errorf("unknown relation type: %v", rel)
+		logx.Debugf("unknown relation type: %v", rel)
 	}
 	return relationType
 }
 
-// getRelationShipTypeFromOccurrence returns the SymbolRole for an occurrence.
-func getRelationShipTypeFromOccurrence(occ *scip.Occurrence) codegraphpb.RelationType {
+// getSymbolRoleFromOccurrence returns the SymbolRole for an occurrence.
+func getSymbolRoleFromOccurrence(occ *scip.Occurrence) codegraphpb.RelationType {
 	if scip.SymbolRole_Definition.Matches(occ) {
 		return codegraphpb.RelationType_RELATION_DEFINITION
 	}

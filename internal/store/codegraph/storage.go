@@ -63,21 +63,17 @@ func DocKey(path string) []byte {
 	return []byte(fmt.Sprintf("%s%s", DocPrefix, path))
 }
 
-func SymKey(name string) []byte {
-	return []byte(fmt.Sprintf("%s%s", SymPrefix, name))
-}
-
 // SerializeDocument 序列化函数
 func SerializeDocument(doc *codegraphpb.Document) ([]byte, error) {
 	return proto.Marshal(doc)
 }
 
 func DeserializeDocument(data []byte) (*codegraphpb.Document, error) {
-	var doc *codegraphpb.Document
-	if err := proto.Unmarshal(data, doc); err != nil {
+	var doc codegraphpb.Document
+	if err := proto.Unmarshal(data, &doc); err != nil {
 		return nil, err
 	}
-	return doc, nil
+	return &doc, nil
 }
 
 // toScipPosition 辅助函数：将 ranges 转换为 scip.Position
