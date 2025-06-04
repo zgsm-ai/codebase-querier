@@ -41,7 +41,7 @@ func (l *RelationLogic) Relation(req *types.RelationQueryOptions) (resp *types.R
 	}
 	codebasePath := codebase.Path
 
-	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graphStore, err := codegraph.NewBadgerDBGraph(l.ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
 	}

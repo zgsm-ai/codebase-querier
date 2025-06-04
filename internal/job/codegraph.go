@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
@@ -23,28 +22,37 @@ const (
 )
 
 type codegraphProcessor struct {
-	ctx           context.Context
-	svcCtx        *svc.ServiceContext
-	msg           *types.CodebaseSyncMessage
-	graphBuilder  codegraph.GraphBuilder
-	graphStore    graphstore.GraphStore
-	logger        logx.Logger
-	taskHistoryId int64
+	ctx            context.Context
+	svcCtx         *svc.ServiceContext
+	msg            *types.CodebaseSyncMessage
+	indexGenerator *scip.IndexGenerator
+	indexParser    *scip.IndexParser
+	graphStore     graphstore.GraphStore
+	logger         logx.Logger
+	taskHistoryId  int64
 }
 
 func NewCodegraphProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg *types.CodebaseSyncMessage) (Processor, error) {
-	graphBuilder := codegraph.NewScipBuilder(svcCtx)
-	graphStore, err := graphstore.NewBadgerDBGraph(graphstore.WithPath(filepath.Join(msg.CodebasePath, types.CodebaseIndexDir)))
+	config, err := scip.LoadConfig(svcCtx.Config.IndexTask.GraphTask.ConfFile)
 	if err != nil {
 		return nil, err
 	}
+	graphStore, err := graphstore.NewBadgerDBGraph(ctx, graphstore.WithPath(filepath.Join(msg.CodebasePath, types.CodebaseIndexDir)))
+	if err != nil {
+		return nil, err
+	}
+
+	graphBuilder := scip.NewIndexGenerator(config, svcCtx.CodebaseStore)
+	graphParser := scip.NewIndexParser(ctx, svcCtx.CodebaseStore, graphStore)
+
 	return &codegraphProcessor{
-		ctx:          ctx,
-		svcCtx:       svcCtx,
-		msg:          msg,
-		graphBuilder: graphBuilder,
-		graphStore:   graphStore,
-		logger:       logx.WithContext(ctx),
+		ctx:            ctx,
+		svcCtx:         svcCtx,
+		msg:            msg,
+		indexGenerator: graphBuilder,
+		indexParser:    graphParser,
+		graphStore:     graphStore,
+		logger:         logx.WithContext(ctx),
 	}, nil
 }
 
@@ -71,13 +79,13 @@ func (t *codegraphProcessor) Process() error {
 		defer indexGenerator.Cleanup()
 
 		// 构建代码图
-		graph, err := t.graphBuilder.Build(t.ctx, t.msg.CodebasePath)
+		err = t.indexGenerator.Generate(t.ctx, t.msg.CodebasePath)
 		if err != nil {
-			return fmt.Errorf("failed to build code graph: %w", err)
+			return fmt.Errorf("failed to generate %s  index file: %w", t.msg.CodebasePath, err)
 		}
 
-		// 保存代码图到存储
-		if err := t.graphStore.Save(t.ctx, t.msg.CodebaseID, t.msg.CodebasePath, graph); err != nil {
+		// 解析并保存
+		if err = t.indexParser.ParseSCIPFile(t.ctx, t.msg.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
 			return fmt.Errorf("failed to save code graph: %w", err)
 		}
 

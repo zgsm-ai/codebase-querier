@@ -10,7 +10,7 @@ type Codebase struct {
 
 const CodebaseIndexDir = ".shenma"
 const SyncMedataDir = ".shenma_sync"
-const Index = "index"
+const IndexFileName = "index.scip"
 
 // SyncMetadata 代码变更事件结构体
 type SyncMetadata struct {

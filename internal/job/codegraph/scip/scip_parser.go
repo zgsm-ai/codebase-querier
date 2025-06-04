@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -329,4 +330,8 @@ func addMissingExternalSymbols(doc *scip.Document, externalSymbolsByName map[str
 			}
 		}
 	}
+}
+
+func DefaultIndexFilePath() string {
+	return filepath.Join(types.CodebaseIndexDir, types.IndexFileName)
 }
