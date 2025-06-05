@@ -3,20 +3,11 @@ package embedding
 import (
 	"errors"
 	"fmt"
+
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
-
-// CodeParser defines the interface for language-specific code parsing.
-// The genericParser will implement this interface.
-type CodeParser interface {
-	Split(codeFile *types.CodeFile, maxTokensPerChunk, overlapTokens int) ([]*types.CodeChunk, error)
-
-	Parse(codeFile *types.CodeFile) (*sitter.Node, error)
-
-	Close()
-}
 
 // DefinitionKind represents the type of code definition (e.g., function, class)
 type DefinitionKind string
@@ -38,20 +29,13 @@ type DefinitionNodeInfo struct {
 	ParentClass string // Populated if this is a method inside a class or a nested function
 }
 
-// ProcessMatchFunc is a function type that takes a Tree-sitter query match,
-// the root node, and the code content, and returns a slice of DefinitionNodeInfo
-// identified from the match. This function encapsulates language-specific logic.
-type ProcessMatchFunc func(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error)
-
-// LanguageConfig holds language-specific configuration and logic function.
+// LanguageConfig holds language-specific configuration and processor.
 type LanguageConfig struct {
-	Language       Language         // sitterLanguage name (e.g., "Go", "Python")
-	sitterLanguage *sitter.Language // The Tree-sitter language instance
-	Query          string           // The Tree-sitter query string for finding initial match nodes
-	SupportedExts  []string         // The file extensions supported by this config
-
-	// sitterLanguage-specific function to process a query match and extract definition info.
-	ProcessMatch ProcessMatchFunc
+	Language       Language          // sitterLanguage name (e.g., "Go", "Python")
+	sitterLanguage *sitter.Language  // The Tree-sitter language instance
+	Query          string            // The Tree-sitter query string for finding initial match nodes
+	SupportedExts  []string          // The file extensions supported by this config
+	Processor      LanguageProcessor // Language-specific processor
 }
 
 // GenericParser  is a generic implementation of the CodeParser interface
@@ -116,10 +100,10 @@ func (p *GenericParser) Parse(content string) (*sitter.Tree, error) {
 	return tree, nil
 }
 
-// Split splits the code content into chunks based on the LanguageConfig.
-func (p *GenericParser) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
-	if p.parser == nil || p.config == nil || p.config.ProcessMatch == nil {
-		return nil, errors.New("parser is not properly initialized or has been closed or missing config/ProcessMatch function")
+// SplitWithParse splits the code content into chunks based on the LanguageConfig.
+func (p *GenericParser) SplitWithParse(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
+	if p.parser == nil || p.config == nil || p.config.Processor == nil {
+		return nil, errors.New("parser is not properly initialized or has been closed or missing config/processor")
 	}
 
 	tree, err := p.Parse(codeFile.Content)
@@ -146,36 +130,29 @@ func (p *GenericParser) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, err
 	var allChunks []*types.CodeChunk
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
-
-		// Use the language-specific ProcessMatch function from the config
-		defInfos, err := p.config.ProcessMatch(match, root, contentBytes)
+		// Use the language-specific processor to process the match
+		defInfos, err := p.config.Processor.ProcessMatch(match, root, contentBytes)
 		if err != nil {
-			// Log the error and continue processing other matches, or return the error
-			// fmt.Printf("Error processing match for file %s: %v\n", codeFile.Path, err) // Use logger if available
-			continue // Example: continue on error for a single match
+			// Log the error and continue processing other matches
+			continue
 		}
 
 		for _, defInfo := range defInfos {
 			if defInfo == nil || defInfo.Node == nil {
-				continue // Skip invalid results from ProcessMatch
+				continue
 			}
 
 			content := defInfo.Node.Utf8Text(contentBytes)
-			// Convert uint line numbers to int
 			startLine := int(defInfo.Node.StartPosition().Row)
 			endLine := int(defInfo.Node.EndPosition().Row)
 
 			tokenCount := p.countToken(content)
 
-			// Check if the content size exceeds the maximum chunk size (still using char count as proxy)
-			if tokenCount > p.maxTokensPerChunk { // Using character count as a proxy for tokens
-				// Split the large block using the sliding window approach
-				// Pass ParentFunc and ParentClass to splitIntoChunks
+			if tokenCount > p.maxTokensPerChunk {
 				subChunks := p.splitIntoChunks(content, codeFile.Path, startLine,
 					endLine, defInfo.ParentFunc, defInfo.ParentClass)
 				allChunks = append(allChunks, subChunks...)
 			} else {
-				// Add the whole block as a single chunk
 				chunk := &types.CodeChunk{
 					Name:         defInfo.Name,
 					Content:      content,
@@ -183,19 +160,14 @@ func (p *GenericParser) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, err
 					StartLine:    startLine,
 					EndLine:      endLine,
 					OriginalSize: len(content),
-					TokenCount:   tokenCount,          // Approximation
-					ParentFunc:   defInfo.ParentFunc,  // Populate new fields
-					ParentClass:  defInfo.ParentClass, // Populate new fields
+					TokenCount:   tokenCount,
+					ParentFunc:   defInfo.ParentFunc,
+					ParentClass:  defInfo.ParentClass,
 				}
 				allChunks = append(allChunks, chunk)
 			}
 		}
 	}
-
-	// TODO: Potentially add logic here or within ProcessMatchFunc to capture
-	// top-level code that isn't part of a specific definition match, if needed.
-	// This might involve iterating through the root node's children and processing
-	// nodes that weren't covered by the definition queries/matches.
 
 	return allChunks, nil
 }
@@ -292,9 +264,9 @@ func countLines(data []byte) int {
 	return lines
 }
 
-// GetDefinitionKindFromNodeKind adds a simple helper to determine DefinitionKind from a node kind string
+// getDefinitionKindFromNodeKind adds a simple helper to determine DefinitionKind from a node kind string
 // This is a basic mapping and might need refinement per language's AST.
-func GetDefinitionKindFromNodeKind(nodeKind string) DefinitionKind {
+func getDefinitionKindFromNodeKind(nodeKind string) DefinitionKind {
 	switch nodeKind {
 	case "function_declaration", "function_definition", "method_declaration", "func_declaration", "func_definition": // Common names across languages
 		// Further logic might be needed in ProcessMatchFunc to differentiate between function and method

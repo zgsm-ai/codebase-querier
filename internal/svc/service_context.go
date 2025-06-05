@@ -64,10 +64,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		return nil, err
 	}
 
-	splitter, err := embedding.NewCodeSplitter(ctx,
-		embedding.WithOverlapTokens(c.IndexTask.EmbeddingTask.OverlapTokens),
-		embedding.WithMaxTokensPerChunk(c.IndexTask.EmbeddingTask.MaxTokensPerChunk),
-	)
+	splitter, err := embedding.NewCodeSplitter(embedding.WithOverlapTokens(c.IndexTask.EmbeddingTask.OverlapTokens), embedding.WithMaxTokensPerChunk(c.IndexTask.EmbeddingTask.MaxTokensPerChunk))
 	if err != nil {
 		return nil, err
 	}

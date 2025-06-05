@@ -1,7 +1,6 @@
 package embedding
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -33,11 +32,11 @@ func anotherFunc() int {
 
 	// Create a new CodeSplitter
 	// Use reasonable default options for maxTokens and overlap
-	splitter, err := NewCodeSplitter(context.Background(), 1000, 100)
+	splitter, err := NewCodeSplitter(1000, 100)
 	assert.NoError(t, err)
 	assert.NotNil(t, splitter)
 
-	// Split the code
+	// SplitWithParse the code
 	chunks, err := splitter.Split(codeFile)
 	assert.NoError(t, err)
 	assert.NotNil(t, chunks)

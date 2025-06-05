@@ -21,6 +21,7 @@ import (
 // Language represents a programming language.
 type Language string
 
+// Language constants
 const (
 	Unknown    Language = "unknown"
 	Java       Language = "java"
@@ -50,97 +51,97 @@ var supportedLanguagesConfigs = []LanguageConfig{ // This variable must be expor
 		sitterLanguage: sitter.NewLanguage(sittergo.Language()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Go)+queryExt),
 		SupportedExts:  []string{".go"},
-		ProcessMatch:   processGoMatch,
+		Processor:      NewGoProcessor(),
 	},
 	{
 		Language:       Python,
 		sitterLanguage: sitter.NewLanguage(sitterpython.Language()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Python)+queryExt),
 		SupportedExts:  []string{".py"},
-		ProcessMatch:   processPythonMatch,
+		Processor:      NewPythonProcessor(),
 	},
 	{
 		Language:       Java,
 		sitterLanguage: sitter.NewLanguage(sitterjava.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Java)+queryExt), // Will be loaded from queries/java.scm
 		SupportedExts:  []string{".java"},
-		ProcessMatch:   processJavaMatch,
+		Processor:      NewJavaProcessor(),
 	},
 	{
 		Language:       JavaScript,
 		sitterLanguage: sitter.NewLanguage(sitterjavascript.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(JavaScript)+queryExt), // Will be loaded from queries/javascript.scm
 		SupportedExts:  []string{".js", ".jsx"},
-		ProcessMatch:   processJavaScriptMatch,
+		Processor:      NewJavaScriptProcessor(),
 	},
 	{
 		Language:       TypeScript,
 		sitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTypescript()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(TypeScript)+queryExt),  // Will be loaded from queries/typescript.scm
 		SupportedExts:  []string{".ts"},
-		ProcessMatch:   processTypescriptMatch,
+		Processor:      NewJavaScriptProcessor(),
 	},
 	{
 		Language:       TSX,
 		sitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTSX()), // TSX uses the same language binding as TS, Type assertion
 		Query:          filepath.Join(queryBaseDir, string(TSX)+queryExt),  // Will be loaded from queries/typescript_tsx.scm
 		SupportedExts:  []string{".tsx"},
-		ProcessMatch:   processTsxMatch,
+		Processor:      NewJavaScriptProcessor(),
 	},
 	{
 		Language:       Rust,
 		sitterLanguage: sitter.NewLanguage(sitterrust.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Rust)+queryExt), // Will be loaded from queries/rust.scm
 		SupportedExts:  []string{".rs"},
-		ProcessMatch:   processRustMatch,
+		Processor:      NewRustProcessor(),
 	},
 	{
 		Language:       C,
 		sitterLanguage: sitter.NewLanguage(sitterc.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(C)+queryExt), // Will be loaded from queries/c.scm
 		SupportedExts:  []string{".c", ".h"},
-		ProcessMatch:   processCMatch,
+		Processor:      NewCProcessor(),
 	},
 	{
 		Language:       CPP,
 		sitterLanguage: sitter.NewLanguage(sittercpp.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(CPP)+queryExt), // Will be loaded from queries/cpp.scm
 		SupportedExts:  []string{".cpp", ".cc", ".cxx", ".hpp"},
-		ProcessMatch:   processCPPMatch,
+		Processor:      NewCppProcessor(),
 	},
 	{
 		Language:       CSharp,
 		sitterLanguage: sitter.NewLanguage(sittercsharp.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(CSharp)+queryExt), // Will be loaded from queries/csharp.scm
 		SupportedExts:  []string{".cs"},
-		ProcessMatch:   processCSharpMatch,
+		Processor:      NewCSharpProcessor(),
 	},
 	{
 		Language:       Ruby,
 		sitterLanguage: sitter.NewLanguage(sitterruby.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Ruby)+queryExt), // Will be loaded from queries/ruby.scm
 		SupportedExts:  []string{".rb"},
-		ProcessMatch:   processRubyMatch,
+		Processor:      NewRubyProcessor(),
 	},
 	{
 		Language:       PHP,
 		sitterLanguage: sitter.NewLanguage(sitterphp.LanguagePHP()),       // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(PHP)+queryExt), // Will be loaded from queries/php.scm
 		SupportedExts:  []string{".php", ".phtml"},
-		ProcessMatch:   processPhpMatch,
+		Processor:      NewPhpProcessor(),
 	},
 	{
 		Language:       Kotlin,
 		sitterLanguage: sitter.NewLanguage(sitterkotlin.Language()),          // Uncommented
 		Query:          filepath.Join(queryBaseDir, string(Kotlin)+queryExt), // Will be loaded from queries/kotlin.scm
 		SupportedExts:  []string{".kt", ".kts"},
-		ProcessMatch:   processKotlinMatch,
+		Processor:      NewKotlinProcessor(),
 	},
 	{
 		Language:       Scala,
 		sitterLanguage: sitter.NewLanguage(sitterscala.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Scala)+queryExt), // Will be loaded from queries/scala.scm
 		SupportedExts:  []string{".scala", ".sc"},
-		ProcessMatch:   processScalaMatch,
+		Processor:      NewScalaProcessor(),
 	},
 }

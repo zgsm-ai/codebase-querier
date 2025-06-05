@@ -2,8 +2,16 @@ package embedding
 
 import (
 	"fmt"
-	"github.com/tiktoken-go/tokenizer"
 	"os"
+
+	"github.com/tiktoken-go/tokenizer"
+)
+
+const (
+	GoLanguage         Language = "go"
+	PythonLanguage     Language = "python"
+	JavaLanguage       Language = "java"
+	JavaScriptLanguage Language = "javascript"
 )
 
 // ParserRegistry manages Tree-sitter parsers for different languages.
@@ -29,7 +37,6 @@ func NewParserRegistry(tokenizer tokenizer.Codec, maxTokensPerChunk, overlapToke
 			// For now, let's return an error to ensure all necessary queries are present.
 			return nil, fmt.Errorf("failed to read query file %s for %s: %w", queryFilePath, config.Language, err)
 		}
-
 		config.Query = string(queryContent) // Store the query content in the config
 
 		// Create and add the parser to the registry
