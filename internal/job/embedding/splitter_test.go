@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 
@@ -32,7 +33,7 @@ func anotherFunc() int {
 
 	// Create a new CodeSplitter
 	// Use reasonable default options for maxTokens and overlap
-	splitter, err := NewCodeSplitter(1000, 100)
+	splitter, err := NewCodeSplitter(math.MaxInt, 0)
 	assert.NoError(t, err)
 	assert.NotNil(t, splitter)
 
