@@ -104,7 +104,7 @@ func TestQueryBadgerDB(t *testing.T) {
 		SymbolName: "GetControlPlaneEndpoint",
 	})
 	if err != nil {
-		t.Logf("Query error: %v\n", err)
+		t.Logf("queryPath error: %v\n", err)
 	}
 	assert.True(t, len(references) > 0)
 	t.Log("-----------------------------------------------")

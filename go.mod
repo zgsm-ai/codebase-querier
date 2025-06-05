@@ -158,6 +158,7 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tetratelabs/wazero v1.3.0 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
+	github.com/tree-sitter/tree-sitter-swift v0.0.0-20220113184755-db675450dcc1 // indirect
 	github.com/vbatts/tar-split v0.11.3 // indirect
 	github.com/weaviate/weaviate v1.27.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.3 // indirect

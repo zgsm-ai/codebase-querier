@@ -217,7 +217,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, symbol *cod
 	maxLayer--
 	// Iterate through the relations of the current symbol
 	for _, relation := range symbol.Relations {
-		// Query the document containing the related symbol
+		// queryPath the document containing the related symbol
 		var relatedDoc *codegraphpb.Document
 		var relatedSymbol *codegraphpb.Symbol = nil
 
