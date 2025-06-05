@@ -12,6 +12,7 @@ type CodeFile struct {
 
 // CodeChunk represents a chunk of code with associated metadata.
 type CodeChunk struct {
+	Name         string
 	CodebaseId   int64
 	CodebasePath string
 	CodebaseName string

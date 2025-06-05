@@ -21,51 +21,32 @@ type CodeSplitter interface {
 type codeSplitter struct {
 	logger            logx.Logger
 	registry          *ParserRegistry // Store the parser registry
-	tokenizer         tokenizer.Codec // Add tokenizer instance
 	overlapTokens     int
 	maxTokensPerChunk int
 }
 
 type SplitOption func(*codeSplitter)
 
-func WithOverlapTokens(OverlapTokens int) SplitOption {
-	return func(s *codeSplitter) {
-		s.overlapTokens = OverlapTokens
-	}
-}
-
-func WithMaxTokensPerChunk(MaxTokensPerChunk int) SplitOption {
-	return func(s *codeSplitter) {
-		s.maxTokensPerChunk = MaxTokensPerChunk
-	}
-}
-
 // NewCodeSplitter creates a new CodeSplitter instance.
 // It initializes the parser registry and the tokenizer.
-func NewCodeSplitter(ctx context.Context, opts ...SplitOption) (CodeSplitter, error) {
-	registry, err := NewParserRegistry() // NewParserRegistry now returns *Registry
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create parser registry: %w", err) // Added fmt.Errorf for better error context
-	}
+func NewCodeSplitter(ctx context.Context, maxTokensPerChunk, overlapTokens int) (CodeSplitter, error) {
 
 	// Initialize the tokenizer	// Initialize the tokenizer
 	enc, err := tokenizer.Get(tokenizer.Cl100kBase)
 	if err != nil {
-		// Close registry on error to prevent resource leak
-		registry.Close()
 		return nil, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
 
-	s := &codeSplitter{
-		logger:    logx.WithContext(ctx),
-		registry:  registry,
-		tokenizer: enc,
+	registry, err := NewParserRegistry(enc, maxTokensPerChunk, overlapTokens) // NewParserRegistry now returns *Registry
+
+	if err != nil {
+		registry.Close()
+		return nil, fmt.Errorf("failed to create parser registry: %w", err) // Added fmt.Errorf for better error context
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(s)
+	s := &codeSplitter{
+		logger:   logx.WithContext(ctx),
+		registry: registry,
 	}
 
 	return s, nil
@@ -91,7 +72,7 @@ func (s *codeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 		return nil, fmt.Errorf("no language parser found for file %s with extension %s", codeFile.Path, ext)
 	}
 
-	s.logger.Debugf("file %s found parser for extension %s", codeFile.Path, ext) // Log parser found
+	s.logger.Debugf("file %s found parser %s for extension %s", codeFile.Path, parser.config.Language, ext) // Log parser found
 
 	// No need to create a new parser instance here, registry provides a ready one.
 	// We might need to handle if the parser needs context-specific state, but for now, assume stateless or context-managed by registry.
@@ -102,7 +83,7 @@ func (s *codeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 
 	// Step 1: Perform splitting using the generic parser's Split method
 	// Note: The Split method on GenericParser takes codeFile, maxTokens, overlapTokens
-	chunks, err := parser.Split(codeFile, s.maxTokensPerChunk, s.overlapTokens)
+	chunks, err := parser.Split(codeFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to split file %s using parser for %s: %w", codeFile.Path, ext, err)
 	}

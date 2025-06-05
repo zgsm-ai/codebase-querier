@@ -3,9 +3,9 @@ package embedding
 import (
 	"errors"
 	"fmt"
+	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"os"
 )
 
 // CodeParser defines the interface for language-specific code parsing.
@@ -45,7 +45,7 @@ type ProcessMatchFunc func(match *sitter.QueryMatch, root *sitter.Node, content 
 
 // LanguageConfig holds language-specific configuration and logic function.
 type LanguageConfig struct {
-	Name           Language         // sitterLanguage name (e.g., "Go", "Python")
+	Language       Language         // sitterLanguage name (e.g., "Go", "Python")
 	sitterLanguage *sitter.Language // The Tree-sitter language instance
 	Query          string           // The Tree-sitter query string for finding initial match nodes
 	SupportedExts  []string         // The file extensions supported by this config
@@ -54,17 +54,21 @@ type LanguageConfig struct {
 	ProcessMatch ProcessMatchFunc
 }
 
-// genericParser is a generic implementation of the CodeParser interface
+// GenericParser  is a generic implementation of the CodeParser interface
 // that uses a LanguageConfig to handle language-specific details.
 type GenericParser struct {
-	parser *sitter.Parser  // Tree-sitter parser instance
-	config *LanguageConfig // Language-specific configuration
+	parser            *sitter.Parser  // Tree-sitter parser instance
+	config            *LanguageConfig // Language-specific configuration
+	tokenizer         tokenizer.Codec
+	maxTokensPerChunk int
+	overlapTokens     int
 }
 
 // NewGenericParser creates a new generic parser with the given config.
-func NewGenericParser(config LanguageConfig) (*GenericParser, error) {
+func NewGenericParser(config LanguageConfig, tokenizer tokenizer.Codec, maxTokensPerChunk, overlapTokens int) (*GenericParser, error) {
 	parser := sitter.NewParser()
 	err := parser.SetLanguage(config.sitterLanguage)
+
 	if err != nil {
 		// Close parser on error to prevent resource leak
 		parser.Close()
@@ -72,8 +76,11 @@ func NewGenericParser(config LanguageConfig) (*GenericParser, error) {
 	}
 
 	return &GenericParser{
-		parser: parser,
-		config: &config,
+		parser:            parser,
+		config:            &config,
+		tokenizer:         tokenizer,
+		maxTokensPerChunk: maxTokensPerChunk,
+		overlapTokens:     overlapTokens,
 	}, nil
 }
 
@@ -94,28 +101,34 @@ func (p *GenericParser) GetLanguage() *sitter.Language {
 
 // Parse the code file into a tree-sitter node.
 // Reuses the existing doParse helper.
-func (p *GenericParser) Parse(codeFile *types.CodeFile) (*sitter.Node, error) {
+func (p *GenericParser) Parse(content string) (*sitter.Tree, error) {
 	if p.parser == nil {
 		return nil, errors.New("parser is not properly initialized or has been closed")
 	}
-	// Note: The caller is responsible for closing the returned node/tree.
-	return doParse(codeFile, p.parser)
+	if p == nil {
+		return nil, errors.New("parser is not properly initialized or has been closed")
+	}
+
+	tree := p.parser.Parse([]byte(content), nil)
+	if tree == nil {
+		return nil, errors.New("failed to parse code")
+	}
+	return tree, nil
 }
 
 // Split splits the code content into chunks based on the LanguageConfig.
-func (p *GenericParser) Split(codeFile *types.CodeFile, maxTokensPerChunk, overlapTokens int) ([]*types.CodeChunk, error) {
+func (p *GenericParser) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
 	if p.parser == nil || p.config == nil || p.config.ProcessMatch == nil {
 		return nil, errors.New("parser is not properly initialized or has been closed or missing config/ProcessMatch function")
 	}
 
-	tree := p.parser.Parse([]byte(codeFile.Content), nil)
-	if tree == nil {
-		return nil, errors.New("failed to parse code")
+	tree, err := p.Parse(codeFile.Content)
+	if err != nil {
+		return nil, err
 	}
 	defer tree.Close()
 
 	root := tree.RootNode()
-	contentBytes := []byte(codeFile.Content)
 
 	// Create Tree-sitter query from the config's query string
 	query, queryErr := sitter.NewQuery(p.config.sitterLanguage, p.config.Query)
@@ -127,16 +140,12 @@ func (p *GenericParser) Split(codeFile *types.CodeFile, maxTokensPerChunk, overl
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	// Use the query defined in the LanguageConfig
+	contentBytes := []byte(codeFile.Content)
 	matches := qc.Matches(query, root, contentBytes)
 
 	var allChunks []*types.CodeChunk
 
-	for {
-		match := matches.Next()
-		if match == nil {
-			break
-		}
+	for match := matches.Next(); match != nil; match = matches.Next() {
 
 		// Use the language-specific ProcessMatch function from the config
 		defInfos, err := p.config.ProcessMatch(match, root, contentBytes)
@@ -153,24 +162,28 @@ func (p *GenericParser) Split(codeFile *types.CodeFile, maxTokensPerChunk, overl
 
 			content := defInfo.Node.Utf8Text(contentBytes)
 			// Convert uint line numbers to int
-			startLine := int(defInfo.Node.StartPosition().Row + 1)
-			endLine := int(defInfo.Node.EndPosition().Row + 1)
+			startLine := int(defInfo.Node.StartPosition().Row)
+			endLine := int(defInfo.Node.EndPosition().Row)
+
+			tokenCount := p.countToken(content)
 
 			// Check if the content size exceeds the maximum chunk size (still using char count as proxy)
-			if len(content) > maxTokensPerChunk { // Using character count as a proxy for tokens
+			if tokenCount > p.maxTokensPerChunk { // Using character count as a proxy for tokens
 				// Split the large block using the sliding window approach
 				// Pass ParentFunc and ParentClass to splitIntoChunks
-				subChunks := splitIntoChunks(content, codeFile.Path, startLine, endLine, defInfo.ParentFunc, defInfo.ParentClass, maxTokensPerChunk, overlapTokens)
+				subChunks := p.splitIntoChunks(content, codeFile.Path, startLine,
+					endLine, defInfo.ParentFunc, defInfo.ParentClass)
 				allChunks = append(allChunks, subChunks...)
 			} else {
 				// Add the whole block as a single chunk
 				chunk := &types.CodeChunk{
+					Name:         defInfo.Name,
 					Content:      content,
 					FilePath:     codeFile.Path,
 					StartLine:    startLine,
 					EndLine:      endLine,
 					OriginalSize: len(content),
-					TokenCount:   len(content),        // Approximation
+					TokenCount:   tokenCount,          // Approximation
 					ParentFunc:   defInfo.ParentFunc,  // Populate new fields
 					ParentClass:  defInfo.ParentClass, // Populate new fields
 				}
@@ -187,57 +200,30 @@ func (p *GenericParser) Split(codeFile *types.CodeFile, maxTokensPerChunk, overl
 	return allChunks, nil
 }
 
-// LoadQuery reads a Tree-sitter query file and validates it.
-func LoadQuery(lang *sitter.Language, queryFilePath string) (string, error) {
-	// Read the query file
-	queryContent, err := os.ReadFile(queryFilePath)
+func (p *GenericParser) countToken(content string) int {
+	tokenCount, err := p.tokenizer.Count(content)
 	if err != nil {
-		return "", fmt.Errorf("failed to read query file %s: %w", queryFilePath, err)
+		tokenCount = len(content)
 	}
-	queryStr := string(queryContent)
-
-	// Validate query early
-	// Check if the language is nil before creating the query
-	if lang == nil {
-		return "", errors.New("Tree-sitter language is nil, cannot validate query")
-	}
-
-	_, queryErr := sitter.NewQuery(lang, queryStr)
-	if queryErr != nil {
-		// Include queryFilePath in the error for better debugging
-		return "", fmt.Errorf("failed to validate query %s: %w", queryFilePath, queryErr)
-	}
-	return queryStr, nil
-}
-
-// doParse parses the code file into a tree-sitter node.
-// Reuses the existing logic.
-func doParse(codeFile *types.CodeFile, p *sitter.Parser) (*sitter.Node, error) {
-	if p == nil {
-		return nil, errors.New("parser is not properly initialized or has been closed")
-	}
-
-	tree := p.Parse([]byte(codeFile.Content), nil)
-	if tree == nil {
-		return nil, errors.New("failed to parse code")
-	}
-
-	// We don't close the tree here because the caller is expected to use it.
-	// The caller is responsible for closing the returned *sitter.Node which will close the tree.
-	return tree.RootNode(), nil
+	return tokenCount
 }
 
 // splitIntoChunks applies a sliding window to a large content string.
 // Updated to populate ParentFunc and ParentClass.
-func splitIntoChunks(content string, filePath string, startLine, endLine int,
-	parentFunc, parentClass string, maxTokensPerChunk, overlapTokens int) []*types.CodeChunk {
+func (p *GenericParser) splitIntoChunks(
+	content string,
+	filePath string,
+	startLine,
+	endLine int,
+	parentFunc,
+	parentClass string) []*types.CodeChunk {
 	var chunks []*types.CodeChunk
 	contentBytes := []byte(content)
 	contentLen := len(contentBytes)
 
 	// Use character count as a simple token approximation for now
-	maxLen := maxTokensPerChunk
-	overlapLen := overlapTokens
+	maxLen := p.maxTokensPerChunk
+	overlapLen := p.overlapTokens
 
 	for i := 0; i < contentLen; {
 		end := i + maxLen

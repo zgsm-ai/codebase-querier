@@ -572,7 +572,7 @@ extractCInfo:
 			}
 		}
 	case "struct_specifier", "enum_specifier", "union_specifier":
-		// Name is usually a `type_identifier` child
+		// Language is usually a `type_identifier` child
 		nameNode := definitionNode.ChildByFieldName("name") // Try "name" first
 		if nameNode == nil || nameNode.IsMissing() {
 			nameNode = definitionNode.ChildByFieldName("type_identifier") // Then try "type_identifier"
@@ -658,7 +658,7 @@ extractCppInfo:
 		}
 
 	case "class_specifier", "struct_specifier":
-		// Name is usually a `type_identifier` child
+		// Language is usually a `type_identifier` child
 		nameNode := definitionNode.ChildByFieldName("name") // Try "name" first
 		if nameNode == nil || nameNode.IsMissing() {
 			nameNode = definitionNode.ChildByFieldName("type_identifier") // Then try "type_identifier"
@@ -959,7 +959,7 @@ extractScalaInfo:
 	// Extract name and find parent context
 	switch definitionNode.Kind() {
 	case "class_declaration", "object_declaration", "trait_declaration", "type_alias", "enum_declaration":
-		// Name is often an identifier
+		// Language is often an identifier
 		nameNode := definitionNode.ChildByFieldName("name")
 		if nameNode != nil && !nameNode.IsMissing() {
 			name = nameNode.Utf8Text(content)
@@ -1272,7 +1272,7 @@ extractKotlinInfo:
 	// Extract name and find parent context
 	switch definitionNode.Kind() {
 	case "class_declaration", "object_declaration", "interface_declaration", "property_declaration":
-		// Name is often an identifier
+		// Language is often an identifier
 		nameNode := definitionNode.ChildByFieldName("name")
 		if nameNode != nil && !nameNode.IsMissing() {
 			name = nameNode.Utf8Text(content)

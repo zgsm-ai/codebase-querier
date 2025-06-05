@@ -22,7 +22,7 @@ import (
 type Language string
 
 const (
-	Unknown    Language = ""
+	Unknown    Language = "unknown"
 	Java       Language = "java"
 	Python     Language = "python"
 	Go         Language = "go"
@@ -46,114 +46,101 @@ const queryExt = ".scm"
 // The Query field will be populated in NewParserRegistry by loading the .scm files.
 var supportedLanguagesConfigs = []LanguageConfig{ // This variable must be exported (capital S)
 	{
-		Name:           Go,
+		Language:       Go,
 		sitterLanguage: sitter.NewLanguage(sittergo.Language()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Go)+queryExt),
 		SupportedExts:  []string{".go"},
 		ProcessMatch:   processGoMatch,
 	},
 	{
-		Name:           Python,
+		Language:       Python,
 		sitterLanguage: sitter.NewLanguage(sitterpython.Language()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Python)+queryExt),
 		SupportedExts:  []string{".py"},
 		ProcessMatch:   processPythonMatch,
 	},
 	{
-		Name:           Java,
+		Language:       Java,
 		sitterLanguage: sitter.NewLanguage(sitterjava.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Java)+queryExt), // Will be loaded from queries/java.scm
 		SupportedExts:  []string{".java"},
 		ProcessMatch:   processJavaMatch,
 	},
 	{
-		Name:           JavaScript,
+		Language:       JavaScript,
 		sitterLanguage: sitter.NewLanguage(sitterjavascript.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(JavaScript)+queryExt), // Will be loaded from queries/javascript.scm
 		SupportedExts:  []string{".js", ".jsx"},
 		ProcessMatch:   processJavaScriptMatch,
 	},
 	{
-		Name:           TypeScript,
+		Language:       TypeScript,
 		sitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTypescript()), // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(TypeScript)+queryExt),  // Will be loaded from queries/typescript.scm
 		SupportedExts:  []string{".ts"},
 		ProcessMatch:   processTypescriptMatch,
 	},
 	{
-		Name:           TSX,
+		Language:       TSX,
 		sitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTSX()), // TSX uses the same language binding as TS, Type assertion
 		Query:          filepath.Join(queryBaseDir, string(TSX)+queryExt),  // Will be loaded from queries/typescript_tsx.scm
 		SupportedExts:  []string{".tsx"},
 		ProcessMatch:   processTsxMatch,
 	},
 	{
-		Name:           Rust,
+		Language:       Rust,
 		sitterLanguage: sitter.NewLanguage(sitterrust.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Rust)+queryExt), // Will be loaded from queries/rust.scm
 		SupportedExts:  []string{".rs"},
 		ProcessMatch:   processRustMatch,
 	},
 	{
-		Name:           C,
+		Language:       C,
 		sitterLanguage: sitter.NewLanguage(sitterc.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(C)+queryExt), // Will be loaded from queries/c.scm
 		SupportedExts:  []string{".c", ".h"},
 		ProcessMatch:   processCMatch,
 	},
 	{
-		Name:           CPP,
+		Language:       CPP,
 		sitterLanguage: sitter.NewLanguage(sittercpp.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(CPP)+queryExt), // Will be loaded from queries/cpp.scm
 		SupportedExts:  []string{".cpp", ".cc", ".cxx", ".hpp"},
 		ProcessMatch:   processCPPMatch,
 	},
 	{
-		Name:           CSharp,
+		Language:       CSharp,
 		sitterLanguage: sitter.NewLanguage(sittercsharp.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(CSharp)+queryExt), // Will be loaded from queries/csharp.scm
 		SupportedExts:  []string{".cs"},
 		ProcessMatch:   processCSharpMatch,
 	},
 	{
-		Name:           Ruby,
+		Language:       Ruby,
 		sitterLanguage: sitter.NewLanguage(sitterruby.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Ruby)+queryExt), // Will be loaded from queries/ruby.scm
 		SupportedExts:  []string{".rb"},
 		ProcessMatch:   processRubyMatch,
 	},
 	{
-		Name:           PHP,
+		Language:       PHP,
 		sitterLanguage: sitter.NewLanguage(sitterphp.LanguagePHP()),       // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(PHP)+queryExt), // Will be loaded from queries/php.scm
 		SupportedExts:  []string{".php", ".phtml"},
 		ProcessMatch:   processPhpMatch,
 	},
 	{
-		Name:           Kotlin,
+		Language:       Kotlin,
 		sitterLanguage: sitter.NewLanguage(sitterkotlin.Language()),          // Uncommented
 		Query:          filepath.Join(queryBaseDir, string(Kotlin)+queryExt), // Will be loaded from queries/kotlin.scm
 		SupportedExts:  []string{".kt", ".kts"},
 		ProcessMatch:   processKotlinMatch,
 	},
 	{
-		Name:           Scala,
+		Language:       Scala,
 		sitterLanguage: sitter.NewLanguage(sitterscala.Language()),          // Type assertion
 		Query:          filepath.Join(queryBaseDir, string(Scala)+queryExt), // Will be loaded from queries/scala.scm
 		SupportedExts:  []string{".scala", ".sc"},
 		ProcessMatch:   processScalaMatch,
 	},
-}
-
-// getLanguageByExt finds the LanguageConfig for a given file extension.
-func getLanguageByExt(ext string) (*LanguageConfig, bool) {
-	for i := range supportedLanguagesConfigs {
-		config := &supportedLanguagesConfigs[i]
-		for _, supportedExt := range config.SupportedExts {
-			if supportedExt == ext {
-				return config, true
-			}
-		}
-	}
-	return nil, false
 }
