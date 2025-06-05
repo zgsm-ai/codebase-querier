@@ -6,11 +6,9 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
-
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -140,66 +138,115 @@ func (p *CodeSplitter) countToken(content string) int {
 	return tokenCount
 }
 
-// splitFuncWithSlidingWindow: 对超长函数体做滑动窗口切分，chunk包含完整函数头，token计数准确，重叠token数准确
 func (p *CodeSplitter) splitFuncWithSlidingWindow(
 	content string,
 	filePath string,
 	funcStartLine int,
 	parentFunc, parentClass string,
 ) []*types.CodeChunk {
-	var chunks []*types.CodeChunk
 	maxTokens := p.splitOptions.MaxTokensPerChunk
 	overlapTokens := p.splitOptions.SlidingWindowOverlapTokens
 
-	// 按行切分，保证每个chunk都包含完整的函数头
-	lines := utils.SplitLines(content)
-	// 计算每行的token数
-	lineTokens := make([]int, len(lines))
-	for i, line := range lines {
-		lineTokens[i] = p.countToken(line)
+	if maxTokens <= 0 || overlapTokens < 0 || overlapTokens >= maxTokens {
+		return nil
 	}
-	// 滑动窗口切分
-	for start := 0; start < len(lines); {
-		tokens := 0
-		end := start
-		for end < len(lines) && tokens+lineTokens[end] <= maxTokens {
-			tokens += lineTokens[end]
-			end++
+
+	_, tokens, err := p.tokenizer.Encode(content)
+	if err != nil {
+		return nil
+	}
+	totalTokens := len(tokens)
+	if totalTokens == 0 {
+		return nil
+	}
+
+	byteOffsets := make([]int, len(tokens)+1)
+	currentOffset := 0
+	for i, token := range tokens {
+		byteOffsets[i] = currentOffset
+		currentOffset += len(token)
+	}
+	byteOffsets[len(tokens)] = currentOffset
+
+	chunks := make([]*types.CodeChunk, 0)
+	startTokenIdx := 0
+	chunkCount := 0
+
+	for startTokenIdx < totalTokens {
+		// 计算当前块结束位置（正常情况）
+		endTokenIdx := startTokenIdx + maxTokens
+		if endTokenIdx > totalTokens {
+			endTokenIdx = totalTokens
 		}
-		if end == start {
-			// 单行就超限，强制切分
-			end = start + 1
-			tokens = lineTokens[start]
+		currentTokens := endTokenIdx - startTokenIdx
+		chunkCount++
+
+		// 提取代码块
+		startByte := byteOffsets[startTokenIdx]
+		endByte := byteOffsets[endTokenIdx] - 1
+		if endByte >= len(content) {
+			endByte = len(content) - 1
 		}
-		chunkLines := lines[start:end]
-		chunkContent := utils.JoinLines(chunkLines)
-		chunk := &types.CodeChunk{
-			Content:      chunkContent,
-			FilePath:     filePath,
-			StartLine:    funcStartLine + start,
-			EndLine:      funcStartLine + end - 1,
-			ParentFunc:   parentFunc,
-			ParentClass:  parentClass,
-			OriginalSize: len(chunkContent),
-			TokenCount:   p.countToken(chunkContent),
-		}
-		chunks = append(chunks, chunk)
-		if end == len(lines) {
+		chunkContent := content[startByte : endByte+1]
+		startLine := funcStartLine + countLines(content[:startByte])
+		endLine := startLine + countLines(chunkContent) - 1
+
+		chunks = append(chunks, &types.CodeChunk{
+			Content:    chunkContent,
+			FilePath:   filePath,
+			StartLine:  startLine,
+			EndLine:    endLine,
+			TokenCount: currentTokens,
+		})
+
+		if endTokenIdx >= totalTokens {
 			break
 		}
-		// 下一个窗口起点，重叠overlapTokens
-		// 计算重叠行数
-		overlap := 0
-		for i := end - 1; i >= start; i-- {
-			overlap += lineTokens[i]
-			if overlap >= overlapTokens {
-				start = i
-				break
+
+		// **优化最后一块逻辑**
+		if chunkCount < (totalTokens+maxTokens-1)/maxTokens-1 {
+			// 非最后一块，使用固定重叠
+			startTokenIdx = endTokenIdx - overlapTokens
+			if startTokenIdx < chunkCount*(maxTokens-overlapTokens) { // 防止回退
+				startTokenIdx = chunkCount * (maxTokens - overlapTokens)
 			}
-			if i == start {
-				start = end - 1 // 至少重叠一行
+		} else {
+			// 最后一块，动态调整重叠
+			remainingTokens := totalTokens - endTokenIdx
+			if remainingTokens > 0 {
+				// 允许重叠量减少为 maxTokens - remainingTokens，但至少为0
+				newOverlap := maxTokens - remainingTokens
+				if newOverlap < 0 {
+					newOverlap = 0
+				}
+				startTokenIdx = endTokenIdx - newOverlap
+			} else {
+				startTokenIdx = endTokenIdx
 			}
 		}
+
+		// 防止索引越界
+		if startTokenIdx < 0 {
+			startTokenIdx = 0
+		}
+		if startTokenIdx >= endTokenIdx {
+			startTokenIdx = endTokenIdx
+		}
 	}
+
 	return chunks
+}
+
+// 辅助函数：计算字符串中的行数
+func countLines(s string) int {
+	if len(s) == 0 {
+		return 0
+	}
+	count := 0
+	for _, c := range s {
+		if c == '\n' {
+			count++
+		}
+	}
+	return count + 1 // 最后一行可能没有换行符
 }
