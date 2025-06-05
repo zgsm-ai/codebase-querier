@@ -31,3 +31,16 @@ func CountLines(data []byte) int {
 	} // Explicitly handle empty
 	return lines
 }
+
+// SplitLines splits a string into lines (preserving line endings)
+func SplitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
+// JoinLines joins lines into a single string with \n
+func JoinLines(lines []string) string {
+	return strings.Join(lines, "\n")
+}

@@ -3,10 +3,11 @@ package embedding
 import (
 	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
 	"slices"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
@@ -14,16 +15,20 @@ import (
 )
 
 type CodeSplitter struct {
-	languages         []*lang.LanguageConfig // Language-specific configuration
-	tokenizer         tokenizer.Codec
-	maxTokensPerChunk int
-	overlapTokens     int
+	languages    []*lang.LanguageConfig // Language-specific configuration
+	tokenizer    tokenizer.Codec
+	splitOptions SplitOptions
 }
 
-type SplitOption func(*CodeSplitter)
+type SplitOptions struct {
+	// when exceed MaxTokensPerChunk, split it with sliding window. it is also the windows size.
+	MaxTokensPerChunk int
+	// take effects when exceed MaxTokensPerChunk
+	SlidingWindowOverlapTokens int
+}
 
 // NewCodeSplitter creates a new generic parser with the given config.
-func NewCodeSplitter(maxTokensPerChunk, overlapTokens int) (*CodeSplitter, error) {
+func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 	// Initialize the codec	// Initialize the codec
 	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
 	if err != nil {
@@ -36,10 +41,9 @@ func NewCodeSplitter(maxTokensPerChunk, overlapTokens int) (*CodeSplitter, error
 	}
 
 	return &CodeSplitter{
-		languages:         languages,
-		tokenizer:         codec,
-		maxTokensPerChunk: maxTokensPerChunk,
-		overlapTokens:     overlapTokens,
+		languages:    languages,
+		tokenizer:    codec,
+		splitOptions: splitOptions,
 	}, nil
 }
 
@@ -94,27 +98,20 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	var allChunks []*types.CodeChunk
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		// Use the language-specific processor to process the match
 		defInfos, err := language.Processor.ProcessMatch(match, root, contentBytes)
 		if err != nil {
-			// Log the error and continue processing other matches
 			continue
 		}
-
 		for _, defInfo := range defInfos {
 			if defInfo == nil || defInfo.Node == nil {
 				continue
 			}
-
 			content := defInfo.Node.Utf8Text(contentBytes)
 			startLine := int(defInfo.Node.StartPosition().Row)
 			endLine := int(defInfo.Node.EndPosition().Row)
-
 			tokenCount := p.countToken(content)
-
-			if tokenCount > p.maxTokensPerChunk {
-				subChunks := p.splitIntoChunks(content, codeFile.Path, startLine,
-					endLine, defInfo.ParentFunc, defInfo.ParentClass)
+			if tokenCount > p.splitOptions.MaxTokensPerChunk {
+				subChunks := p.splitFuncWithSlidingWindow(content, codeFile.Path, startLine, defInfo.ParentFunc, defInfo.ParentClass)
 				allChunks = append(allChunks, subChunks...)
 			} else {
 				chunk := &types.CodeChunk{
@@ -132,7 +129,6 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 			}
 		}
 	}
-
 	return allChunks, nil
 }
 
@@ -144,60 +140,66 @@ func (p *CodeSplitter) countToken(content string) int {
 	return tokenCount
 }
 
-// splitIntoChunks applies a sliding window to a large content string.
-// Updated to populate ParentFunc and ParentClass.
-func (p *CodeSplitter) splitIntoChunks(
+// splitFuncWithSlidingWindow: 对超长函数体做滑动窗口切分，chunk包含完整函数头，token计数准确，重叠token数准确
+func (p *CodeSplitter) splitFuncWithSlidingWindow(
 	content string,
 	filePath string,
-	startLine,
-	endLine int,
-	parentFunc,
-	parentClass string) []*types.CodeChunk {
+	funcStartLine int,
+	parentFunc, parentClass string,
+) []*types.CodeChunk {
 	var chunks []*types.CodeChunk
-	contentBytes := []byte(content)
-	contentLen := len(contentBytes)
+	maxTokens := p.splitOptions.MaxTokensPerChunk
+	overlapTokens := p.splitOptions.SlidingWindowOverlapTokens
 
-	// Use character count as a simple token approximation for now
-	maxLen := p.maxTokensPerChunk
-	overlapLen := p.overlapTokens
-
-	for i := 0; i < contentLen; {
-		end := i + maxLen
-		if end > contentLen {
-			end = contentLen
+	// 按行切分，保证每个chunk都包含完整的函数头
+	lines := utils.SplitLines(content)
+	// 计算每行的token数
+	lineTokens := make([]int, len(lines))
+	for i, line := range lines {
+		lineTokens[i] = p.countToken(line)
+	}
+	// 滑动窗口切分
+	for start := 0; start < len(lines); {
+		tokens := 0
+		end := start
+		for end < len(lines) && tokens+lineTokens[end] <= maxTokens {
+			tokens += lineTokens[end]
+			end++
 		}
-
-		chunkContent := string(contentBytes[i:end])
-
-		// Approximate start and end lines for the chunk within the original content's line range.
-		// This is a rough approximation and might not be perfectly accurate for multi-line content.
-		// A more accurate approach would involve iterating lines within the content string.
-		chunkStartLine := startLine + utils.CountLines(contentBytes[:i])
-		chunkEndLine := chunkStartLine + utils.CountLines([]byte(chunkContent)) - 1
-		if chunkEndLine < chunkStartLine { // Handle single line chunks
-			chunkEndLine = chunkStartLine
+		if end == start {
+			// 单行就超限，强制切分
+			end = start + 1
+			tokens = lineTokens[start]
 		}
-
-		chunks = append(chunks, &types.CodeChunk{
+		chunkLines := lines[start:end]
+		chunkContent := utils.JoinLines(chunkLines)
+		chunk := &types.CodeChunk{
 			Content:      chunkContent,
 			FilePath:     filePath,
-			StartLine:    chunkStartLine,
-			EndLine:      chunkEndLine,
-			ParentFunc:   parentFunc,  // Populate the field
-			ParentClass:  parentClass, // Populate the field
+			StartLine:    funcStartLine + start,
+			EndLine:      funcStartLine + end - 1,
+			ParentFunc:   parentFunc,
+			ParentClass:  parentClass,
 			OriginalSize: len(chunkContent),
-			TokenCount:   len(chunkContent), // Approximation
-		})
-
-		if end == contentLen {
+			TokenCount:   p.countToken(chunkContent),
+		}
+		chunks = append(chunks, chunk)
+		if end == len(lines) {
 			break
 		}
-
-		i = end - overlapLen
-		if i < 0 {
-			i = 0
+		// 下一个窗口起点，重叠overlapTokens
+		// 计算重叠行数
+		overlap := 0
+		for i := end - 1; i >= start; i-- {
+			overlap += lineTokens[i]
+			if overlap >= overlapTokens {
+				start = i
+				break
+			}
+			if i == start {
+				start = end - 1 // 至少重叠一行
+			}
 		}
 	}
-
 	return chunks
 }

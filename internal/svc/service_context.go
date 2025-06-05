@@ -22,7 +22,7 @@ type ServiceContext struct {
 	DistLock          redisstore.DistributedLock
 	Embedder          vector.Embedder
 	VectorStore       vector.Store
-	CodeSplitter      embedding.CodeSplitter
+	CodeSplitter      *embedding.CodeSplitter
 }
 
 func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {
@@ -51,7 +51,10 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		return nil, err
 	}
 
-	codebaseStore := codebase.NewLocalCodebase(ctx, c.CodeBaseStore)
+	codebaseStore, err := codebase.NewLocalCodebase(ctx, c.CodeBaseStore)
+	if err != nil {
+		return nil, err
+	}
 
 	embedder, err := vector.NewEmbedder(ctx, c.VectorStore.Embedder)
 	if err != nil {
@@ -64,7 +67,9 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		return nil, err
 	}
 
-	splitter, err := embedding.NewCodeSplitter(embedding.WithOverlapTokens(c.IndexTask.EmbeddingTask.OverlapTokens), embedding.WithMaxTokensPerChunk(c.IndexTask.EmbeddingTask.MaxTokensPerChunk))
+	splitter, err := embedding.NewCodeSplitter(embedding.SplitOptions{
+		MaxTokensPerChunk:          c.IndexTask.EmbeddingTask.MaxTokensPerChunk,
+		SlidingWindowOverlapTokens: c.IndexTask.EmbeddingTask.OverlapTokens})
 	if err != nil {
 		return nil, err
 	}
