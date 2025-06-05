@@ -1,7 +1,7 @@
 // This is a rich test file for the Go parser.
 // It includes various language constructs like packages, imports, functions, structs, interfaces, methods, control flow, and more.
 
-package main
+package testdata
 
 import (
 	"fmt"
