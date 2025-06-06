@@ -197,13 +197,13 @@ func (t *embeddingProcessor) getSyncFileListCollapse() (map[string]string, []str
 			t.logger.Errorf("read metadata file %v failed: %v", metadataFile, err)
 			continue
 		}
-		if syncMetaData == types.EmptyString {
+		if syncMetaData == nil {
 			t.logger.Errorf("sync file %s metadata is empty", metadataFile)
 			continue
 		}
 		var syncMetaObj *types.SyncMetadata
 
-		err = json.Unmarshal([]byte(syncMetaData), &syncMetaObj)
+		err = json.Unmarshal(syncMetaData, &syncMetaObj)
 		if err != nil {
 			t.logger.Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
 		}
@@ -249,7 +249,7 @@ func (t *embeddingProcessor) processAddFile(syncFile *types.SyncFile) error {
 		return err
 	}
 
-	// 保存到向量库, weavi
+	// 保存到向量库
 	err = t.svcCtx.VectorStore.UpsertCodeChunks(t.ctx, codeChunks)
 	if err != nil {
 		return err

@@ -22,7 +22,7 @@ type embedder struct {
 func (e *embedder) EmbedCodeChunks(ctx context.Context, chunks []types.CodeChunk) ([][]float32, error) {
 	texts := make([]string, len(chunks))
 	for i, chunk := range chunks {
-		texts[i] = chunk.Content
+		texts[i] = string(chunk.Content)
 	}
 	return e.EmbedDocuments(ctx, texts)
 }

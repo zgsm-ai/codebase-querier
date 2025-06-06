@@ -21,11 +21,14 @@ type DefinitionType string
 
 const (
 	Function  DefinitionType = "function"
+	Method    DefinitionType = "method"
 	Class     DefinitionType = "class"
 	Struct    DefinitionType = "struct"
 	Interface DefinitionType = "interface"
 	Enum      DefinitionType = "enum"
+	Union     DefinitionType = "union"
 	Variable  DefinitionType = "variable"
+	Const     DefinitionType = "const"
 	TypeAlias DefinitionType = "type_alias"
 )
 
@@ -177,7 +180,11 @@ func (p *BaseProcessor) CommonStructureProcessor(
 	switch captureName {
 	case "function":
 		defType = Function
-	case "struct", "class":
+	case "method":
+		defType = Method
+	case "class":
+		defType = Class
+	case "struct":
 		defType = Struct
 	case "interface":
 		defType = Interface
@@ -185,8 +192,12 @@ func (p *BaseProcessor) CommonStructureProcessor(
 		defType = TypeAlias
 	case "variable":
 		defType = Variable
+	case "const":
+		defType = Const
 	case "enum":
 		defType = Enum
+	case "union":
+		defType = Union
 	default:
 		// fallback: 根据节点类型判断
 		kind := defNode.Kind()
@@ -230,14 +241,14 @@ func (p *BaseProcessor) CommonStructureProcessor(
 	endLine := endPoint.Row
 	endColumn := endPoint.Column
 
-	// 构建签名
-	signature := buildSignature(defNode, content)
+	// 构建签名 TODO wrong info
+	// signature := buildSignature(defNode, content)
 
 	return &Definition{
-		Type:      defType,
-		Name:      name,
-		Range:     []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
-		Signature: signature,
+		Type:  defType,
+		Name:  name,
+		Range: []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
+		// Signature: signature,
 	}, nil
 }
 
@@ -293,7 +304,6 @@ func (p *BaseProcessor) getDefinitionKindFromNodeKind(kind string) string {
 		"variable_definition",
 		"var_declaration",
 		"let_declaration",
-		"const_declaration",
 		"field_declaration",
 		"property_declaration",
 		"local_variable_declaration",
@@ -309,6 +319,8 @@ func (p *BaseProcessor) getDefinitionKindFromNodeKind(kind string) string {
 		"using_declaration":
 		return string(TypeAlias)
 
+	case "const_declaration":
+		return string(Const)
 	// 默认返回原始类型
 	default:
 		// 检查是否在预定义的类型列表中

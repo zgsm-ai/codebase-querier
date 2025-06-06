@@ -58,7 +58,8 @@ var TestVar = "test"
 	if len(structure.Definitions) == 0 {
 		t.Fatal("no definitions found")
 	}
-
+	assert.NotEmpty(t, structure.Path)
+	assert.NotEmpty(t, structure.Language)
 	// 验证结构体定义
 	foundStruct := false
 	foundInterface := false

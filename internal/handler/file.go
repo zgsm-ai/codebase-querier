@@ -23,7 +23,7 @@ func getFileContentHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		if err != nil {
 			response.Error(w, err)
 		} else {
-			response.RawText(w, content)
+			response.Bytes(w, content)
 		}
 	}
 }

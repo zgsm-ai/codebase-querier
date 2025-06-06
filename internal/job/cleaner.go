@@ -54,9 +54,9 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo clean graph store
-			graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
+			graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
 
-			err = graphStore.DeleteAll(ctx, cb.Id, cb.Path)
+			err = graphStore.DeleteAll(ctx)
 			if err != nil {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue

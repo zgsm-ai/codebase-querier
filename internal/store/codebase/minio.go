@@ -356,20 +356,20 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 	return rootNodes, nil
 }
 
-func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
+func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) ([]byte, error) {
 	objectName := filepath.Join(codebasePath, filePath)
 	object, err := m.client.GetObject(ctx, m.cfg.Minio.Bucket, objectName, minio.GetObjectOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to get object: %w", err)
+		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
 	defer object.Close()
 
 	content, err := io.ReadAll(object)
 	if err != nil {
-		return "", fmt.Errorf("failed to read object content: %w", err)
+		return nil, fmt.Errorf("failed to read object content: %w", err)
 	}
 
-	return string(content), nil
+	return content, nil
 }
 
 func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {

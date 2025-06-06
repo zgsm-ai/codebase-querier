@@ -77,5 +77,9 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*lang.CodeFileStructur
 	}
 
 	// 返回结构信息，包含处理后的定义
-	return &lang.CodeFileStructure{Definitions: definitions}, nil
+	return &lang.CodeFileStructure{
+		Definitions: definitions,
+		Path:        codeFile.Path,
+		Language:    string(language.Language),
+	}, nil
 }

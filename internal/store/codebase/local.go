@@ -378,21 +378,21 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 	return nodes, nil
 }
 
-func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error) {
+func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) ([]byte, error) {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
-		return types.EmptyString, err
+		return nil, err
 	}
 	if !exists {
-		return types.EmptyString, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
 	fullPath := filepath.Join(codebasePath, filePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return types.EmptyString, err
+		return nil, err
 	}
-	return string(content), nil
+	return content, nil
 }
 
 func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {

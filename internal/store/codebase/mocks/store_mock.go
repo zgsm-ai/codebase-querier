@@ -168,10 +168,10 @@ func (mr *MockStoreMockRecorder) Open(ctx, codebasePath, filePath interface{}) *
 }
 
 // Read mocks base method.
-func (m *MockStore) Read(ctx context.Context, codebasePath, filePath string, option types.ReadOptions) (string, error) {
+func (m *MockStore) Read(ctx context.Context, codebasePath, filePath string, option types.ReadOptions) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Read", ctx, codebasePath, filePath, option)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

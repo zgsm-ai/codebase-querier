@@ -113,7 +113,7 @@ func (v *weaviateWrapper) UpsertCodeChunks(ctx context.Context, chunks []*types.
 	documents := make([]schema.Document, len(chunks))
 	for i, chunk := range chunks {
 		documents[i] = schema.Document{
-			PageContent: chunk.Content,
+			PageContent: string(chunk.Content),
 			Metadata: map[string]any{
 				types.MetadataFilePath:     chunk.FilePath,
 				types.MetadataLanguage:     chunk.Language,

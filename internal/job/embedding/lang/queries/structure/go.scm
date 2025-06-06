@@ -16,12 +16,12 @@
     name: (type_identifier) @name
     type: (interface_type))) @interface
 
-(type_declaration
-  (type_spec
-    name: (type_identifier) @name
-    type: (_) @typekind
-      (#not-match? @typekind "struct_type")
-      (#not-match? @typekind "interface_type"))) @type_alias
+;;(type_declaration
+;;  (type_spec
+;;    name: (type_identifier) @name
+;;    type: (_) @typekind
+;;      (#not-match? @typekind "struct_type")
+;;      (#not-match? @typekind "interface_type"))) @type_alias
 
 (var_declaration
   (var_spec

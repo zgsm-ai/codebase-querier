@@ -52,7 +52,7 @@ type Store interface {
 	// Read reads the content of a file
 	// filePath: the path to the file to read
 	// option: optional parameters for reading
-	Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) (string, error)
+	Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) ([]byte, error)
 
 	// Open reads the content of a file
 	// filePath: the path to the file to read

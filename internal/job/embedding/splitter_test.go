@@ -64,26 +64,26 @@ func anotherFunc() int {
 	assert.Len(t, chunks, 2, "Should have exactly 2 chunks, one per function")
 
 	// 验证main函数
-	assert.Contains(t, chunks[0].Content, "func main")
+	assert.Contains(t, string(chunks[0].Content), "func main")
 	assert.Equal(t, 5, chunks[0].StartLine, "main function should start at line 5")
 	assert.Equal(t, mainFuncTokens, chunks[0].TokenCount, "main function chunk should have correct token count")
-	assert.Contains(t, chunks[0].Content, "fmt.Println(\"Hello, world!\")", "main function should be complete")
+	assert.Contains(t, string(chunks[0].Content), "fmt.Println(\"Hello, world!\")", "main function should be complete")
 	assert.LessOrEqual(t, chunks[0].TokenCount, mainFuncTokens+10, "main function chunk should not exceed maxTokensPerChunk")
 
 	// 验证anotherFunc函数
-	assert.Contains(t, chunks[1].Content, "func anotherFunc")
+	assert.Contains(t, string(chunks[1].Content), "func anotherFunc")
 	assert.Equal(t, 9, chunks[1].StartLine, "anotherFunc should start at line 9")
 	assert.Equal(t, anotherFuncTokens, chunks[1].TokenCount, "anotherFunc chunk should have correct token count")
-	assert.Contains(t, chunks[1].Content, "return 1", "anotherFunc should be complete")
+	assert.Contains(t, string(chunks[1].Content), "return 1", "anotherFunc should be complete")
 	assert.LessOrEqual(t, chunks[1].TokenCount, anotherFuncTokens+10, "anotherFunc chunk should not exceed maxTokensPerChunk")
 
 	// 验证函数完整性
 	for _, chunk := range chunks {
 		// 验证每个chunk都包含完整的函数定义
-		assert.Contains(t, chunk.Content, "func ", "Each chunk should contain a function definition")
+		assert.Contains(t, string(chunk.Content), "func ", "Each chunk should contain a function definition")
 		// 验证每个chunk都包含函数体
-		assert.Contains(t, chunk.Content, "{", "Each chunk should contain function body")
-		assert.Contains(t, chunk.Content, "}", "Each chunk should contain function body")
+		assert.Contains(t, string(chunk.Content), "{", "Each chunk should contain function body")
+		assert.Contains(t, string(chunk.Content), "}", "Each chunk should contain function body")
 		// 验证行号范围
 		assert.GreaterOrEqual(t, chunk.StartLine, 0, "Chunk should have valid start line (0-based)")
 		assert.GreaterOrEqual(t, chunk.EndLine, chunk.StartLine, "Chunk should have valid line range")
@@ -96,7 +96,8 @@ func TestCodeSplitter_SplitWithOverlapAndMaxTokens(t *testing.T) {
 package main
 
 import "fmt"
-
+var mu *sync.Mux
+const Name = "go"
 // Function 1
 func function1() {
 	fmt.Println("This is function 1")
