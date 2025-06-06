@@ -6,7 +6,7 @@ type CodeFile struct {
 	CodebaseName string
 	Name         string
 	Path         string
-	Content      string
+	Content      []byte
 	Language     string
 }
 
@@ -17,7 +17,7 @@ type CodeChunk struct {
 	CodebasePath string
 	CodebaseName string
 	Language     string
-	Content      string // The actual code snippet
+	Content      []byte // The actual code snippet
 	FilePath     string // The FullPath to the file this block came from
 	StartLine    int    // The 0-indexed starting line number of the block in the original file
 	EndLine      int    // The 0-indexed ending line number of the block in the original file

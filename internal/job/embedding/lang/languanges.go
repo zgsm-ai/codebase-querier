@@ -3,7 +3,6 @@ package lang
 import (
 	"embed"
 	"fmt"
-
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -50,9 +49,15 @@ type LanguageConfig struct {
 	Processor          LanguageProcessor
 }
 
+var configs []*LanguageConfig
+
 // GetLanguageConfigs returns all supported language configurations
 func GetLanguageConfigs() ([]*LanguageConfig, error) {
-	configs := make([]*LanguageConfig, 0)
+	if configs != nil {
+		return configs, nil
+	}
+	var err error
+	configs = make([]*LanguageConfig, 0)
 
 	// Add configurations from each language file
 	configs = append(configs, GetGoConfig())
@@ -72,22 +77,19 @@ func GetLanguageConfigs() ([]*LanguageConfig, error) {
 	//TODO 校验scm文件的语法
 	for _, config := range configs {
 		chunkQueryPath := config.chunkQueryPath
+
 		chunkQueryContent, err := scmFS.ReadFile(chunkQueryPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read chunk query file %s for %s: %w", chunkQueryPath, config.Language, err)
 		}
 		config.ChunkQuery = string(chunkQueryContent)
-		if config.structureQueryPath == "" {
-			continue
-		}
 		structureQueryContent, err := scmFS.ReadFile(config.structureQueryPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read structure query file %s for %s: %w", config.structureQueryPath, config.Language, err)
 		}
 		config.StructureQuery = string(structureQueryContent)
 	}
-
-	return configs, nil
+	return configs, err
 }
 
 // Helper function to create a query path

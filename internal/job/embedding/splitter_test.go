@@ -11,7 +11,7 @@ import (
 
 func TestCodeSplitter_Split_Go(t *testing.T) {
 	// Simple Go code with a function
-	goCode := `
+	goCode := []byte(`
 package main
 
 import "fmt"
@@ -23,7 +23,7 @@ func main() {
 func anotherFunc() int {
 	return 1
 }
-`
+`)
 
 	// Create a dummy CodeFile
 	codeFile := &types.CodeFile{
@@ -92,7 +92,7 @@ func anotherFunc() int {
 
 func TestCodeSplitter_SplitWithOverlapAndMaxTokens(t *testing.T) {
 	// Create a longer Go code that will be split into multiple chunks
-	goCode := `
+	goCode := []byte(`
 package main
 
 import "fmt"
@@ -117,7 +117,7 @@ func function3() {
 	fmt.Println("With more lines")
 	fmt.Println("To ensure proper splitting")
 }
-`
+`)
 
 	codeFile := &types.CodeFile{
 		Path:    filepath.Join("testdata", "go", "multi_func.go"),
@@ -186,14 +186,14 @@ func function3() {
 
 			// Verify that each chunk contains at least one function
 			for _, chunk := range chunks {
-				assert.Contains(t, chunk.Content, "func ", "Each chunk should contain at least one function")
+				assert.Contains(t, string(chunk.Content), "func ", "Each chunk should contain at least one function")
 			}
 		})
 	}
 }
 func TestCodeSplitter_SplitWithSlidingWindow(t *testing.T) {
 	// 创建一个超长函数，确保会触发滑动窗口
-	goCode := `
+	goCode := []byte(`
 package main
 
 import "fmt"
@@ -203,7 +203,7 @@ func veryLongFunc1() {
 	for i := 0; i < 100; i++ {
 		lines = append(lines, fmt.Sprintf("line %d with some content to ensure token count", i))
 	}
-}`
+}`)
 	codeFile := &types.CodeFile{
 		Path:    filepath.Join("testdata", "go", "long_func.go"),
 		Content: goCode,
@@ -269,8 +269,8 @@ func veryLongFunc1() {
 							i, curr.StartLine, curr.EndLine, i-1, prev.StartLine, prev.EndLine, funcName)
 
 						// 2. 验证内容重叠
-						prevTokens := defaultSplitter.tokenizeToStrings(prev.Content)
-						currTokens := defaultSplitter.tokenizeToStrings(curr.Content)
+						prevTokens := defaultSplitter.tokenizeToStrings(string(prev.Content))
+						currTokens := defaultSplitter.tokenizeToStrings(string(curr.Content))
 
 						// 找到实际重叠的token数
 						overlapCount := 0

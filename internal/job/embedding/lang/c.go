@@ -5,7 +5,7 @@ import (
 	sitterc "github.com/tree-sitter/tree-sitter-c/bindings/go"
 )
 
-// CProcessor implements LanguageProcessor for C code
+// CProcessor implements LanguageProcessor for C
 type CProcessor struct {
 	*BaseProcessor
 }
@@ -13,33 +13,36 @@ type CProcessor struct {
 // NewCProcessor creates a new C language processor
 func NewCProcessor() *CProcessor {
 	return &CProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"function_definition",
-			"struct_specifier",
-			"enum_specifier",
-			"union_specifier",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"function_definition",
+				"struct_specifier",
+				"union_specifier",
+				"declaration",
+				"enum_specifier",
+				"type_definition",
+			},
+			[]string{
+				"function",
+				"struct",
+				"variable",
+				"enum",
+				"type_alias",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for C
+// ProcessMatch processes a match for C language
 func (p *CProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		nil, // C doesn't have nested functions
-	)
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for C
+// FindEnclosingType finds the enclosing type for a node in C
 func (p *CProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
-		switch curr.Kind() {
-		case "struct_specifier", "enum_specifier", "union_specifier":
+		if curr.Kind() == "struct_specifier" || curr.Kind() == "union_specifier" {
 			return curr
 		}
 		curr = curr.Parent()
@@ -47,19 +50,31 @@ func (p *CProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for C
+// FindEnclosingFunction finds the enclosing function for a node in C
 func (p *CProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	// C doesn't support nested functions
+	curr := node
+	for curr != nil && !curr.IsMissing() {
+		if curr.Kind() == "function_definition" {
+			return curr
+		}
+		curr = curr.Parent()
+	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for C
+func (p *CProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetCConfig returns the configuration for C language
 func GetCConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       C,
-		SitterLanguage: sitter.NewLanguage(sitterc.Language()),
-		chunkQueryPath: makeChunkQueryPath(C),
-		SupportedExts:  []string{".c", ".h"},
-		Processor:      NewCProcessor(),
+		Language:           C,
+		SitterLanguage:     sitter.NewLanguage(sitterc.Language()),
+		chunkQueryPath:     makeChunkQueryPath(C),
+		structureQueryPath: makeStructureQueryPath(C),
+		SupportedExts:      []string{".c", ".h"},
+		Processor:          NewCProcessor(),
 	}
 }

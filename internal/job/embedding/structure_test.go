@@ -1,6 +1,8 @@
-package lang
+package embedding
 
 import (
+	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,14 +43,13 @@ var TestVar = "test"
 `)
 
 	// 获取 Go 语言配置
-	configs, err := GetLanguageConfigs()
+	parser, err := NewStructureParser()
 	assert.NoError(t, err)
-	goConfig := GetLanguageConfigByExt(configs, ".go")
-	assert.NotNil(t, goConfig, "Go config should not be nil")
-	assert.NotEmpty(t, goConfig.structureQueryPath, "structure query path should not be empty")
-	assert.NotEmpty(t, goConfig.StructureQuery, "structure query should not be empty")
 	// 解析文件结构
-	structure, err := ParseFileStructure(code, goConfig)
+	structure, err := parser.Parse(&types.CodeFile{
+		Content: code,
+		Path:    "test.go",
+	})
 	if err != nil {
 		t.Fatalf("failed to parse file structure: %v", err)
 	}
@@ -68,21 +69,21 @@ var TestVar = "test"
 
 	for _, def := range structure.Definitions {
 		switch def.Type {
-		case Struct:
+		case lang.Struct:
 			if def.Name == "TestStruct" {
 				foundStruct = true
 			}
-		case Interface:
+		case lang.Interface:
 			if def.Name == "TestInterface" {
 				foundInterface = true
 			}
-		case Function:
+		case lang.Function:
 			if def.Name == "TestFunc" {
 				foundFunction = true
 			} else if def.Name == "TestMethod" {
 				foundMethod = true
 			}
-		case Variable:
+		case lang.Variable:
 			if def.Name == "TestConst" {
 				foundConst = true
 			} else if def.Name == "TestVar" {

@@ -61,7 +61,9 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	}
 	defer parser.Close()
 
-	tree := parser.Parse([]byte(codeFile.Content), nil)
+	content := codeFile.Content
+
+	tree := parser.Parse(content, nil)
 	if tree == nil {
 		return nil, errors.New("failed to parse code")
 	}
@@ -79,13 +81,12 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	contentBytes := []byte(codeFile.Content)
-	matches := qc.Matches(query, root, contentBytes)
+	matches := qc.Matches(query, root, content)
 
 	var allChunks []*types.CodeChunk
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		defInfos, err := language.Processor.ProcessMatch(match, root, contentBytes)
+		defInfos, err := language.Processor.ProcessMatch(match, root, content)
 		if err != nil {
 			continue
 		}
@@ -93,12 +94,12 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 			if defInfo == nil || defInfo.Node == nil {
 				continue
 			}
-			content := defInfo.Node.Utf8Text(contentBytes)
+			nodeContent := defInfo.Node.Utf8Text(content)
 			startLine := int(defInfo.Node.StartPosition().Row)
 			endLine := int(defInfo.Node.EndPosition().Row)
-			tokenCount := p.countToken(content)
+			tokenCount := p.countToken(nodeContent)
 			if tokenCount > p.splitOptions.MaxTokensPerChunk {
-				subChunks := p.splitFuncWithSlidingWindow(content, codeFile.Path, startLine, defInfo.ParentFunc, defInfo.ParentClass)
+				subChunks := p.splitFuncWithSlidingWindow(nodeContent, codeFile.Path, startLine, defInfo.ParentFunc, defInfo.ParentClass)
 				allChunks = append(allChunks, subChunks...)
 			} else {
 				chunk := &types.CodeChunk{
@@ -181,7 +182,7 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(
 		endLine := startLine + countLines(chunkContent) - 1
 
 		chunks = append(chunks, &types.CodeChunk{
-			Content:    chunkContent,
+			Content:    []byte(chunkContent),
 			FilePath:   filePath,
 			StartLine:  startLine,
 			EndLine:    endLine,

@@ -13,14 +13,23 @@ type ScalaProcessor struct {
 // NewScalaProcessor creates a new Scala language processor
 func NewScalaProcessor() *ScalaProcessor {
 	return &ScalaProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"class_declaration",
-			"object_declaration",
-			"trait_declaration",
-			"method_declaration",
-			"type_alias",
-			"enum_declaration",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"class_declaration",
+				"object_declaration",
+				"trait_declaration",
+				"method_declaration",
+				"type_alias",
+				"enum_declaration",
+			},
+			[]string{
+				"class",
+				"interface",
+				"function",
+				"type_alias",
+				"enum",
+			},
+		),
 	}
 }
 
@@ -56,7 +65,7 @@ func (p *ScalaProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 		if curr.Kind() == "method_declaration" {
 			return curr
 		}
-		// Stop at class/object/trait definition
+		// Stop at class/object/trait Definition
 		if curr.Kind() == "class_declaration" || curr.Kind() == "object_declaration" || curr.Kind() == "trait_declaration" {
 			return nil
 		}
@@ -65,13 +74,19 @@ func (p *ScalaProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// GetScalaConfig returns the configuration for Kotlin language
+// ProcessStructureMatch processes a structure match for Scala
+func (p *ScalaProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
+}
+
+// GetScalaConfig returns the configuration for Scala language
 func GetScalaConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       Scala,
-		SitterLanguage: sitter.NewLanguage(sitterscala.Language()), // Type assertion
-		chunkQueryPath: makeChunkQueryPath(Scala),                  // Will be loaded from queries/scala.scm
-		SupportedExts:  []string{".scala", ".sc"},
-		Processor:      NewScalaProcessor(),
+		Language:           Scala,
+		SitterLanguage:     sitter.NewLanguage(sitterscala.Language()),
+		chunkQueryPath:     makeChunkQueryPath(Scala),
+		structureQueryPath: makeStructureQueryPath(Scala),
+		SupportedExts:      []string{".scala"},
+		Processor:          NewScalaProcessor(),
 	}
 }

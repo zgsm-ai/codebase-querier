@@ -5,42 +5,49 @@ import (
 	sitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 )
 
-// PhpProcessor implements LanguageProcessor for PHP code
-type PhpProcessor struct {
+// PHPProcessor implements LanguageProcessor for PHP
+type PHPProcessor struct {
 	*BaseProcessor
 }
 
-// NewPhpProcessor creates a new PHP language processor
-func NewPhpProcessor() *PhpProcessor {
-	return &PhpProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"class_declaration",
-			"interface_declaration",
-			"trait_declaration",
-			"function_definition",
-			"method_declaration",
-		}),
+// NewPHPProcessor creates a new PHP language processor
+func NewPHPProcessor() *PHPProcessor {
+	return &PHPProcessor{
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"class_declaration",
+				"interface_declaration",
+				"trait_declaration",
+				"function_definition",
+				"method_declaration",
+				"const_declaration",
+				"property_declaration",
+				"namespace_definition",
+				"use_declaration",
+				"enum_declaration",
+			},
+			[]string{
+				"class",
+				"interface",
+				"function",
+				"variable",
+				"type_alias",
+				"enum",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for PHP
-func (p *PhpProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		nil, // PHP doesn't have nested functions in the same way as Python
-	)
+// ProcessMatch processes a match for PHP language
+func (p *PHPProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for PHP
-func (p *PhpProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+// FindEnclosingType finds the enclosing type for a node in PHP
+func (p *PHPProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
+	curr := node
 	for curr != nil && !curr.IsMissing() {
-		switch curr.Kind() {
-		case "class_declaration", "interface_declaration", "trait_declaration":
+		if curr.Kind() == "class_declaration" || curr.Kind() == "interface_declaration" || curr.Kind() == "trait_declaration" {
 			return curr
 		}
 		curr = curr.Parent()
@@ -48,19 +55,31 @@ func (p *PhpProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for PHP
-func (p *PhpProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	// PHP doesn't support nested functions in the same way as Python
+// FindEnclosingFunction finds the enclosing function for a node in PHP
+func (p *PHPProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
+	curr := node
+	for curr != nil && !curr.IsMissing() {
+		if curr.Kind() == "function_definition" || curr.Kind() == "method_declaration" {
+			return curr
+		}
+		curr = curr.Parent()
+	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for PHP
+func (p *PHPProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetPhpConfig returns the configuration for PHP language
 func GetPhpConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       PHP,
-		SitterLanguage: sitter.NewLanguage(sitterphp.LanguagePHP()),
-		chunkQueryPath: makeChunkQueryPath(PHP),
-		SupportedExts:  []string{".php", ".phtml"},
-		Processor:      NewPhpProcessor(),
+		Language:           PHP,
+		SitterLanguage:     sitter.NewLanguage(sitterphp.LanguagePHP()),
+		chunkQueryPath:     makeChunkQueryPath(PHP),
+		structureQueryPath: makeStructureQueryPath(PHP),
+		SupportedExts:      []string{".php", ".phtml"},
+		Processor:          NewPHPProcessor(),
 	}
 }

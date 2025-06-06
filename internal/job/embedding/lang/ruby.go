@@ -5,7 +5,7 @@ import (
 	sitterruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 )
 
-// RubyProcessor implements LanguageProcessor for Ruby code
+// RubyProcessor implements LanguageProcessor for Ruby
 type RubyProcessor struct {
 	*BaseProcessor
 }
@@ -13,33 +13,33 @@ type RubyProcessor struct {
 // NewRubyProcessor creates a new Ruby language processor
 func NewRubyProcessor() *RubyProcessor {
 	return &RubyProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"method_declaration",
-			"class_declaration",
-			"module_declaration",
-			"singleton_method",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"class",
+				"module",
+				"method",
+				"singleton_method",
+				"assignment",
+			},
+			[]string{
+				"class",
+				"function",
+				"variable",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for Ruby
+// ProcessMatch processes a match for Ruby language
 func (p *RubyProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		nil, // Ruby doesn't have nested functions in the same way as Python
-	)
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for Ruby
+// FindEnclosingType finds the enclosing type for a node in Ruby
 func (p *RubyProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
-		switch curr.Kind() {
-		case "class_declaration", "module_declaration":
+		if curr.Kind() == "class" || curr.Kind() == "module" {
 			return curr
 		}
 		curr = curr.Parent()
@@ -47,19 +47,31 @@ func (p *RubyProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for Ruby
+// FindEnclosingFunction finds the enclosing function for a node in Ruby
 func (p *RubyProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	// Ruby doesn't support nested functions in the same way as Python
+	curr := node
+	for curr != nil && !curr.IsMissing() {
+		if curr.Kind() == "method" || curr.Kind() == "singleton_method" {
+			return curr
+		}
+		curr = curr.Parent()
+	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for Ruby
+func (p *RubyProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetRubyConfig returns the configuration for Ruby language
 func GetRubyConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       Ruby,
-		SitterLanguage: sitter.NewLanguage(sitterruby.Language()),
-		chunkQueryPath: makeChunkQueryPath(Ruby),
-		SupportedExts:  []string{".rb"},
-		Processor:      NewRubyProcessor(),
+		Language:           Ruby,
+		SitterLanguage:     sitter.NewLanguage(sitterruby.Language()),
+		chunkQueryPath:     makeChunkQueryPath(Ruby),
+		structureQueryPath: makeStructureQueryPath(Ruby),
+		SupportedExts:      []string{".rb"},
+		Processor:          NewRubyProcessor(),
 	}
 }

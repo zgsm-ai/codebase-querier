@@ -5,7 +5,7 @@ import (
 	sitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
-// PythonProcessor implements LanguageProcessor for Python code
+// PythonProcessor implements LanguageProcessor for Python
 type PythonProcessor struct {
 	*BaseProcessor
 }
@@ -13,28 +13,31 @@ type PythonProcessor struct {
 // NewPythonProcessor creates a new Python language processor
 func NewPythonProcessor() *PythonProcessor {
 	return &PythonProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"function_definition",
-			"class_definition",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"function_definition",
+				"class_definition",
+				"assignment",
+			},
+			[]string{
+				"function",
+				"class",
+				"type_alias",
+				"variable",
+				"enum",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for Python
+// ProcessMatch processes a match for Python language
 func (p *PythonProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		p.FindEnclosingFunction,
-	)
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for Python
+// FindEnclosingType finds the enclosing type for a node in Python
 func (p *PythonProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
 		if curr.Kind() == "class_definition" {
 			return curr
@@ -44,29 +47,31 @@ func (p *PythonProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for Python
+// FindEnclosingFunction finds the enclosing function for a node in Python
 func (p *PythonProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
 		if curr.Kind() == "function_definition" {
 			return curr
 		}
-		// Stop at class definition to correctly identify methods vs nested functions
-		if curr.Kind() == "class_definition" {
-			return nil
-		}
 		curr = curr.Parent()
 	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for Python
+func (p *PythonProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetPythonConfig returns the configuration for Python language
 func GetPythonConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       Python,
-		SitterLanguage: sitter.NewLanguage(sitterpython.Language()),
-		chunkQueryPath: makeChunkQueryPath(Python),
-		SupportedExts:  []string{".py"},
-		Processor:      NewPythonProcessor(),
+		Language:           Python,
+		SitterLanguage:     sitter.NewLanguage(sitterpython.Language()),
+		chunkQueryPath:     makeChunkQueryPath(Python),
+		structureQueryPath: makeStructureQueryPath(Python),
+		SupportedExts:      []string{".py"},
+		Processor:          NewPythonProcessor(),
 	}
 }

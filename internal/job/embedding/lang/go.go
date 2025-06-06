@@ -5,7 +5,7 @@ import (
 	sittergo "github.com/tree-sitter/tree-sitter-go/bindings/go"
 )
 
-// GoProcessor implements LanguageProcessor for Go code
+// GoProcessor implements LanguageProcessor for Go
 type GoProcessor struct {
 	*BaseProcessor
 }
@@ -13,29 +13,33 @@ type GoProcessor struct {
 // NewGoProcessor creates a new Go language processor
 func NewGoProcessor() *GoProcessor {
 	return &GoProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"function_declaration",
-			"method_declaration",
-			"type_declaration",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"function_declaration",
+				"method_declaration",
+				"type_declaration",
+				"const_declaration",
+				"var_declaration",
+			},
+			[]string{
+				"function",
+				"struct",
+				"interface",
+				"type_alias",
+				"variable",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for Go
+// ProcessMatch processes a match for Go language
 func (p *GoProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		nil, // Go doesn't have nested functions
-	)
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for Go
+// FindEnclosingType finds the enclosing type for a node in Go
 func (p *GoProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
 		if curr.Kind() == "type_declaration" {
 			return curr
@@ -45,23 +49,30 @@ func (p *GoProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for Go
+// FindEnclosingFunction finds the enclosing function for a node in Go
 func (p *GoProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	// Go doesn't support nested functions
+	curr := node
+	for curr != nil && !curr.IsMissing() {
+		if curr.Kind() == "function_declaration" || curr.Kind() == "method_declaration" {
+			return curr
+		}
+		curr = curr.Parent()
+	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for Go
+func (p *GoProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetGoConfig returns the configuration for Go language
 func GetGoConfig() *LanguageConfig {
-	query := "(function_declaration name: (identifier) @name) @function"
-	// 打印 query 字符串，便于排查 tree-sitter 解析问题
-	println("go structure query (go.go):", query)
 	return &LanguageConfig{
 		Language:           Go,
 		SitterLanguage:     sitter.NewLanguage(sittergo.Language()),
 		chunkQueryPath:     makeChunkQueryPath(Go),
 		structureQueryPath: makeStructureQueryPath(Go),
-		StructureQuery:     query,
 		SupportedExts:      []string{".go"},
 		Processor:          NewGoProcessor(),
 	}

@@ -6,43 +6,46 @@ import (
 	sittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
-// JavaScriptProcessor implements LanguageProcessor for JavaScript/TypeScript code
+// JavaScriptProcessor implements LanguageProcessor for JavaScript
 type JavaScriptProcessor struct {
 	*BaseProcessor
 }
 
-// NewJavaScriptProcessor creates a new JavaScript/TypeScript language processor
+// NewJavaScriptProcessor creates a new JavaScript language processor
 func NewJavaScriptProcessor() *JavaScriptProcessor {
 	return &JavaScriptProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"function_declaration",
-			"class_declaration",
-			"method_definition",
-			"interface_declaration",
-			"enum_declaration",
-			"type_alias_declaration",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"function_declaration",
+				"class_declaration",
+				"method_definition",
+				"variable_declarator",
+				"interface_declaration",
+				"type_alias_declaration",
+				"enum_declaration",
+			},
+			[]string{
+				"function",
+				"class",
+				"interface",
+				"type_alias",
+				"variable",
+				"enum",
+			},
+		),
 	}
 }
 
-// ProcessMatch implements LanguageProcessor for JavaScript/TypeScript
+// ProcessMatch processes a match for JavaScript language
 func (p *JavaScriptProcessor) ProcessMatch(match *sitter.QueryMatch, root *sitter.Node, content []byte) ([]*DefinitionNodeInfo, error) {
-	return p.CommonMatchProcessor(
-		match,
-		root,
-		content,
-		p.GetDefinitionKinds(),
-		p.FindEnclosingType,
-		p.FindEnclosingFunction,
-	)
+	return p.CommonMatchProcessor(match, root, content, p.GetDefinitionKinds(), p.FindEnclosingType, p.FindEnclosingFunction)
 }
 
-// FindEnclosingType implements LanguageProcessor for JavaScript/TypeScript
+// FindEnclosingType finds the enclosing type for a node in JavaScript
 func (p *JavaScriptProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
-		switch curr.Kind() {
-		case "class_declaration", "interface_declaration":
+		if curr.Kind() == "class_declaration" || curr.Kind() == "interface_declaration" {
 			return curr
 		}
 		curr = curr.Parent()
@@ -50,52 +53,55 @@ func (p *JavaScriptProcessor) FindEnclosingType(node *sitter.Node) *sitter.Node 
 	return nil
 }
 
-// FindEnclosingFunction implements LanguageProcessor for JavaScript/TypeScript
+// FindEnclosingFunction finds the enclosing function for a node in JavaScript
 func (p *JavaScriptProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
-	curr := node.Parent()
+	curr := node
 	for curr != nil && !curr.IsMissing() {
-		switch curr.Kind() {
-		case "function_declaration", "arrow_function":
+		if curr.Kind() == "function_declaration" || curr.Kind() == "method_definition" {
 			return curr
-		}
-		// Stop at class/interface definition to correctly identify methods vs nested functions
-		if curr.Kind() == "class_declaration" || curr.Kind() == "interface_declaration" {
-			return nil
 		}
 		curr = curr.Parent()
 	}
 	return nil
+}
+
+// ProcessStructureMatch processes a structure match for JavaScript
+func (p *JavaScriptProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
 }
 
 // GetJavaScriptConfig returns the configuration for JavaScript language
 func GetJavaScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       JavaScript,
-		SitterLanguage: sitter.NewLanguage(sitterjavascript.Language()),
-		chunkQueryPath: makeChunkQueryPath(JavaScript),
-		SupportedExts:  []string{".js", ".jsx"},
-		Processor:      NewJavaScriptProcessor(),
+		Language:           JavaScript,
+		SitterLanguage:     sitter.NewLanguage(sitterjavascript.Language()),
+		chunkQueryPath:     makeChunkQueryPath(JavaScript),
+		structureQueryPath: makeStructureQueryPath(JavaScript),
+		SupportedExts:      []string{".js", ".jsx"},
+		Processor:          NewJavaScriptProcessor(),
 	}
 }
 
 // GetTypeScriptConfig returns the configuration for TypeScript language
 func GetTypeScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       TypeScript,
-		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTypescript()),
-		chunkQueryPath: makeChunkQueryPath(TypeScript),
-		SupportedExts:  []string{".ts"},
-		Processor:      NewJavaScriptProcessor(),
+		Language:           TypeScript,
+		SitterLanguage:     sitter.NewLanguage(sittertypescript.LanguageTypescript()),
+		chunkQueryPath:     makeChunkQueryPath(TypeScript),
+		structureQueryPath: makeStructureQueryPath(TypeScript),
+		SupportedExts:      []string{".ts"},
+		Processor:          NewJavaScriptProcessor(),
 	}
 }
 
 // GetTSXConfig returns the configuration for TSX language
 func GetTSXConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       TSX,
-		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTSX()),
-		chunkQueryPath: makeChunkQueryPath(TSX),
-		SupportedExts:  []string{".tsx"},
-		Processor:      NewJavaScriptProcessor(),
+		Language:           TSX,
+		SitterLanguage:     sitter.NewLanguage(sittertypescript.LanguageTSX()),
+		chunkQueryPath:     makeChunkQueryPath(TSX),
+		structureQueryPath: makeStructureQueryPath(TSX),
+		SupportedExts:      []string{".tsx"},
+		Processor:          NewJavaScriptProcessor(),
 	}
 }

@@ -13,17 +13,28 @@ type CSharpProcessor struct {
 // NewCSharpProcessor creates a new C# language processor
 func NewCSharpProcessor() *CSharpProcessor {
 	return &CSharpProcessor{
-		BaseProcessor: NewBaseProcessor([]string{
-			"class_declaration",
-			"struct_declaration",
-			"interface_declaration",
-			"enum_declaration",
-			"method_declaration",
-			"property_declaration",
-			"field_declaration",
-			"event_declaration",
-			"delegate_declaration",
-		}),
+		BaseProcessor: NewBaseProcessor(
+			[]string{
+				"class_declaration",
+				"struct_declaration",
+				"interface_declaration",
+				"enum_declaration",
+				"method_declaration",
+				"property_declaration",
+				"field_declaration",
+				"event_declaration",
+				"delegate_declaration",
+			},
+			[]string{
+				"class",
+				"struct",
+				"interface",
+				"function",
+				"variable",
+				"enum",
+				"type_alias",
+			},
+		),
 	}
 }
 
@@ -58,13 +69,19 @@ func (p *CSharpProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node 
 	return nil
 }
 
+// ProcessStructureMatch processes a structure match for C#
+func (p *CSharpProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+	return p.CommonStructureProcessor(match, query, root, content)
+}
+
 // GetCSharpConfig returns the configuration for C# language
 func GetCSharpConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:       CSharp,
-		SitterLanguage: sitter.NewLanguage(sittercsharp.Language()),
-		chunkQueryPath: makeChunkQueryPath(CSharp),
-		SupportedExts:  []string{".cs"},
-		Processor:      NewCSharpProcessor(),
+		Language:           CSharp,
+		SitterLanguage:     sitter.NewLanguage(sittercsharp.Language()),
+		chunkQueryPath:     makeChunkQueryPath(CSharp),
+		structureQueryPath: makeStructureQueryPath(CSharp),
+		SupportedExts:      []string{".cs"},
+		Processor:          NewCSharpProcessor(),
 	}
 }
