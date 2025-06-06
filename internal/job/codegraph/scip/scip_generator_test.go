@@ -2,12 +2,12 @@ package scip
 
 import (
 	"context"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/mocks"
 	"path/filepath"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/scip/mocks"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 

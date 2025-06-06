@@ -180,7 +180,7 @@ func (b BadgerDBGraph) convertSymbolToGraphNode(filePath string, symbol *codegra
 
 	graphNode := &types.GraphNode{
 		FilePath:   filePath,
-		SymbolName: symbol.Name,
+		SymbolName: symbol.Identifier,
 		Position:   types.ToPosition(symbol.Range), // Use the helper function from types
 		Content:    symbol.Content,
 		NodeType:   string(nodeType),
@@ -194,7 +194,7 @@ func (b BadgerDBGraph) convertSymbolToGraphNode(filePath string, symbol *codegra
 // findSymbolInDoc 在文档中查找指定名称的符号
 func (b BadgerDBGraph) findSymbolInDoc(doc *codegraphpb.Document, symbolName string) *codegraphpb.Symbol {
 	for _, sym := range doc.Symbols {
-		if sym.Name == symbolName {
+		if sym.Identifier == symbolName {
 			return sym
 		}
 	}
@@ -304,7 +304,7 @@ func (b BadgerDBGraph) querySymbolsByNameAndLine(doc *codegraphpb.Document, opts
 	// 根据名字和 行号， 找到symbol
 	for _, s := range doc.Symbols {
 		// symbol 名字 模糊匹配
-		if strings.Contains(s.Name, queryName) {
+		if strings.Contains(s.Identifier, queryName) {
 			symbolRange := s.Range
 			if symbolRange != nil && len(symbolRange) > 0 {
 				if symbolRange[0] == int32(opts.StartLine-1) {

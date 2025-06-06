@@ -15,7 +15,7 @@ package test
 
 // TestStruct 是一个测试结构体
 type TestStruct struct {
-	Name string
+	Identifier string
 	Age  int
 }
 
@@ -32,7 +32,7 @@ func TestFunc(name string, age int) (string, error) {
 
 // TestMethod 是一个测试方法
 func (s *TestStruct) TestMethod() string {
-	return s.Name
+	return s.Identifier
 }
 
 // 常量定义

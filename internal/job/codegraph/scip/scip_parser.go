@@ -153,16 +153,11 @@ func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
 				if scip.IsLocalSymbol(occ.Symbol) {
 					continue
 				}
-				symbolRole := getSymbolRoleFromOccurrence(occ)
-				if symbolRole == codegraphpb.RelationType_RELATION_DEFINITION {
-					// 只保存定义，symbol 会在多个文件中重复出现，因为有引用的存在
-					result.AllOccurrenceDefinitions[occ.Symbol] = &codegraphpb.Symbol{
-						Name:  occ.Symbol,
-						Path:  d.RelativePath,
-						Role:  symbolRole,
-						Range: occ.Range,
-					}
+				if getSymbolRoleFromOccurrence(occ) != codegraphpb.RelationType_RELATION_DEFINITION {
+					return
 				}
+				// 只保存定义，symbol 会在多个文件中重复出现，因为有引用的存在
+				result.AllOccurrenceDefinitions[occ.Symbol] = buildSymbol(occ, d.RelativePath)
 			}
 		},
 		VisitExternalSymbol: func(s *scip.SymbolInformation) {
@@ -249,26 +244,30 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 		var occurSymbol *codegraphpb.Symbol
 		// 当前是定义，则直接指向全局即可
 		if symbolRole == codegraphpb.RelationType_RELATION_DEFINITION {
-			occurSymbol = symbolDef
+			if symbolDef != nil {
+				occurSymbol = symbolDef
+			} else {
+				occurSymbol = buildSymbol(occ, relativePath)
+			}
 		} else {
-			// 当前是引用，创建一个新的，
+			// 当前是引用或未找到定义，创建一个新的，
 			occurSymbol = &codegraphpb.Symbol{
-				Name:  occName,
-				Role:  symbolRole,
-				Path:  relativePath,
-				Range: occ.Range,
+				Identifier: occName,
+				Role:       symbolRole,
+				Path:       relativePath,
+				Range:      occ.Range,
 			}
 			if symbolDef != nil {
 				// 引用->定义
 				occurSymbol.Relations = append([]*codegraphpb.Relation(nil), &codegraphpb.Relation{
-					Name:         symbolDef.Name,
+					Name:         symbolDef.Identifier,
 					FilePath:     symbolDef.Path,
 					Range:        symbolDef.Range,
 					RelationType: codegraphpb.RelationType_RELATION_DEFINITION,
 				})
 				// 定义 -> 引用
 				symbolDef.Relations = append(symbolDef.Relations, &codegraphpb.Relation{
-					Name:         occurSymbol.Name,
+					Name:         occurSymbol.Identifier,
 					FilePath:     relativePath,
 					Range:        occ.Range,
 					RelationType: codegraphpb.RelationType_RELATION_REFERENCE,

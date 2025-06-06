@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/sourcegraph/scip/bindings/go/scip"
 	"path/filepath"
 	"testing"
 	"time"
@@ -180,4 +181,15 @@ func TestInspectBadgerDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to inspect BadgerDB: %v", err)
 	}
+}
+
+func TestParseScipSymbol(t *testing.T) {
+	t.Run("parse symbol", func(t *testing.T) {
+		symbol := "scip-go gomod k8s.io/kubernetes . `k8s.io/kubernetes/cmd/kubeadm/app/util`/GetControlPlaneEndpoint()."
+		parsedSymbol, err := scip.ParseSymbol(symbol)
+		assert.NoError(t, err)
+		t.Logf("parserd Scheme: %v", parsedSymbol.Scheme)           // scip-go
+		t.Logf("parserd Package: %v", parsedSymbol.Package)         // {Manager: "gomod" Identifier: "k8s.io/kubernetes"}
+		t.Logf("parserd Descriptors: %v", parsedSymbol.Descriptors) //  [ {Identifier: "k8s.io/kubernetes/cmd/kubeadm/app/util" Suffix: Descriptor_Namespace } {Identifier: "GetControlPlaneEndpoint" Suffix: Descriptor_Method}  ]
+	})
 }
