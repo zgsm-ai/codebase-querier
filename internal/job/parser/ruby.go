@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	sitterruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // RubyProcessor implements LanguageProcessor for Ruby
@@ -60,7 +61,7 @@ func (p *RubyProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 }
 
 // ProcessStructureMatch processes a structure match for Ruby
-func (p *RubyProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *RubyProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 

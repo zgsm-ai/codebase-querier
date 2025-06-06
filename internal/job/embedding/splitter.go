@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
 )
 
 type CodeSplitter struct {
-	languages    []*lang.LanguageConfig // Language-specific configuration
+	languages    []*parser.LanguageConfig // Language-specific configuration
 	tokenizer    tokenizer.Codec
 	splitOptions SplitOptions
 }
@@ -31,7 +31,7 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 		return nil, fmt.Errorf("failed to get codec: %w", err)
 	}
 
-	languages, err := lang.GetLanguageConfigs()
+	languages, err := parser.GetLanguageConfigs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get languages config: %w", err)
 	}
@@ -50,7 +50,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	if ext == "" {
 		return nil, fmt.Errorf("file %s has no extension, cannot determine language", codeFile.Path)
 	}
-	language := lang.GetLanguageConfigByExt(p.languages, ext)
+	language := parser.GetLanguageConfigByExt(p.languages, ext)
 	if language == nil {
 		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
 	}

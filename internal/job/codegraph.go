@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"io"
 	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -58,6 +62,57 @@ func NewCodegraphProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg 
 
 func (t *codegraphProcessor) Process() error {
 	t.logger.Infof("start to execute codegraph processor %v", t.msg)
+
+	// 启动一个协程去将所有文件的结构提取处理
+	go func(t *codegraphProcessor) {
+		t.logger.Infof("start to parse code structure %v", t.msg)
+		start := time.Now()
+		var data []*codegraphpb.CodeFileStructure
+		err := t.svcCtx.CodebaseStore.Walk(t.ctx, t.msg.CodebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
+
+			// 1. 每次回调开始时检查 context 是否已取消
+			if t.ctx.Err() != nil {
+				t.logger.Info("code structure parse, context cancelled, exit.")
+				return t.ctx.Err() // 返回 context 错误以终止遍历
+			}
+
+			defer reader.Close()
+			bytes, err := io.ReadAll(reader)
+			if err != nil {
+				t.logger.Errorf("code structure parse, read err:%w", err)
+				// 继续处理
+				return nil
+			}
+			structureParser, err := codegraph.NewStructureParser()
+			if err != nil {
+				t.logger.Errorf("init code structure parser err:%w", err)
+				// 继续处理
+				return nil
+			}
+			parsedData, err := structureParser.Parse(&types.CodeFile{
+				Path:         walkCtx.RelativePath,
+				CodebasePath: t.msg.CodebasePath,
+				Name:         walkCtx.Info.Name,
+				Content:      bytes,
+			})
+			if err != nil {
+				t.logger.Errorf("code structure parse err:%w", err)
+				// 继续处理
+				return nil
+			}
+			data = append(data, parsedData)
+			return nil
+		})
+		t.logger.Infof("code structure parsed successfully, cost: %d s, msg: %v, err:%v", time.Since(start), t.msg, err)
+
+		if len(data) != 0 {
+			if err = t.graphStore.BatchWriteCodeStructures(t.ctx, data); err != nil {
+				t.logger.Errorf("code structure parsed data write err:%w", err)
+			}
+		}
+		t.logger.Infof("code structure saved successfully, cost: %d s, msg: %v, err:%v", time.Since(start), t.msg, err)
+	}(t)
+
 	start := time.Now()
 
 	err := func(t *codegraphProcessor) error {

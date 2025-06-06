@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	sitterjava "github.com/tree-sitter/tree-sitter-java/bindings/go"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // JavaProcessor implements LanguageProcessor for Java
@@ -65,7 +66,7 @@ func (p *JavaProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 }
 
 // ProcessStructureMatch processes a structure match for Java
-func (p *JavaProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *JavaProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 

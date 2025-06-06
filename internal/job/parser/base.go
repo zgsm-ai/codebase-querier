@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -32,19 +33,6 @@ const (
 	TypeAlias DefinitionType = "type_alias"
 )
 
-type CodeFileStructure struct {
-	Path        string        `json:"path"`        // 文件相对路径
-	Language    string        `json:"language"`    // 编程语言
-	Definitions []*Definition `json:"definitions"` // 定义列表
-}
-
-type Definition struct {
-	Type      DefinitionType `json:"type"`
-	Name      string         `json:"name"`
-	Range     []int32        `json:"range"`     // [startLine, startColumn, endLine, endColumn] (0-based)
-	Signature string         `json:"signature"` // 完整签名
-}
-
 // DefinitionNodeInfo holds information about a Definition node
 type DefinitionNodeInfo struct {
 	Node        *sitter.Node
@@ -60,7 +48,7 @@ type LanguageProcessor interface {
 	GetDefinitionKinds() []string
 	FindEnclosingType(node *sitter.Node) *sitter.Node
 	FindEnclosingFunction(node *sitter.Node) *sitter.Node
-	ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error)
+	ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error)
 	GetStructureDefinitionKinds() []string
 }
 
@@ -159,7 +147,7 @@ func (p *BaseProcessor) CommonStructureProcessor(
 	query *sitter.Query,
 	root *sitter.Node,
 	content []byte,
-) (*Definition, error) {
+) (*codegraphpb.Definition, error) {
 	if len(match.Captures) == 0 {
 		return nil, ErrNoCaptures
 	}
@@ -244,8 +232,8 @@ func (p *BaseProcessor) CommonStructureProcessor(
 	// 构建签名 TODO wrong info
 	// signature := buildSignature(defNode, content)
 
-	return &Definition{
-		Type:  defType,
+	return &codegraphpb.Definition{
+		Type:  string(defType),
 		Name:  name,
 		Range: []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
 		// Signature: signature,
@@ -359,7 +347,7 @@ func isValidDefinitionType(t DefinitionType) bool {
 }
 
 // ProcessStructureMatch 处理结构查询的匹配结果
-func ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	if len(match.Captures) == 0 {
 		return nil, ErrNoCaptures
 	}
@@ -434,8 +422,8 @@ func ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *
 	// 构建签名
 	signature := buildSignature(defNode, content)
 
-	return &Definition{
-		Type:      defType,
+	return &codegraphpb.Definition{
+		Type:      string(defType),
 		Name:      name,
 		Range:     []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
 		Signature: signature,

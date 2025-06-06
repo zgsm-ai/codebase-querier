@@ -1,7 +1,6 @@
-package embedding
+package codegraph
 
 import (
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"testing"
 
@@ -70,21 +69,21 @@ var TestVar = "test"
 
 	for _, def := range structure.Definitions {
 		switch def.Type {
-		case lang.Struct:
+		case parser.Struct:
 			if def.Name == "TestStruct" {
 				foundStruct = true
 			}
-		case lang.Interface:
+		case parser.Interface:
 			if def.Name == "TestInterface" {
 				foundInterface = true
 			}
-		case lang.Function:
+		case parser.Function:
 			if def.Name == "TestFunc" {
 				foundFunction = true
 			} else if def.Name == "TestMethod" {
 				foundMethod = true
 			}
-		case lang.Variable:
+		case parser.Variable:
 			if def.Name == "TestConst" {
 				foundConst = true
 			} else if def.Name == "TestVar" {

@@ -1,8 +1,9 @@
-package embedding
+package codegraph
 
 import (
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
 
@@ -10,12 +11,12 @@ import (
 )
 
 type StructureParser struct {
-	languages []*lang.LanguageConfig // Language-specific configuration
+	languages []*parser.LanguageConfig // Language-specific configuration
 }
 
 // NewStructureParser creates a new generic parser with the given config.
 func NewStructureParser() (*StructureParser, error) {
-	languages, err := lang.GetLanguageConfigs()
+	languages, err := parser.GetLanguageConfigs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get languages config: %w", err)
 	}
@@ -26,13 +27,13 @@ func NewStructureParser() (*StructureParser, error) {
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s StructureParser) Parse(codeFile *types.CodeFile) (*lang.CodeFileStructure, error) {
+func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeFileStructure, error) {
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
 		return nil, fmt.Errorf("file %s has no extension, cannot determine language", codeFile.Path)
 	}
-	language := lang.GetLanguageConfigByExt(s.languages, ext)
+	language := parser.GetLanguageConfigByExt(s.languages, ext)
 	if language == nil {
 		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
 	}
@@ -63,7 +64,7 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*lang.CodeFileStructur
 
 	// 消费 matches，并调用 ProcessStructureMatch 处理匹配结果
 	processor := language.Processor
-	definitions := make([]*lang.Definition, 0)
+	definitions := make([]*codegraphpb.Definition, 0)
 	for {
 		m := matches.Next()
 		if m == nil {
@@ -77,7 +78,7 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*lang.CodeFileStructur
 	}
 
 	// 返回结构信息，包含处理后的定义
-	return &lang.CodeFileStructure{
+	return &codegraphpb.CodeFileStructure{
 		Definitions: definitions,
 		Path:        codeFile.Path,
 		Language:    string(language.Language),

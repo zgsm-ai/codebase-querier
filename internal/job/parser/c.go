@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	sitterc "github.com/tree-sitter/tree-sitter-c/bindings/go"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // CProcessor implements LanguageProcessor for C
@@ -63,7 +64,7 @@ func (p *CProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 }
 
 // ProcessStructureMatch processes a structure match for C
-func (p *CProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *CProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 

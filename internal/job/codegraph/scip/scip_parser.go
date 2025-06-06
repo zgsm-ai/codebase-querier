@@ -73,7 +73,7 @@ func (i *IndexParser) visitDocument(
 
 		//// 到达一定批次，写入数据 处理完所有才能入库
 		//if len(*pendingDocs) >= writeBatchSize {
-		//	if err := i.graphStore.BatchWrite(ctx, *pendingDocs); err != nil {
+		//	if err := i.graphStore.BatchWriteDocuments(ctx, *pendingDocs); err != nil {
 		//		logx.Errorf("failed to batch write remaining documents: %w", err)
 		//	}
 		//	// 处理完，清空

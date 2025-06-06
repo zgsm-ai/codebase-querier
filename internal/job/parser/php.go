@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	sitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // PHPProcessor implements LanguageProcessor for PHP
@@ -68,7 +69,7 @@ func (p *PHPProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 }
 
 // ProcessStructureMatch processes a structure match for PHP
-func (p *PHPProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *PHPProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 

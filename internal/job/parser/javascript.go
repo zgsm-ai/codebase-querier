@@ -1,9 +1,10 @@
-package lang
+package parser
 
 import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	sitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	sittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // JavaScriptProcessor implements LanguageProcessor for JavaScript
@@ -66,7 +67,7 @@ func (p *JavaScriptProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.N
 }
 
 // ProcessStructureMatch processes a structure match for JavaScript
-func (p *JavaScriptProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *JavaScriptProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 

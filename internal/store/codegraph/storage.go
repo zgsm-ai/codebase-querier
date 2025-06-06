@@ -13,8 +13,11 @@ import (
 
 // GraphStore 定义图存储接口
 type GraphStore interface {
-	// 批量写入接口
+	// BatchWrite 批量写入接口
 	BatchWrite(ctx context.Context, docs []*codegraphpb.Document) error
+
+	// BatchWriteCodeStructures BatchWrite 批量写入接口
+	BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeFileStructure) error
 
 	// 查询接口
 	Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error)
@@ -36,16 +39,15 @@ func DocKey(path string) []byte {
 }
 
 // SerializeDocument 序列化函数
-func SerializeDocument(doc *codegraphpb.Document) ([]byte, error) {
+func SerializeDocument(doc proto.Message) ([]byte, error) {
 	return proto.Marshal(doc)
 }
 
-func DeserializeDocument(data []byte) (*codegraphpb.Document, error) {
-	var doc codegraphpb.Document
-	if err := proto.Unmarshal(data, &doc); err != nil {
-		return nil, err
+func DeserializeDocument(data []byte, doc proto.Message) error {
+	if err := proto.Unmarshal(data, doc); err != nil {
+		return err
 	}
-	return &doc, nil
+	return nil
 }
 
 // toScipPosition 辅助函数：将 ranges 转换为 scip.Position

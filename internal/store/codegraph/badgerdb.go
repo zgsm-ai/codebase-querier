@@ -95,6 +95,21 @@ func (b BadgerDBGraph) BatchWrite(ctx context.Context, docs []*codegraphpb.Docum
 	return wb.Flush()
 }
 
+func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeFileStructure) error {
+	wb := b.db.NewWriteBatch()
+	// 写入文档
+	for _, doc := range docs {
+		docBytes, err := SerializeDocument(doc)
+		if err != nil {
+			return err
+		}
+		if err := wb.Set(DocKey(doc.Path), docBytes); err != nil {
+			return err
+		}
+	}
+	return wb.Flush()
+}
+
 // Query 实现查询接口
 func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
 	if opts.MaxLayer <= 0 {
@@ -111,9 +126,7 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 			return err
 		}
 		return item.Value(func(val []byte) error {
-			var err error
-			doc, err = DeserializeDocument(val)
-			return err
+			return DeserializeDocument(val, doc)
 		})
 	})
 	if err != nil {
@@ -230,7 +243,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, symbol *cod
 				return err // Propagate other errors
 			}
 			return item.Value(func(val []byte) error {
-				relatedDoc, err = DeserializeDocument(val)
+				err = DeserializeDocument(val, relatedDoc)
 				if err != nil {
 					return err
 				}

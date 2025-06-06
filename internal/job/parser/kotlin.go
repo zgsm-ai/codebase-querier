@@ -1,8 +1,9 @@
-package lang
+package parser
 
 import (
 	sitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	sitter "github.com/tree-sitter/go-tree-sitter"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 )
 
 // KotlinProcessor implements LanguageProcessor for Kotlin
@@ -69,7 +70,7 @@ func (p *KotlinProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node 
 }
 
 // ProcessStructureMatch processes a structure match for Kotlin
-func (p *KotlinProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*Definition, error) {
+func (p *KotlinProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitter.Query, root *sitter.Node, content []byte) (*codegraphpb.Definition, error) {
 	return p.CommonStructureProcessor(match, query, root, content)
 }
 
