@@ -3,6 +3,7 @@ package lang
 import (
 	"embed"
 	"fmt"
+
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -34,6 +35,7 @@ const (
 
 const queryBaseDir = "queries"
 const chunkSubDir = "chunk"
+const structureSubDir = "structure"
 const queryExt = ".scm"
 
 // LanguageConfig holds the configuration for a language
@@ -43,7 +45,7 @@ type LanguageConfig struct {
 	chunkQueryPath     string
 	ChunkQuery         string
 	structureQueryPath string
-	structureQuery     string
+	StructureQuery     string
 	SupportedExts      []string
 	Processor          LanguageProcessor
 }
@@ -67,14 +69,22 @@ func GetLanguageConfigs() ([]*LanguageConfig, error) {
 	configs = append(configs, GetPhpConfig())
 	configs = append(configs, GetKotlinConfig())
 	configs = append(configs, GetScalaConfig())
-
+	//TODO 校验scm文件的语法
 	for _, config := range configs {
-		queryFilePath := config.chunkQueryPath
-		queryContent, err := scmFS.ReadFile(queryFilePath)
+		chunkQueryPath := config.chunkQueryPath
+		chunkQueryContent, err := scmFS.ReadFile(chunkQueryPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read query file %s for %s: %w", queryFilePath, config.Language, err)
+			return nil, fmt.Errorf("failed to read chunk query file %s for %s: %w", chunkQueryPath, config.Language, err)
 		}
-		config.ChunkQuery = string(queryContent)
+		config.ChunkQuery = string(chunkQueryContent)
+		if config.structureQueryPath == "" {
+			continue
+		}
+		structureQueryContent, err := scmFS.ReadFile(config.structureQueryPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read structure query file %s for %s: %w", config.structureQueryPath, config.Language, err)
+		}
+		config.StructureQuery = string(structureQueryContent)
 	}
 
 	return configs, nil
@@ -83,4 +93,20 @@ func GetLanguageConfigs() ([]*LanguageConfig, error) {
 // Helper function to create a query path
 func makeChunkQueryPath(lang Language) string {
 	return queryBaseDir + "/" + chunkSubDir + "/" + string(lang) + queryExt
+}
+
+func makeStructureQueryPath(lang Language) string {
+	return queryBaseDir + "/" + structureSubDir + "/" + string(lang) + queryExt
+}
+
+// GetLanguageConfigByExt 根据文件扩展名获取语言配置
+func GetLanguageConfigByExt(configs []*LanguageConfig, ext string) *LanguageConfig {
+	for _, config := range configs {
+		for _, supportedExt := range config.SupportedExts {
+			if supportedExt == ext {
+				return config
+			}
+		}
+	}
+	return nil
 }

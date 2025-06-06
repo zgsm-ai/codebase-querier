@@ -118,3 +118,8 @@ func (p *BaseProcessor) findDefinitionNode(node *sitter.Node, kinds []string) *s
 func getDefinitionKindFromNodeKind(kind string) string {
 	return kind
 }
+
+// FileStructureProcessor 处理文件结构查询的结果
+type FileStructureProcessor struct {
+	*BaseProcessor
+}

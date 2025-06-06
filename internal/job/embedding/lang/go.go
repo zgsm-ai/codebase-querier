@@ -53,11 +53,16 @@ func (p *GoProcessor) FindEnclosingFunction(node *sitter.Node) *sitter.Node {
 
 // GetGoConfig returns the configuration for Go language
 func GetGoConfig() *LanguageConfig {
+	query := "(function_declaration name: (identifier) @name) @function"
+	// 打印 query 字符串，便于排查 tree-sitter 解析问题
+	println("go structure query (go.go):", query)
 	return &LanguageConfig{
-		Language:       Go,
-		SitterLanguage: sitter.NewLanguage(sittergo.Language()),
-		chunkQueryPath: makeChunkQueryPath(Go),
-		SupportedExts:  []string{".go"},
-		Processor:      NewGoProcessor(),
+		Language:           Go,
+		SitterLanguage:     sitter.NewLanguage(sittergo.Language()),
+		chunkQueryPath:     makeChunkQueryPath(Go),
+		structureQueryPath: makeStructureQueryPath(Go),
+		StructureQuery:     query,
+		SupportedExts:      []string{".go"},
+		Processor:          NewGoProcessor(),
 	}
 }

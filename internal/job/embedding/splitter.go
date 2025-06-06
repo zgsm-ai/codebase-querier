@@ -3,13 +3,11 @@ package embedding
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
-	"slices"
-
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding/lang"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"path/filepath"
 )
 
 type CodeSplitter struct {
@@ -45,15 +43,6 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 	}, nil
 }
 
-func (p *CodeSplitter) getLanguageConfigByExt(ext string) *lang.LanguageConfig {
-	for _, c := range p.languages {
-		if slices.Contains(c.SupportedExts, ext) {
-			return c
-		}
-	}
-	return nil
-}
-
 // Split splits the code content into chunks based on the LanguageConfig.
 func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
 	// Extract file extension
@@ -61,7 +50,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	if ext == "" {
 		return nil, fmt.Errorf("file %s has no extension, cannot determine language", codeFile.Path)
 	}
-	language := p.getLanguageConfigByExt(ext)
+	language := lang.GetLanguageConfigByExt(p.languages, ext)
 	if language == nil {
 		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
 	}
