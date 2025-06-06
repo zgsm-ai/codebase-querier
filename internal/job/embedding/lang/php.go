@@ -59,7 +59,7 @@ func GetPhpConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       PHP,
 		SitterLanguage: sitter.NewLanguage(sitterphp.LanguagePHP()),
-		queryPath:      makeQueryPath(PHP),
+		chunkQueryPath: makeChunkQueryPath(PHP),
 		SupportedExts:  []string{".php", ".phtml"},
 		Processor:      NewPhpProcessor(),
 	}

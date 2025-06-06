@@ -58,7 +58,7 @@ func GetCppConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       CPP,
 		SitterLanguage: sitter.NewLanguage(sittercpp.Language()),
-		queryPath:      makeQueryPath(CPP),
+		chunkQueryPath: makeChunkQueryPath(CPP),
 		SupportedExts:  []string{".cpp", ".cc", ".cxx", ".hpp"},
 		Processor:      NewCppProcessor(),
 	}

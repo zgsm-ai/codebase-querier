@@ -58,7 +58,7 @@ func GetCConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       C,
 		SitterLanguage: sitter.NewLanguage(sitterc.Language()),
-		queryPath:      makeQueryPath(C),
+		chunkQueryPath: makeChunkQueryPath(C),
 		SupportedExts:  []string{".c", ".h"},
 		Processor:      NewCProcessor(),
 	}

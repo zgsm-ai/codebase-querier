@@ -65,7 +65,7 @@ func GetPythonConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Python,
 		SitterLanguage: sitter.NewLanguage(sitterpython.Language()),
-		queryPath:      makeQueryPath(Python),
+		chunkQueryPath: makeChunkQueryPath(Python),
 		SupportedExts:  []string{".py"},
 		Processor:      NewPythonProcessor(),
 	}

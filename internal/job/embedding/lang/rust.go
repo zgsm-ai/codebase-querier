@@ -59,7 +59,7 @@ func GetRustConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Rust,
 		SitterLanguage: sitter.NewLanguage(sitterrust.Language()),
-		queryPath:      makeQueryPath(Rust),
+		chunkQueryPath: makeChunkQueryPath(Rust),
 		SupportedExts:  []string{".rs"},
 		Processor:      NewRustProcessor(),
 	}

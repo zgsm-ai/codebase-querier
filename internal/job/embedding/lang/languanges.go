@@ -6,7 +6,7 @@ import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-//go:embed queries/*.scm
+//go:embed queries/**/*.scm
 
 var scmFS embed.FS
 
@@ -33,16 +33,19 @@ const (
 )
 
 const queryBaseDir = "queries"
+const chunkSubDir = "chunk"
 const queryExt = ".scm"
 
 // LanguageConfig holds the configuration for a language
 type LanguageConfig struct {
-	Language       Language
-	SitterLanguage *sitter.Language
-	queryPath      string
-	Query          string
-	SupportedExts  []string
-	Processor      LanguageProcessor
+	Language           Language
+	SitterLanguage     *sitter.Language
+	chunkQueryPath     string
+	ChunkQuery         string
+	structureQueryPath string
+	structureQuery     string
+	SupportedExts      []string
+	Processor          LanguageProcessor
 }
 
 // GetLanguageConfigs returns all supported language configurations
@@ -66,18 +69,18 @@ func GetLanguageConfigs() ([]*LanguageConfig, error) {
 	configs = append(configs, GetScalaConfig())
 
 	for _, config := range configs {
-		queryFilePath := config.queryPath
+		queryFilePath := config.chunkQueryPath
 		queryContent, err := scmFS.ReadFile(queryFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read query file %s for %s: %w", queryFilePath, config.Language, err)
 		}
-		config.Query = string(queryContent)
+		config.ChunkQuery = string(queryContent)
 	}
 
 	return configs, nil
 }
 
 // Helper function to create a query path
-func makeQueryPath(lang Language) string {
-	return queryBaseDir + "/" + string(lang) + queryExt
+func makeChunkQueryPath(lang Language) string {
+	return queryBaseDir + "/" + chunkSubDir + "/" + string(lang) + queryExt
 }

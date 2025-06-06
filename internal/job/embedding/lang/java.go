@@ -59,7 +59,7 @@ func GetJavaConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Java,
 		SitterLanguage: sitter.NewLanguage(sitterjava.Language()),
-		queryPath:      makeQueryPath(Java),
+		chunkQueryPath: makeChunkQueryPath(Java),
 		SupportedExts:  []string{".java"},
 		Processor:      NewJavaProcessor(),
 	}

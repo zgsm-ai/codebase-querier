@@ -81,7 +81,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	root := tree.RootNode()
 
 	// Create Tree-sitter query from the config's query string
-	query, queryErr := sitter.NewQuery(language.SitterLanguage, language.Query)
+	query, queryErr := sitter.NewQuery(language.SitterLanguage, language.ChunkQuery)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to create query for %s: %v", codeFile.Path, queryErr)
 	}

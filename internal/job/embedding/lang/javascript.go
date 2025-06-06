@@ -72,7 +72,7 @@ func GetJavaScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       JavaScript,
 		SitterLanguage: sitter.NewLanguage(sitterjavascript.Language()),
-		queryPath:      makeQueryPath(JavaScript),
+		chunkQueryPath: makeChunkQueryPath(JavaScript),
 		SupportedExts:  []string{".js", ".jsx"},
 		Processor:      NewJavaScriptProcessor(),
 	}
@@ -83,7 +83,7 @@ func GetTypeScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       TypeScript,
 		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTypescript()),
-		queryPath:      makeQueryPath(TypeScript),
+		chunkQueryPath: makeChunkQueryPath(TypeScript),
 		SupportedExts:  []string{".ts"},
 		Processor:      NewJavaScriptProcessor(),
 	}
@@ -94,7 +94,7 @@ func GetTSXConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       TSX,
 		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTSX()),
-		queryPath:      makeQueryPath(TSX),
+		chunkQueryPath: makeChunkQueryPath(TSX),
 		SupportedExts:  []string{".tsx"},
 		Processor:      NewJavaScriptProcessor(),
 	}

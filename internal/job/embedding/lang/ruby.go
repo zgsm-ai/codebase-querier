@@ -58,7 +58,7 @@ func GetRubyConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Ruby,
 		SitterLanguage: sitter.NewLanguage(sitterruby.Language()),
-		queryPath:      makeQueryPath(Ruby),
+		chunkQueryPath: makeChunkQueryPath(Ruby),
 		SupportedExts:  []string{".rb"},
 		Processor:      NewRubyProcessor(),
 	}

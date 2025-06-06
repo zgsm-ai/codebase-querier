@@ -63,7 +63,7 @@ func GetCSharpConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       CSharp,
 		SitterLanguage: sitter.NewLanguage(sittercsharp.Language()),
-		queryPath:      makeQueryPath(CSharp),
+		chunkQueryPath: makeChunkQueryPath(CSharp),
 		SupportedExts:  []string{".cs"},
 		Processor:      NewCSharpProcessor(),
 	}

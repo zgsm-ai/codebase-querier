@@ -70,7 +70,7 @@ func GetScalaConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Scala,
 		SitterLanguage: sitter.NewLanguage(sitterscala.Language()), // Type assertion
-		queryPath:      makeQueryPath(Scala),                       // Will be loaded from queries/scala.scm
+		chunkQueryPath: makeChunkQueryPath(Scala),                  // Will be loaded from queries/scala.scm
 		SupportedExts:  []string{".scala", ".sc"},
 		Processor:      NewScalaProcessor(),
 	}

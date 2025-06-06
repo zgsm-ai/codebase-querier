@@ -69,7 +69,7 @@ func GetKotlinConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Kotlin,
 		SitterLanguage: sitter.NewLanguage(sitterkotlin.Language()),
-		queryPath:      makeQueryPath(Kotlin),
+		chunkQueryPath: makeChunkQueryPath(Kotlin),
 		SupportedExts:  []string{".kt", ".kts"},
 		Processor:      NewKotlinProcessor(),
 	}

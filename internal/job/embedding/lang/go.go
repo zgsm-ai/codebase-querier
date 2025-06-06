@@ -56,7 +56,7 @@ func GetGoConfig() *LanguageConfig {
 	return &LanguageConfig{
 		Language:       Go,
 		SitterLanguage: sitter.NewLanguage(sittergo.Language()),
-		queryPath:      makeQueryPath(Go),
+		chunkQueryPath: makeChunkQueryPath(Go),
 		SupportedExts:  []string{".go"},
 		Processor:      NewGoProcessor(),
 	}
