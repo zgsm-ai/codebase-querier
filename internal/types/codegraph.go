@@ -33,6 +33,7 @@ const ( //
 type GraphNode struct {
 	FilePath   string       `json:"filePath"`
 	SymbolName string       `json:"symbolName"`
+	Identifier string       `json:"-"`
 	Position   Position     `json:"position"`
 	Content    string       `json:"content"`
 	NodeType   string       `json:"nodeType"`

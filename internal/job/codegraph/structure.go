@@ -27,7 +27,7 @@ func NewStructureParser() (*StructureParser, error) {
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeFileStructure, error) {
+func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, error) {
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
@@ -78,7 +78,7 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeFileS
 	}
 
 	// 返回结构信息，包含处理后的定义
-	return &codegraphpb.CodeFileStructure{
+	return &codegraphpb.CodeStructure{
 		Definitions: definitions,
 		Path:        codeFile.Path,
 		Language:    string(language.Language),

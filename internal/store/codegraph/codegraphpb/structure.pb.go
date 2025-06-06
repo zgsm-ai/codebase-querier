@@ -25,7 +25,7 @@ const (
 )
 
 // 代码文件结构
-type CodeFileStructure struct {
+type CodeStructure struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`               // 文件相对路径
 	Language      string                 `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"`       // 编程语言
@@ -34,20 +34,20 @@ type CodeFileStructure struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CodeFileStructure) Reset() {
-	*x = CodeFileStructure{}
+func (x *CodeStructure) Reset() {
+	*x = CodeStructure{}
 	mi := &file_internal_store_codegraph_structure_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CodeFileStructure) String() string {
+func (x *CodeStructure) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CodeFileStructure) ProtoMessage() {}
+func (*CodeStructure) ProtoMessage() {}
 
-func (x *CodeFileStructure) ProtoReflect() protoreflect.Message {
+func (x *CodeStructure) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_store_codegraph_structure_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -59,26 +59,26 @@ func (x *CodeFileStructure) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CodeFileStructure.ProtoReflect.Descriptor instead.
-func (*CodeFileStructure) Descriptor() ([]byte, []int) {
+// Deprecated: Use CodeStructure.ProtoReflect.Descriptor instead.
+func (*CodeStructure) Descriptor() ([]byte, []int) {
 	return file_internal_store_codegraph_structure_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CodeFileStructure) GetPath() string {
+func (x *CodeStructure) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-func (x *CodeFileStructure) GetLanguage() string {
+func (x *CodeStructure) GetLanguage() string {
 	if x != nil {
 		return x.Language
 	}
 	return ""
 }
 
-func (x *CodeFileStructure) GetDefinitions() []*Definition {
+func (x *CodeStructure) GetDefinitions() []*Definition {
 	if x != nil {
 		return x.Definitions
 	}
@@ -184,11 +184,11 @@ func file_internal_store_codegraph_structure_proto_rawDescGZIP() []byte {
 
 var file_internal_store_codegraph_structure_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_internal_store_codegraph_structure_proto_goTypes = []any{
-	(*CodeFileStructure)(nil), // 0: codegraphpb.CodeFileStructure
-	(*Definition)(nil),        // 1: codegraphpb.Definition
+	(*CodeStructure)(nil), // 0: codegraphpb.CodeStructure
+	(*Definition)(nil),    // 1: codegraphpb.Definition
 }
 var file_internal_store_codegraph_structure_proto_depIdxs = []int32{
-	1, // 0: codegraphpb.CodeFileStructure.definitions:type_name -> codegraphpb.Definition
+	1, // 0: codegraphpb.CodeStructure.definitions:type_name -> codegraphpb.Definition
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

@@ -6,7 +6,7 @@ package codegraphpb;
 option go_package = "internal/store/codegraph/codegraphpb;codegraphpb";
 
 // 代码文件结构
-message CodeFileStructure {
+message CodeStructure {
   string path = 1;                   // 文件相对路径
   string language = 2;               // 编程语言
   repeated Definition definitions = 3; // 定义列表

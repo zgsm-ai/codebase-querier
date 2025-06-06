@@ -67,7 +67,7 @@ func (t *codegraphProcessor) Process() error {
 	go func(t *codegraphProcessor) {
 		t.logger.Infof("start to parse code structure %v", t.msg)
 		start := time.Now()
-		var data []*codegraphpb.CodeFileStructure
+		var data []*codegraphpb.CodeStructure
 		err := t.svcCtx.CodebaseStore.Walk(t.ctx, t.msg.CodebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
 
 			// 1. 每次回调开始时检查 context 是否已取消

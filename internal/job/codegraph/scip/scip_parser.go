@@ -201,11 +201,12 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 				relationSymbolName := rel.Symbol
 				defSymbol, ok := allSymbolDefinitions[relationSymbolName]
 				relation := &codegraphpb.Relation{
-					Name:         relationSymbolName,
+					Identifier:   relationSymbolName,
 					RelationType: getRelationShipTypeFromRelation(rel),
 				}
 				if ok {
 					relation.FilePath = defSymbol.Path
+					relation.Name = defSymbol.Name
 				} else { // TODO 第三方库（包括标准库）
 					// logx.Errorf("relation defSymbol %s definition not found in allSymbolDefinitions", relationSymbolName)
 				}

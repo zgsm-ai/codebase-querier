@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"google.golang.org/protobuf/proto"
 	"path/filepath"
 	"strings"
 
@@ -95,7 +96,7 @@ func (b BadgerDBGraph) BatchWrite(ctx context.Context, docs []*codegraphpb.Docum
 	return wb.Flush()
 }
 
-func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeFileStructure) error {
+func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeStructure) error {
 	wb := b.db.NewWriteBatch()
 	// 写入文档
 	for _, doc := range docs {
@@ -103,7 +104,7 @@ func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*cod
 		if err != nil {
 			return err
 		}
-		if err := wb.Set(DocKey(doc.Path), docBytes); err != nil {
+		if err := wb.Set(StructKey(doc.Path), docBytes); err != nil {
 			return err
 		}
 	}
@@ -137,33 +138,53 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	}
 
 	var res []*types.GraphNode
-	var rootSymbols []*codegraphpb.Symbol
+	var foundSymbols []*codegraphpb.Symbol
 
 	// Find root symbols based on query options
 	if opts.SymbolName != "" {
-		rootSymbols = b.querySymbolsByNameAndLine(doc, opts)
+		foundSymbols = b.querySymbolsByNameAndLine(doc, opts)
 	} else {
-		rootSymbols = b.querySymbolsByPosition(doc, opts)
+		foundSymbols = b.querySymbolsByPosition(doc, opts)
 	}
 
 	// Check if any root symbols were found
-	if len(rootSymbols) == 0 {
+	if len(foundSymbols) == 0 {
 		return nil, fmt.Errorf("symbol not found: name %s startLine %d in document %s", opts.SymbolName, opts.StartLine, opts.FilePath)
 	}
-
-	// Convert root symbols to GraphNodes and add to result
-	for _, sym := range rootSymbols {
-		graphNode := b.convertSymbolToGraphNode(doc.Path, sym)
-		if graphNode != nil {
-			res = append(res, graphNode)
+	// root
+	// 找定义节点，以定义节点为根节点进行深度遍历
+	for _, s := range foundSymbols {
+		relations := s.Relations
+		if len(relations) == 0 {
+			continue
+		}
+		for _, r := range relations {
+			if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
+				// 定义节点，加入root
+				res = append(res, &types.GraphNode{
+					FilePath:   r.FilePath,
+					SymbolName: r.Name,
+					Identifier: r.Identifier,
+					Position:   types.ToPosition(r.Range),
+					NodeType:   string(types.NodeTypeDefinition),
+				})
+			}
 		}
 	}
 
+	// Convert root symbols to GraphNodes and add to result
+	//for _, sym := range foundSymbols {
+	//	graphNode := b.convertSymbolToGraphNode(doc.Path, sym)
+	//	if graphNode != nil {
+	//		res = append(res, graphNode)
+	//	}
+	//}
+
 	// Build the rest of the tree recursively
 	// We need to build children for the root nodes found
-	for i, rootNode := range res {
+	for _, rootNode := range res {
 		// Pass the corresponding original symbol proto to the recursive function
-		b.buildChildrenRecursive(rootNode, rootSymbols[i], opts.MaxLayer)
+		b.buildChildrenRecursive(rootNode, opts.MaxLayer)
 	}
 
 	return res, nil
@@ -205,13 +226,51 @@ func (b BadgerDBGraph) convertSymbolToGraphNode(filePath string, symbol *codegra
 }
 
 // findSymbolInDoc 在文档中查找指定名称的符号
-func (b BadgerDBGraph) findSymbolInDoc(doc *codegraphpb.Document, symbolName string) *codegraphpb.Symbol {
+func (b BadgerDBGraph) findSymbolInDoc(doc *codegraphpb.Document, identifier string) *codegraphpb.Symbol {
+	// TODO 使用Position 二分查找
 	for _, sym := range doc.Symbols {
-		if sym.Identifier == symbolName {
+		if sym.Identifier == identifier {
 			return sym
 		}
 	}
 	return nil
+}
+
+// findSymbolInDoc 在结构文件中符号在该范围的symbol
+func (b BadgerDBGraph) findSymbolInStruct(doc *codegraphpb.CodeStructure, position types.Position) *codegraphpb.Symbol {
+	line := position.StartLine
+	column := position.StartColumn
+	if line == 0 && column == 0 {
+		logx.Errorf("findSymbolInStruct invalid position :%v, length less than 2", position)
+		return nil
+	}
+	// TODO 二分查找
+	var foundDef *codegraphpb.Definition
+	for _, d := range doc.Definitions {
+		parsedRange, err := scip.NewRange(d.Range)
+		if err != nil {
+			logx.Errorf("findSymbolInStruct parse range error:%w", err)
+			return nil
+		}
+		if parsedRange.Contains(scip.Position{Line: int32(line), Character: int32(column)}) {
+			foundDef = d
+			break
+		}
+	}
+
+	if foundDef == nil {
+		logx.Debugf("findSymbolInStruct definition not found by position %v in doc: %s", position, doc.Path)
+		return nil
+	}
+	// 找到了def, 下一步根据def 的path、 range，找 symbol
+	var document codegraphpb.Document
+	err := b.findDocument(DocKey(doc.Path), &document)
+	if err != nil {
+		logx.Debugf("findSymbolInStruct document not found by path %v in doc: %s", position, doc.Path)
+		return nil
+	}
+	return b.findSymbolInDocByRange(&document, foundDef.Range)
+
 }
 
 // buildChildrenForNodes (Deprecated) - Replaced by buildChildrenRecursive
@@ -223,77 +282,115 @@ func (b BadgerDBGraph) buildChildrenForNodes(nodes []*types.GraphNode, maxLayer 
 // node: The current GraphNode to build children for.
 // symbol: The codegraphpb.Symbol corresponding to the node, containing the Relations.
 // maxLayer: Maximum depth to build the tree from this node downwards.
-func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, symbol *codegraphpb.Symbol, maxLayer int) {
-	if maxLayer <= 0 || node == nil || symbol == nil {
+func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer int) {
+	if maxLayer <= 0 || node == nil {
 		return
 	}
-	maxLayer--
-	// Iterate through the relations of the current symbol
-	for _, relation := range symbol.Relations {
-		// queryPath the document containing the related symbol
-		var relatedDoc *codegraphpb.Document
-		var relatedSymbol *codegraphpb.Symbol = nil
+	maxLayer-- // 防止死递归
 
-		err := b.db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get(DocKey(relation.FilePath))
-			if err != nil {
-				if errors.Is(err, badger.ErrKeyNotFound) {
-					return nil // Not finding the doc is not an error we should stop for
-				}
-				return err // Propagate other errors
-			}
-			return item.Value(func(val []byte) error {
-				err = DeserializeDocument(val, relatedDoc)
-				if err != nil {
-					return err
-				}
-				// Document found, now try to find the specific symbol within it
-				relatedSymbol = b.findSymbolInDoc(relatedDoc, relation.Name)
-				// If relatedSymbol is still nil after finding the doc, that's unexpected but handled below
-				return nil
-			})
-		})
+	symbolPath := node.FilePath
+	identifier := node.Identifier
+	position := node.Position
+	// 根据path和position，定义到 symbol，从而找到它的relation
+	var document codegraphpb.Document
+	err := b.findDocument(DocKey(symbolPath), &document)
+	if err != nil {
+		return
+	}
+	symbol := b.findSymbolInDoc(&document, identifier)
+	if symbol == nil {
+		return
+	}
 
-		// Log any errors during document/symbol retrieval (excluding key not found for doc)
-		if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-			b.logger.Errorf("failed to get related document or symbol for relation %s in %s: %v", relation.Name, relation.FilePath, err)
-		}
+	var children []*types.GraphNode
 
-		var childNode *types.GraphNode
-		if relatedSymbol != nil {
-			// Related symbol proto was found, convert it to GraphNode
-			childNode = b.convertSymbolToGraphNode(relatedDoc.Path, relatedSymbol)
-		} else {
-			// Related symbol proto not found (either doc not found or symbol not in doc).
-			// Create a GraphNode using info available in the relation itself.
-			childNode = &types.GraphNode{
-				FilePath:   relation.FilePath,
-				SymbolName: relation.Name,
-				Position:   types.ToPosition(relation.Range),                        // Use relation's range
-				Content:    relation.Content,                                        // Content not available
-				NodeType:   getGraphNodeTypeFromRelationType(relation.RelationType), // Map relation type to node type
-				Children:   []*types.GraphNode{},
-				Parent:     node, // Set parent
-			}
-			b.logger.Debugf("related symbol proto not found for %s in %s, created node from relation info", relation.Name, relation.FilePath)
-		}
-
-		if childNode != nil {
-			// Add the child node to the parent's children list
-			// Check if this child node (identified by unique properties like FilePath and SymbolName) already exists
-			// in parentNode.Children to avoid duplicates in case of multiple relations pointing to the same symbol.
-			// For simplicity now, we'll just append, but deduplication might be needed.
-			node.Children = append(node.Children, childNode)
-
-			// Recursively build children for the child node ONLY if the relatedSymbol proto was found.
-			// We cannot build children for nodes created solely from relation info as they lack relation details.
-			if relatedSymbol != nil {
-				b.buildChildrenRecursive(childNode, relatedSymbol, maxLayer)
+	// 找到symbol 的relation. 只有定义的symbol 有reference，
+	if len(symbol.Relations) > 0 {
+		for _, r := range symbol.Relations {
+			if r.RelationType == codegraphpb.RelationType_RELATION_REFERENCE {
+				// 引用节点，加入node的children
+				children = append(children, &types.GraphNode{
+					FilePath:   r.FilePath,
+					SymbolName: r.Name,
+					Identifier: r.Identifier,
+					Position:   types.ToPosition(r.Range),
+					NodeType:   string(types.NodeTypeDefinition),
+				})
 			}
 		}
 	}
+
+	if len(children) == 0 {
+		// 如果references 为空，说明当前 node 是引用节点， 找到它属于哪个函数/类/结构体，再找它的definition节点，再找引用
+		var structFile codegraphpb.CodeStructure
+		err = b.findDocument(StructKey(symbolPath), &structFile)
+		if err != nil {
+			return
+		}
+		// 定义symbol
+		foundDefSymbol := b.findSymbolInStruct(&structFile, position)
+		children = append(children, &types.GraphNode{
+			FilePath:   foundDefSymbol.Path,
+			SymbolName: foundDefSymbol.Name,
+			Identifier: foundDefSymbol.Identifier,
+			Position:   types.ToPosition(foundDefSymbol.Range),
+			NodeType:   string(types.NodeTypeDefinition),
+		})
+	}
+	//当前节点的子
+	node.Children = children
+	// 继续递归
+	for _, ch := range children {
+		b.buildChildrenRecursive(ch, maxLayer)
+	}
+
 }
 
+func (b BadgerDBGraph) findDocument(key []byte, message proto.Message) error {
+	err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				return nil // Not finding the doc is not an error we should stop for
+			}
+			return err // Propagate other errors
+		}
+		return item.Value(func(val []byte) error {
+			err = DeserializeDocument(val, message)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	})
+	return err
+}
+
+// func (b BadgerDBGraph) findDocument(relation any, relatedDoc *codegraphpb.Document,
+//
+//		relatedSymbol *codegraphpb.Symbol) (error, *codegraphpb.Symbol) {
+//		err := b.db.View(func(txn *badger.Txn) error {
+//			item, err := txn.Get(DocKey(relation.FilePath))
+//			if err != nil {
+//				if errors.Is(err, badger.ErrKeyNotFound) {
+//					return nil // Not finding the doc is not an error we should stop for
+//				}
+//				return err // Propagate other errors
+//			}
+//			return item.Value(func(val []byte) error {
+//				err = DeserializeDocument(val, relatedDoc)
+//				if err != nil {
+//					return err
+//				}
+//				// Document found, now try to find the specific symbol within it
+//				relatedSymbol = b.findSymbolInDoc(relatedDoc, relation.Name)
+//				// If relatedSymbol is still nil after finding the doc, that's unexpected but handled below
+//				return nil
+//			})
+//		})
+//		return err, relatedSymbol
+//	}
+//
 // Helper to map codegraphpb.RelationType to types.NodeType (string)
 func getGraphNodeTypeFromRelationType(relationType codegraphpb.RelationType) string {
 	switch relationType {
@@ -376,4 +473,22 @@ func (b BadgerDBGraph) DeleteAll(ctx context.Context) error {
 
 func (b BadgerDBGraph) DB() *badger.DB {
 	return b.db
+}
+
+// TODO 这个symbol 得和scip统一，要找到 name 的position
+func (b BadgerDBGraph) findSymbolInDocByRange(document *codegraphpb.Document, symbolRange []int32) *codegraphpb.Symbol {
+	//TODO 二分查找
+	for _, s := range document.Symbols {
+		// s
+		// 开始行
+		if len(s.Range) < 2 {
+			logx.Debugf("findSymbolInDocByRange invalid range in doc:%s, less than 2: %v", s.Identifier, s.Range)
+			continue
+		}
+		// 开始行、列一致
+		if s.Range[0] == symbolRange[0] && s.Range[1] == symbolRange[1] {
+			return s
+		}
+	}
+	return nil
 }

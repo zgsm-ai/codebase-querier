@@ -17,11 +17,12 @@ enum RelationType {
 
 // Relation 表示符号在文件中的出现位置（作为关系的终点）
 message Relation {
-  string name = 1; // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
-  string filePath = 2; // 文件路径
-  repeated int32 range = 3; // 范围信息 [startLine,startCol,endLine,endCol]
-  string content = 4; // 符号内容（代码片段）
-  RelationType relationType = 5; // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
+  string name = 1; // 符号名
+  string identifier = 2; // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
+  string filePath = 3; // 文件路径
+  repeated int32 range = 4; // 范围信息 [startLine,startCol,endLine,endCol]
+  string content = 5; // 符号内容（代码片段）
+  RelationType relationType = 6; // 节点角色 (表示关系的类型，比如这个 Relation 指向的是一个定义、引用等)
 }
 
 // Symbol 表示代码库中的一个符号出现（作为图谱的节点）
