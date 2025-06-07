@@ -99,13 +99,10 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 				allChunks = append(allChunks, subChunks...)
 			} else {
 				allChunks = append(allChunks, &types.CodeChunk{
-					Content:     content,
-					FilePath:    codeFile.Path,
-					StartLine:   int(startPos.Row),
-					StartColumn: int(startPos.Column),
-					EndLine:     int(endPos.Row),
-					EndColumn:   int(endPos.Column),
-					TokenCount:  tokenCount,
+					Content:    content,
+					FilePath:   codeFile.Path,
+					Position:   []int{int(startPos.Row), int(startPos.Column), int(endPos.Row), int(endPos.Column)},
+					TokenCount: tokenCount,
 				})
 			}
 
@@ -205,14 +202,19 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath strin
 		}
 
 		chunkContent := content[startByte : endByte+1]
+
+		// 计算起始行和列
 		startLine := funcStartLine + countLines(content[:startByte])
+		startColumn := calculateColumn(content, startByte)
+
+		// 计算结束行和列
 		endLine := startLine + countLines(chunkContent) - 1
+		endColumn := calculateColumn(content[startByte:endByte+1], endByte-startByte)
 
 		chunks = append(chunks, &types.CodeChunk{
 			Content:    []byte(chunkContent),
 			FilePath:   filePath,
-			StartLine:  startLine,
-			EndLine:    endLine,
+			Position:   []int{startLine, startColumn, endLine, endColumn},
 			TokenCount: endTokenIdx - startTokenIdx,
 		})
 
@@ -236,6 +238,26 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath strin
 	}
 
 	return chunks
+}
+
+// calculateColumn 根据字节偏移量计算在当前行的列位置
+func calculateColumn(content string, byteOffset int) int {
+	if byteOffset >= len(content) {
+		byteOffset = len(content) - 1
+	}
+	if byteOffset < 0 {
+		return 0
+	}
+
+	// 从字节偏移量向前查找最后一个换行符
+	column := 0
+	for i := byteOffset; i >= 0; i-- {
+		if content[i] == '\n' {
+			break
+		}
+		column++
+	}
+	return column
 }
 
 // countLines 计算字符串中的行数

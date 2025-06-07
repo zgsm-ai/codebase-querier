@@ -18,9 +18,6 @@ type CodeChunk struct {
 	Language     string
 	Content      []byte // The actual code snippet
 	FilePath     string // The FullPath to the file this block came from
-	StartLine    int    // The 0-indexed starting line number of the block in the original file
-	StartColumn  int    // The 0-indexed starting line number of the block in the original file
-	EndLine      int    // The 0-indexed ending line number of the block in the original file
-	EndColumn    int    // The 0-indexed ending line number of the block in the original file
+	Position     []int  // start from zero, startLine, startColumn, endLine, endColumn
 	TokenCount   int    // The number of tokens in this block
 }
