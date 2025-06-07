@@ -55,15 +55,15 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
 	}
 
-	parser := sitter.NewParser()
-	if err := parser.SetLanguage(language.SitterLanguage); err != nil {
-		return nil, fmt.Errorf("cannot init tree-sitter parser: %w", err)
+	sitterParser := sitter.NewParser()
+	if err := sitterParser.SetLanguage(language.SitterLanguage); err != nil {
+		return nil, fmt.Errorf("cannot init tree-sitter sitterParser: %w", err)
 	}
-	defer parser.Close()
+	defer sitterParser.Close()
 
 	content := codeFile.Content
 
-	tree := parser.Parse(content, nil)
+	tree := sitterParser.Parse(content, nil)
 	if tree == nil {
 		return nil, errors.New("failed to parse code")
 	}
@@ -72,9 +72,9 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	root := tree.RootNode()
 
 	// Create Tree-sitter query from the config's query string
-	query, queryErr := sitter.NewQuery(language.SitterLanguage, language.ChunkQuery)
-	if queryErr != nil {
-		return nil, fmt.Errorf("failed to create query for %s: %v", codeFile.Path, queryErr)
+	query, err := sitter.NewQuery(language.SitterLanguage, language.ChunkQuery)
+	if err != nil && parser.IsRealErr(err) {
+		return nil, fmt.Errorf("failed to create query for %s: %v", codeFile.Path, err)
 	}
 	defer query.Close()
 

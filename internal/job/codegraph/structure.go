@@ -38,21 +38,19 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStruc
 		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
 	}
 
-	parser := sitter.NewParser()
-	if err := parser.SetLanguage(language.SitterLanguage); err != nil {
+	sitterParser := sitter.NewParser()
+	if err := sitterParser.SetLanguage(language.SitterLanguage); err != nil {
 		return nil, err
 	}
 	content := codeFile.Content
-	tree := parser.Parse(content, nil)
+	tree := sitterParser.Parse(content, nil)
 	if tree == nil {
 		return nil, fmt.Errorf("failed to parse file")
 	}
 	defer tree.Close()
 
 	query, err := sitter.NewQuery(language.SitterLanguage, language.StructureQuery)
-	if err != nil {
-		// 打印 query 解析的错误信息，便于排查 tree-sitter 解析问题
-		println("Parse (base.go) query parse error:", err.Error())
+	if err != nil && parser.IsRealErr(err) {
 		return nil, err
 	}
 	defer query.Close()
