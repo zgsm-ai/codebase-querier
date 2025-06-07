@@ -16,6 +16,8 @@ var (
 	ErrNoDefinition = errors.New("no Definition node found")
 )
 
+const name = "name"
+
 // BaseProcessor provides common functionality for all language processors
 type BaseProcessor struct {
 }
@@ -43,7 +45,7 @@ func (p *BaseProcessor) ProcessDefinitionNode(
 
 	for _, capture := range match.Captures {
 		captureName := query.CaptureNames()[capture.Index]
-		if captureName == "name" {
+		if captureName == name {
 			nameNode = &capture.Node
 		} else if defNode == nil { // 使用第一个非 name 的捕获作为定义类型
 			defNode = &capture.Node
