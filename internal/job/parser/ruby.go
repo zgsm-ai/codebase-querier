@@ -68,9 +68,9 @@ func (p *RubyProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *s
 // GetRubyConfig returns the configuration for Ruby language
 func GetRubyConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Ruby,
-		SitterLanguage:     sitter.NewLanguage(sitterruby.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Ruby),
+		Language:       Ruby,
+		SitterLanguage: sitter.NewLanguage(sitterruby.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Ruby),
 		SupportedExts:      []string{".rb"},
 		Processor:          NewRubyProcessor(),

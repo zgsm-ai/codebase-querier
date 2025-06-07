@@ -73,9 +73,9 @@ func (p *JavaProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *s
 // GetJavaConfig returns the configuration for Java language
 func GetJavaConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Java,
-		SitterLanguage:     sitter.NewLanguage(sitterjava.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Java),
+		Language:       Java,
+		SitterLanguage: sitter.NewLanguage(sitterjava.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Java),
 		SupportedExts:      []string{".java"},
 		Processor:          NewJavaProcessor(),

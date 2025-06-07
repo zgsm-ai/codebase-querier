@@ -41,8 +41,6 @@ const queryExt = ".scm"
 type LanguageConfig struct {
 	Language           Language
 	SitterLanguage     *sitter.Language
-	chunkQueryPath     string
-	ChunkQuery         string
 	structureQueryPath string
 	StructureQuery     string
 	SupportedExts      []string
@@ -76,13 +74,6 @@ func GetLanguageConfigs() ([]*LanguageConfig, error) {
 	configs = append(configs, GetScalaConfig())
 	//TODO 校验scm文件的语法
 	for _, config := range configs {
-		chunkQueryPath := config.chunkQueryPath
-
-		chunkQueryContent, err := scmFS.ReadFile(chunkQueryPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read chunk query file %s for %s: %w", chunkQueryPath, config.Language, err)
-		}
-		config.ChunkQuery = string(chunkQueryContent)
 		structureQueryContent, err := scmFS.ReadFile(config.structureQueryPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read structure query file %s for %s: %w", config.structureQueryPath, config.Language, err)

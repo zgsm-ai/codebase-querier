@@ -74,9 +74,9 @@ func (p *CppProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *si
 // GetCppConfig returns the configuration for C++ language
 func GetCppConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           CPP,
-		SitterLanguage:     sitter.NewLanguage(sittercpp.Language()),
-		chunkQueryPath:     makeChunkQueryPath(CPP),
+		Language:       CPP,
+		SitterLanguage: sitter.NewLanguage(sittercpp.Language()),
+
 		structureQueryPath: makeStructureQueryPath(CPP),
 		SupportedExts:      []string{".cpp", ".cc", ".cxx", ".hpp"},
 		Processor:          NewCppProcessor(),

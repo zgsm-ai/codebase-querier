@@ -77,9 +77,9 @@ func (p *RustProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *s
 // GetRustConfig returns the configuration for Rust language
 func GetRustConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Rust,
-		SitterLanguage:     sitter.NewLanguage(sitterrust.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Rust),
+		Language:       Rust,
+		SitterLanguage: sitter.NewLanguage(sitterrust.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Rust),
 		SupportedExts:      []string{".rs"},
 		Processor:          NewRustProcessor(),

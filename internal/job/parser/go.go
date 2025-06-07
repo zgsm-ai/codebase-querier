@@ -70,9 +70,9 @@ func (p *GoProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sit
 // GetGoConfig returns the configuration for Go language
 func GetGoConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Go,
-		SitterLanguage:     sitter.NewLanguage(sittergo.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Go),
+		Language:       Go,
+		SitterLanguage: sitter.NewLanguage(sittergo.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Go),
 		SupportedExts:      []string{".go"},
 		Processor:          NewGoProcessor(),

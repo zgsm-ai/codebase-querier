@@ -68,9 +68,9 @@ func (p *PythonProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query 
 // GetPythonConfig returns the configuration for Python language
 func GetPythonConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Python,
-		SitterLanguage:     sitter.NewLanguage(sitterpython.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Python),
+		Language:       Python,
+		SitterLanguage: sitter.NewLanguage(sitterpython.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Python),
 		SupportedExts:      []string{".py"},
 		Processor:          NewPythonProcessor(),

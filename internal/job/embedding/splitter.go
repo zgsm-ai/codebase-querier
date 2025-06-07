@@ -1,39 +1,37 @@
 package embedding
 
 import (
-	"errors"
 	"fmt"
+	"path/filepath"
+	"slices"
+
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"path/filepath"
 )
 
 type CodeSplitter struct {
-	languages    []*parser.LanguageConfig // Language-specific configuration
+	languages    []*parser.LanguageConfig
 	tokenizer    tokenizer.Codec
 	splitOptions SplitOptions
 }
 
 type SplitOptions struct {
-	// when exceed MaxTokensPerChunk, split it with sliding window. it is also the windows size.
-	MaxTokensPerChunk int
-	// take effects when exceed MaxTokensPerChunk
+	MaxTokensPerChunk          int
 	SlidingWindowOverlapTokens int
 }
 
-// NewCodeSplitter creates a new generic parser with the given config.
+// NewCodeSplitter 创建代码分割器
 func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
-	// Initialize the codec	// Initialize the codec
 	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get codec: %w", err)
+		return nil, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
 
 	languages, err := parser.GetLanguageConfigs()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get languages config: %w", err)
+		return nil, fmt.Errorf("failed to get language configs: %w", err)
 	}
 
 	return &CodeSplitter{
@@ -43,97 +41,122 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 	}, nil
 }
 
-// Split splits the code content into chunks based on the LanguageConfig.
+// Split 将代码文件分割成多个代码块
 func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
-	// Extract file extension
+	// 确定文件语言
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
-		return nil, fmt.Errorf("file %s has no extension, cannot determine language", codeFile.Path)
+		return nil, fmt.Errorf("file %s has no extension", codeFile.Path)
 	}
+
 	language := parser.GetLanguageConfigByExt(p.languages, ext)
 	if language == nil {
-		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
+		return nil, fmt.Errorf("unsupported language for extension %s", ext)
 	}
-
 	sitterParser := sitter.NewParser()
+
+	// 设置解析器语言（复用已创建的Parser）
 	if err := sitterParser.SetLanguage(language.SitterLanguage); err != nil {
-		return nil, fmt.Errorf("cannot init tree-sitter sitterParser: %w", err)
+		return nil, fmt.Errorf("failed to set parser language: %w", err)
 	}
-	defer sitterParser.Close()
 
-	content := codeFile.Content
-
-	tree := sitterParser.Parse(content, nil)
+	// 解析代码
+	tree := sitterParser.Parse(codeFile.Content, nil)
 	if tree == nil {
-		return nil, errors.New("failed to parse code")
+		return nil, fmt.Errorf("failed to parse code: %s", codeFile.Path)
 	}
 	defer tree.Close()
 
-	root := tree.RootNode()
-
-	// Create Tree-sitter query from the config's query string
-	query, err := sitter.NewQuery(language.SitterLanguage, language.ChunkQuery)
-	if err != nil && parser.IsRealErr(err) {
-		return nil, fmt.Errorf("failed to create query for %s: %v", codeFile.Path, err)
+	// 获取要提取的节点类型
+	nodeKinds, ok := languageChunkNodeKind[language.Language]
+	if !ok {
+		return nil, fmt.Errorf("missing chunk config for language %s", language.Language)
 	}
-	defer query.Close()
 
-	qc := sitter.NewQueryCursor()
-	defer qc.Close()
+	// 预分配切片，减少内存重新分配
+	estimatedChunks := 10 // 预估每个文件约10个代码块
+	allChunks := make([]*types.CodeChunk, 0, estimatedChunks)
 
-	matches := qc.Matches(query, root, content)
+	// 遍历语法树
+	cursor := tree.RootNode().Walk()
+	defer cursor.Close()
 
-	var allChunks []*types.CodeChunk
+	// 使用更简洁的遍历逻辑
+	for {
+		currentNode := cursor.Node()
+		kind := currentNode.Kind()
+		// 处理目标节点类型
+		if slices.Contains(nodeKinds, kind) {
+			// 提取节点信息
+			startPos := currentNode.StartPosition()
+			endPos := currentNode.EndPosition()
+			content := codeFile.Content[currentNode.StartByte():currentNode.EndByte()]
+			tokenCount := p.countToken(content)
 
-	for match := matches.Next(); match != nil; match = matches.Next() {
-		defInfos, err := language.Processor.ProcessMatch(match, root, content)
-		if err != nil {
-			continue
-		}
-		for _, defInfo := range defInfos {
-			if defInfo == nil || defInfo.Node == nil {
-				continue
-			}
-			nodeContent := defInfo.Node.Utf8Text(content)
-			startLine := int(defInfo.Node.StartPosition().Row)
-			endLine := int(defInfo.Node.EndPosition().Row)
-			tokenCount := p.countToken(nodeContent)
+			// 处理代码切块
 			if tokenCount > p.splitOptions.MaxTokensPerChunk {
-				subChunks := p.splitFuncWithSlidingWindow(nodeContent, codeFile.Path, startLine, defInfo.ParentFunc, defInfo.ParentClass)
+				subChunks := p.splitFuncWithSlidingWindow(string(content), codeFile.Path, int(startPos.Row))
 				allChunks = append(allChunks, subChunks...)
 			} else {
-				chunk := &types.CodeChunk{
-					Name:         defInfo.Name,
-					Content:      content,
-					FilePath:     codeFile.Path,
-					StartLine:    startLine,
-					EndLine:      endLine,
-					OriginalSize: len(content),
-					TokenCount:   tokenCount,
-					ParentFunc:   defInfo.ParentFunc,
-					ParentClass:  defInfo.ParentClass,
+				allChunks = append(allChunks, &types.CodeChunk{
+					Content:     content,
+					FilePath:    codeFile.Path,
+					StartLine:   int(startPos.Row),
+					StartColumn: int(startPos.Column),
+					EndLine:     int(endPos.Row),
+					EndColumn:   int(endPos.Column),
+					TokenCount:  tokenCount,
+				})
+			}
+
+			// 跳过子节点，直接移动到兄弟节点
+			if !cursor.GotoNextSibling() {
+				// 没有兄弟节点，回溯到父节点的兄弟节点
+				for {
+					if !cursor.GotoParent() {
+						return allChunks, nil // 遍历完成
+					}
+					if cursor.GotoNextSibling() {
+						break
+					}
 				}
-				allChunks = append(allChunks, chunk)
+			}
+			continue
+		}
+
+		// 非目标节点，继续深度优先遍历
+		if cursor.GotoFirstChild() {
+			continue
+		}
+
+		// 无子节点，尝试兄弟节点
+		for {
+			if cursor.GotoNextSibling() {
+				break
+			}
+
+			// 无兄弟节点，回溯父节点
+			if !cursor.GotoParent() {
+				return allChunks, nil // 遍历完成
 			}
 		}
 	}
-	return allChunks, nil
 }
 
-func (p *CodeSplitter) countToken(content string) int {
-	tokenCount, err := p.tokenizer.Count(content)
+// countToken 计算内容的token数量
+func (p *CodeSplitter) countToken(content []byte) int {
+	// 避免不必要的字符串转换
+	contentStr := string(content)
+	tokenCount, err := p.tokenizer.Count(contentStr)
 	if err != nil {
-		tokenCount = len(content)
+		// 回退到简单的长度计算
+		return len(contentStr) / 4 // 粗略估计：1token≈4字符
 	}
 	return tokenCount
 }
 
-func (p *CodeSplitter) splitFuncWithSlidingWindow(
-	content string,
-	filePath string,
-	funcStartLine int,
-	parentFunc, parentClass string,
-) []*types.CodeChunk {
+// splitFuncWithSlidingWindow 使用滑动窗口将大函数分割成多个小块
+func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath string, funcStartLine int) []*types.CodeChunk {
 	maxTokens := p.splitOptions.MaxTokensPerChunk
 	overlapTokens := p.splitOptions.SlidingWindowOverlapTokens
 
@@ -141,15 +164,18 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(
 		return nil
 	}
 
+	// 编码内容获取tokens和字节偏移量
 	_, tokens, err := p.tokenizer.Encode(content)
 	if err != nil {
 		return nil
 	}
+
 	totalTokens := len(tokens)
 	if totalTokens == 0 {
 		return nil
 	}
 
+	// 计算每个token的字节偏移量
 	byteOffsets := make([]int, len(tokens)+1)
 	currentOffset := 0
 	for i, token := range tokens {
@@ -158,18 +184,18 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(
 	}
 	byteOffsets[len(tokens)] = currentOffset
 
-	chunks := make([]*types.CodeChunk, 0)
+	// 预分配切片
+	estimatedChunks := (totalTokens + maxTokens - 1) / maxTokens
+	chunks := make([]*types.CodeChunk, 0, estimatedChunks)
+
 	startTokenIdx := 0
-	chunkCount := 0
 
 	for startTokenIdx < totalTokens {
-		// 计算当前块结束位置（正常情况）
+		// 计算当前块的结束位置
 		endTokenIdx := startTokenIdx + maxTokens
 		if endTokenIdx > totalTokens {
 			endTokenIdx = totalTokens
 		}
-		currentTokens := endTokenIdx - startTokenIdx
-		chunkCount++
 
 		// 提取代码块
 		startByte := byteOffsets[startTokenIdx]
@@ -177,6 +203,7 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(
 		if endByte >= len(content) {
 			endByte = len(content) - 1
 		}
+
 		chunkContent := content[startByte : endByte+1]
 		startLine := funcStartLine + countLines(content[:startByte])
 		endLine := startLine + countLines(chunkContent) - 1
@@ -186,57 +213,48 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(
 			FilePath:   filePath,
 			StartLine:  startLine,
 			EndLine:    endLine,
-			TokenCount: currentTokens,
+			TokenCount: endTokenIdx - startTokenIdx,
 		})
 
 		if endTokenIdx >= totalTokens {
 			break
 		}
 
-		// **优化最后一块逻辑**
-		if chunkCount < (totalTokens+maxTokens-1)/maxTokens-1 {
-			// 非最后一块，使用固定重叠
-			startTokenIdx = endTokenIdx - overlapTokens
-			if startTokenIdx < chunkCount*(maxTokens-overlapTokens) { // 防止回退
-				startTokenIdx = chunkCount * (maxTokens - overlapTokens)
-			}
+		// 计算下一个块的起始位置（应用滑动窗口）
+		if remaining := totalTokens - endTokenIdx; remaining < maxTokens {
+			// 最后一块，调整重叠量
+			startTokenIdx = endTokenIdx - (maxTokens - remaining)
 		} else {
-			// 最后一块，动态调整重叠
-			remainingTokens := totalTokens - endTokenIdx
-			if remainingTokens > 0 {
-				// 允许重叠量减少为 maxTokens - remainingTokens，但至少为0
-				newOverlap := maxTokens - remainingTokens
-				if newOverlap < 0 {
-					newOverlap = 0
-				}
-				startTokenIdx = endTokenIdx - newOverlap
-			} else {
-				startTokenIdx = endTokenIdx
-			}
+			// 正常情况，使用固定重叠
+			startTokenIdx = endTokenIdx - overlapTokens
 		}
 
 		// 防止索引越界
 		if startTokenIdx < 0 {
 			startTokenIdx = 0
 		}
-		if startTokenIdx >= endTokenIdx {
-			startTokenIdx = endTokenIdx
-		}
 	}
 
 	return chunks
 }
 
-// 辅助函数：计算字符串中的行数
+// countLines 计算字符串中的行数
 func countLines(s string) int {
 	if len(s) == 0 {
 		return 0
 	}
+
 	count := 0
 	for _, c := range s {
 		if c == '\n' {
 			count++
 		}
 	}
-	return count + 1 // 最后一行可能没有换行符
+
+	// 最后一行可能没有换行符
+	if len(s) > 0 && s[len(s)-1] != '\n' {
+		count++
+	}
+
+	return count
 }

@@ -1,6 +1,0 @@
-(class_declaration identifier: (identifier) @name)
-(struct_declaration identifier: (identifier) @name)
-(interface_declaration identifier: (identifier) @name)
-(enum_declaration identifier: (identifier) @name)
-(method_declaration identifier: (identifier) @name)
-(property_declaration identifier: (identifier) @name) 

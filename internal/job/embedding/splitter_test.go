@@ -39,12 +39,12 @@ func anotherFunc() int {
 	assert.NoError(t, err)
 
 	// 计算各个函数的token数
-	mainFuncTokens := splitter.countToken(`func main() {
+	mainFuncTokens := splitter.countToken([]byte(`func main() {
 	fmt.Println("Hello, world!")
-}`)
-	anotherFuncTokens := splitter.countToken(`func anotherFunc() int {
+}`))
+	anotherFuncTokens := splitter.countToken([]byte(`func anotherFunc() int {
 	return 1
-}`)
+}`))
 	t.Logf("Token counts - main: %d, anotherFunc: %d", mainFuncTokens, anotherFuncTokens)
 
 	// 使用较小的maxTokensPerChunk，但仍然大于函数token数
@@ -221,7 +221,7 @@ func veryLongFunc1() {
 		lines = append(lines, fmt.Sprintf("line %d with some content to ensure token count", i))
 	}
 }`
-	singleFuncTokenCount := defaultSplitter.countToken(funcContent)
+	singleFuncTokenCount := defaultSplitter.countToken([]byte(funcContent))
 	t.Logf("Total tokens in single function: %d", singleFuncTokenCount)
 
 	// 计算测试配置
@@ -249,9 +249,6 @@ func veryLongFunc1() {
 			verifyOverlap: func(t *testing.T, chunks []*types.CodeChunk) {
 				// 按函数分组块
 				funcChunks := make(map[string][]*types.CodeChunk)
-				for _, chunk := range chunks {
-					funcChunks[chunk.ParentFunc] = append(funcChunks[chunk.ParentFunc], chunk)
-				}
 
 				// 验证每个函数的块重叠
 				for funcName, funcChunks := range funcChunks {

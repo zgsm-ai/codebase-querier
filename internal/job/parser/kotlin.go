@@ -77,9 +77,9 @@ func (p *KotlinProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query 
 // GetKotlinConfig returns the configuration for Kotlin language
 func GetKotlinConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Kotlin,
-		SitterLanguage:     sitter.NewLanguage(sitterkotlin.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Kotlin),
+		Language:       Kotlin,
+		SitterLanguage: sitter.NewLanguage(sitterkotlin.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Kotlin),
 		SupportedExts:      []string{".kt", ".kts"},
 		Processor:          NewKotlinProcessor(),

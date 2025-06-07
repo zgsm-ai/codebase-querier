@@ -12,7 +12,6 @@ type CodeFile struct {
 
 // CodeChunk represents a chunk of code with associated metadata.
 type CodeChunk struct {
-	Name         string
 	CodebaseId   int64
 	CodebasePath string
 	CodebaseName string
@@ -20,9 +19,8 @@ type CodeChunk struct {
 	Content      []byte // The actual code snippet
 	FilePath     string // The FullPath to the file this block came from
 	StartLine    int    // The 0-indexed starting line number of the block in the original file
+	StartColumn  int    // The 0-indexed starting line number of the block in the original file
 	EndLine      int    // The 0-indexed ending line number of the block in the original file
-	OriginalSize int    // The original size in bytes of this block
+	EndColumn    int    // The 0-indexed ending line number of the block in the original file
 	TokenCount   int    // The number of tokens in this block
-	ParentFunc   string
-	ParentClass  string
 }

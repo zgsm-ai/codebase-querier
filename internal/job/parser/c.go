@@ -71,9 +71,9 @@ func (p *CProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *sitt
 // GetCConfig returns the configuration for C language
 func GetCConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           C,
-		SitterLanguage:     sitter.NewLanguage(sitterc.Language()),
-		chunkQueryPath:     makeChunkQueryPath(C),
+		Language:       C,
+		SitterLanguage: sitter.NewLanguage(sitterc.Language()),
+
 		structureQueryPath: makeStructureQueryPath(C),
 		SupportedExts:      []string{".c", ".h"},
 		Processor:          NewCProcessor(),

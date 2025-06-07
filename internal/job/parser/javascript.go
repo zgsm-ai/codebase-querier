@@ -74,9 +74,9 @@ func (p *JavaScriptProcessor) ProcessStructureMatch(match *sitter.QueryMatch, qu
 // GetJavaScriptConfig returns the configuration for JavaScript language
 func GetJavaScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           JavaScript,
-		SitterLanguage:     sitter.NewLanguage(sitterjavascript.Language()),
-		chunkQueryPath:     makeChunkQueryPath(JavaScript),
+		Language:       JavaScript,
+		SitterLanguage: sitter.NewLanguage(sitterjavascript.Language()),
+
 		structureQueryPath: makeStructureQueryPath(JavaScript),
 		SupportedExts:      []string{".js", ".jsx"},
 		Processor:          NewJavaScriptProcessor(),
@@ -86,9 +86,9 @@ func GetJavaScriptConfig() *LanguageConfig {
 // GetTypeScriptConfig returns the configuration for TypeScript language
 func GetTypeScriptConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           TypeScript,
-		SitterLanguage:     sitter.NewLanguage(sittertypescript.LanguageTypescript()),
-		chunkQueryPath:     makeChunkQueryPath(TypeScript),
+		Language:       TypeScript,
+		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTypescript()),
+
 		structureQueryPath: makeStructureQueryPath(TypeScript),
 		SupportedExts:      []string{".ts"},
 		Processor:          NewJavaScriptProcessor(),
@@ -98,9 +98,9 @@ func GetTypeScriptConfig() *LanguageConfig {
 // GetTSXConfig returns the configuration for TSX language
 func GetTSXConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           TSX,
-		SitterLanguage:     sitter.NewLanguage(sittertypescript.LanguageTSX()),
-		chunkQueryPath:     makeChunkQueryPath(TSX),
+		Language:       TSX,
+		SitterLanguage: sitter.NewLanguage(sittertypescript.LanguageTSX()),
+
 		structureQueryPath: makeStructureQueryPath(TSX),
 		SupportedExts:      []string{".tsx"},
 		Processor:          NewJavaScriptProcessor(),

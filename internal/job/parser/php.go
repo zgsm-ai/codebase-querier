@@ -76,9 +76,9 @@ func (p *PHPProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *si
 // GetPhpConfig returns the configuration for PHP language
 func GetPhpConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           PHP,
-		SitterLanguage:     sitter.NewLanguage(sitterphp.LanguagePHP()),
-		chunkQueryPath:     makeChunkQueryPath(PHP),
+		Language:       PHP,
+		SitterLanguage: sitter.NewLanguage(sitterphp.LanguagePHP()),
+
 		structureQueryPath: makeStructureQueryPath(PHP),
 		SupportedExts:      []string{".php", ".phtml"},
 		Processor:          NewPHPProcessor(),

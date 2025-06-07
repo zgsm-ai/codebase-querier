@@ -83,9 +83,9 @@ func (p *ScalaProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query *
 // GetScalaConfig returns the configuration for Scala language
 func GetScalaConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           Scala,
-		SitterLanguage:     sitter.NewLanguage(sitterscala.Language()),
-		chunkQueryPath:     makeChunkQueryPath(Scala),
+		Language:       Scala,
+		SitterLanguage: sitter.NewLanguage(sitterscala.Language()),
+
 		structureQueryPath: makeStructureQueryPath(Scala),
 		SupportedExts:      []string{".scala"},
 		Processor:          NewScalaProcessor(),

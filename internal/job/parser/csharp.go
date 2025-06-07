@@ -78,9 +78,9 @@ func (p *CSharpProcessor) ProcessStructureMatch(match *sitter.QueryMatch, query 
 // GetCSharpConfig returns the configuration for C# language
 func GetCSharpConfig() *LanguageConfig {
 	return &LanguageConfig{
-		Language:           CSharp,
-		SitterLanguage:     sitter.NewLanguage(sittercsharp.Language()),
-		chunkQueryPath:     makeChunkQueryPath(CSharp),
+		Language:       CSharp,
+		SitterLanguage: sitter.NewLanguage(sittercsharp.Language()),
+
 		structureQueryPath: makeStructureQueryPath(CSharp),
 		SupportedExts:      []string{".cs"},
 		Processor:          NewCSharpProcessor(),
