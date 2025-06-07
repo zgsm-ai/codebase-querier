@@ -1,4 +1,4 @@
-package codegraph
+package structure
 
 import (
 	"testing"

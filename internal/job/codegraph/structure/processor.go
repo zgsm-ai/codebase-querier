@@ -1,9 +1,8 @@
-package codegraph
+package structure
 
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 
@@ -44,14 +43,11 @@ func (p *BaseProcessor) ProcessDefinitionNode(
 
 	for _, capture := range match.Captures {
 		captureName := query.CaptureNames()[capture.Index]
-		switch captureName {
-		case "name":
+		if captureName == "name" {
 			nameNode = &capture.Node
-		default:
-			if strings.HasSuffix(captureName, "_declaration") {
-				defNode = &capture.Node
-				defType = captureName
-			}
+		} else if defNode == nil { // 使用第一个非 name 的捕获作为定义类型
+			defNode = &capture.Node
+			defType = captureName
 		}
 	}
 

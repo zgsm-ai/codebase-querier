@@ -1,16 +1,16 @@
-package codegraph
+package structure
 
 import (
 	"embed"
 	"fmt"
+
 	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 )
 
-//go:embed queries/**/*.scm
+//go:embed queries/*.scm
 var scmFS embed.FS
 
 const queryBaseDir = "queries"
-const structureSubDir = "structure"
 const queryExt = ".scm"
 
 var languageQueryConfig map[parser.Language]string
@@ -29,5 +29,5 @@ func init() {
 }
 
 func makeStructureQueryPath(lang parser.Language) string {
-	return queryBaseDir + "/" + structureSubDir + "/" + string(lang) + queryExt
+	return queryBaseDir + "/" + string(lang) + queryExt
 }

@@ -1,4 +1,4 @@
-package codegraph
+package structure
 
 import "github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 
