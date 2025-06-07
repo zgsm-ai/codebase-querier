@@ -26,6 +26,7 @@ type indexJob struct {
 	graphTaskPool     *ants.Pool
 	messageQueue      mq.MessageQueue
 	consumerGroup     string // 消费者组名称
+
 }
 
 func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
@@ -106,7 +107,7 @@ func (i *indexJob) Start() {
 func (i *indexJob) processMessage(msg *types.Message) {
 	syncMsg, err := parseSyncMessage(msg)
 	if err != nil {
-		i.Logger.Errorf("parse sync message failed for message %s: %v. Nacking message.", msg.ID, err)
+		i.Logger.Errorf("parse sync message failed for message %s: %v. nack message.", msg.ID, err)
 		err := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 		if err != nil {
 			i.Logger.Errorf("failed to Nack invalid message %s: %v", msg.ID, err)
@@ -123,11 +124,23 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		return
 	}
 
+	// 本次同步的元数据列表
+	syncFileModeMap, medataFileList, err := i.svcCtx.CodebaseStore.GetSyncFileListCollapse(i.ctx, syncMsg.CodebasePath)
+	if err != nil {
+		i.Logger.Errorf("index job GetSyncFileListCollapse err:%w", err)
+		return
+	}
+	if len(syncFileModeMap) == 0 {
+		i.Logger.Errorf("sync file list is nil, not process %v", syncMsg)
+		return
+	}
+
 	embeddingCtx, embeddingTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
 	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
-	embeddingProcessor, err := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg)
+	embeddingProcessor, err := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg, syncFileModeMap)
 	if err != nil {
-		i.Logger.Errorf("failed to create embedding processor for message %s: %v", msg.ID, err)
+		i.Logger.Errorf("failed to create embedding processor for message %s: %v", syncMsg, err)
+		embeddingTimeoutCancel()
 	} else {
 		errEmbeddingSubmit := i.embeddingTaskPool.Submit(func() {
 			defer embeddingTimeoutCancel() // Cancel context when the goroutine finishes
@@ -152,9 +165,10 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		}
 	}
 
-	codegraphProcessor, err := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg)
+	codegraphProcessor, err := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg, syncFileModeMap)
 	if err != nil {
 		i.Logger.Errorf("failed to create codegraph processor for message %s: %v", msg.ID, err)
+		graphTimeoutCancel()
 	} else {
 		errGraphSubmit := i.graphTaskPool.Submit(func() {
 			defer graphTimeoutCancel() // Cancel context when the goroutine finishes
@@ -182,6 +196,10 @@ func (i *indexJob) processMessage(msg *types.Message) {
 	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
 		i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
+	}
+	// 当调用链和嵌入任务都成功时，清理元数据文件。
+	if err = i.svcCtx.CodebaseStore.BatchDelete(i.ctx, syncMsg.CodebasePath, medataFileList); err != nil {
+		i.Logger.Errorf("failed to delete codebase %s metadata : %v, err: %v", syncMsg.CodebasePath, medataFileList, err)
 	}
 }
 

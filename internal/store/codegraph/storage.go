@@ -25,6 +25,7 @@ type GraphStore interface {
 	// Close 数据库操作
 	Close() error
 	DeleteAll(ctx context.Context) error
+	Delete(ctx context.Context, files []string) error
 }
 
 // 键前缀

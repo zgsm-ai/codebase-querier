@@ -3,9 +3,7 @@ package job
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -14,7 +12,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 )
 
 const (
@@ -22,23 +19,29 @@ const (
 )
 
 type embeddingProcessor struct {
-	ctx            context.Context
-	svcCtx         *svc.ServiceContext
-	msg            *types.CodebaseSyncMessage
-	logger         logx.Logger
-	taskHistoryId  int64
-	totalFileCnt   int
-	successFileCnt int
-	failedFileCnt  int
-	ignoreFileCnt  int
+	ctx             context.Context
+	svcCtx          *svc.ServiceContext
+	msg             *types.CodebaseSyncMessage
+	logger          logx.Logger
+	syncFileModeMap map[string]string
+	taskHistoryId   int64
+	totalFileCnt    int
+	successFileCnt  int
+	failedFileCnt   int
+	ignoreFileCnt   int
 }
 
-func NewEmbeddingProcessor(ctx context.Context, svcCtx *svc.ServiceContext, msg *types.CodebaseSyncMessage) (Processor, error) {
+func NewEmbeddingProcessor(ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	msg *types.CodebaseSyncMessage,
+	syncFileModeMap map[string]string,
+) (Processor, error) {
 	return &embeddingProcessor{
-		ctx:    ctx,
-		svcCtx: svcCtx,
-		msg:    msg,
-		logger: logx.WithContext(ctx),
+		ctx:             ctx,
+		svcCtx:          svcCtx,
+		msg:             msg,
+		syncFileModeMap: syncFileModeMap,
+		logger:          logx.WithContext(ctx),
 	}, nil
 }
 
@@ -53,46 +56,28 @@ func (t *embeddingProcessor) Process() error {
 			return err
 		}
 
-		syncFileList, medataFileList, err := t.getSyncFileListCollapse()
-		if err != nil {
-			return err
-		}
-		if len(syncFileList) == 0 {
-			return fmt.Errorf("sync file list is nil, not process %v", t.msg)
-		}
-
 		// TODO 并发处理任务
-		// fileCnt := len(syncFileList)
+		// fileCnt := len(syncFileMap)
 		// maxConcurrency := t.svcCtx.Config.IndexTask.EmbeddingTask.MaxConcurrency
 
-		totalFileCnt := len(syncFileList)
+		t.totalFileCnt = len(t.syncFileModeMap)
 		//TODO ignore cnt
-		successFileCnt := 0
-		failedFileCnt := 0
-		ignoreFileCnt := 0
-		for k, v := range syncFileList {
+		for k, v := range t.syncFileModeMap {
 			select {
 			// timeout
 			case <-t.ctx.Done():
 				t.logger.Errorf("embedding embeddingProcessor %d timeout", t.taskHistoryId)
 				return errs.RunTimeout
 			default:
-				if err = t.processFile(&types.SyncFile{Path: k, Op: types.FileOp(v)}); err != nil {
+				if err := t.processFile(&types.SyncFile{Path: k, Op: types.FileOp(v)}); err != nil {
 					t.logger.Errorf("update embedding embeddingProcessor file %s failed: %v", k, err)
-					failedFileCnt++
+					t.failedFileCnt++
 				} else {
-					successFileCnt++
+					t.successFileCnt++
 				}
 			}
 
 		}
-		t.totalFileCnt = totalFileCnt
-		t.successFileCnt = successFileCnt
-		t.failedFileCnt = failedFileCnt
-		t.ignoreFileCnt = ignoreFileCnt
-
-		// 删除元数据文件
-		t.deleteProcessedSyncMetadata(medataFileList)
 
 		// update embeddingProcessor when success
 		t.updateTaskSuccess()
@@ -105,7 +90,8 @@ func (t *embeddingProcessor) Process() error {
 		return err
 	}
 
-	t.logger.Infof("embedding embeddingProcessor end successfully, cost: %d s, : %v", time.Since(start), t.msg)
+	t.logger.Infof("embedding embeddingProcessor end successfully, cost: %d s, msg: %v, total: %d, success: %d, failed: %d",
+		time.Since(start), t.msg, t.totalFileCnt, t.successFileCnt, t.failedFileCnt)
 	return nil // 任务成功，返回 nil
 }
 
@@ -166,57 +152,6 @@ func (t *embeddingProcessor) initTaskHistory() error {
 	return nil
 }
 
-func (t *embeddingProcessor) getSyncFileListCollapse() (map[string]string, []string, error) {
-	// 根据元数据获取代码文件列表
-	var syncFileList map[string]string
-
-	// 递归目录，进行处理，并发
-	// 获取代码文件列表
-	list, err := t.svcCtx.CodebaseStore.List(t.ctx, t.msg.CodebasePath, types.SyncMedataDir, types.ListOptions{})
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(list) == 0 {
-		return nil, nil, errors.New("embeddingProcessor metadata dir is empty")
-	}
-	//TODO collapse list to fileList
-	// 对目录下的文件按名字升序排序
-	treeSet := utils.NewTimestampTreeSet()
-	// sort
-	for _, f := range list {
-		treeSet.Add(f.Name)
-	}
-
-	metaFileNames := make([]string, 0)
-	it := treeSet.Iterator()
-	for it.Next() {
-		metadataFile := it.Value().(string)
-		metaFileNames = append(metaFileNames, metadataFile)
-		syncMetaData, err := t.svcCtx.CodebaseStore.Read(t.ctx, t.msg.CodebasePath, filepath.Join(types.SyncMedataDir, metadataFile), types.ReadOptions{})
-		if err != nil {
-			t.logger.Errorf("read metadata file %v failed: %v", metadataFile, err)
-			continue
-		}
-		if syncMetaData == nil {
-			t.logger.Errorf("sync file %s metadata is empty", metadataFile)
-			continue
-		}
-		var syncMetaObj *types.SyncMetadata
-
-		err = json.Unmarshal(syncMetaData, &syncMetaObj)
-		if err != nil {
-			t.logger.Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
-		}
-		files := syncMetaObj.FileList
-		for k, v := range files {
-			// add delete modify
-			syncFileList[k] = v
-		}
-
-	}
-	return syncFileList, metaFileNames, nil
-}
-
 func (t *embeddingProcessor) processFile(syncFile *types.SyncFile) error {
 
 	t.logger.Debugf("start process file %v", syncFile)
@@ -271,13 +206,4 @@ func (t *embeddingProcessor) processDeleteFile(file *types.SyncFile) error {
 	resp, err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, del)
 	t.logger.Debugf("process delete file resp:%v", resp)
 	return err
-}
-
-func (t *embeddingProcessor) deleteProcessedSyncMetadata(metadataFileNames []string) {
-	for _, n := range metadataFileNames {
-		if err := t.svcCtx.CodebaseStore.Delete(t.ctx, t.msg.CodebasePath, filepath.Join(types.SyncMedataDir, n)); err != nil {
-			t.logger.Errorf("delete metadata file %s error: %v", n, err)
-		}
-	}
-
 }

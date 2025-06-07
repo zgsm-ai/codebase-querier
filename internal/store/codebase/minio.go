@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,10 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/wrapper"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -31,9 +35,65 @@ var _ Store = &minioCodebase{}
 
 type minioCodebase struct {
 	cfg    config.CodeBaseStoreConf
-	client MinioClient
+	client wrapper.MinioClient
 	logger logx.Logger
 	mu     sync.RWMutex
+}
+
+func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error) {
+	exists, err := m.Exists(ctx, codebasePath, types.EmptyString)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !exists {
+		return nil, nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+	}
+	// filepath -> mode(add delete modify)
+	// 根据元数据获取代码文件列表
+	// 递归目录，进行处理，并发
+	// 获取代码文件列表
+	list, err := m.List(ctx, codebasePath, types.SyncMedataDir, types.ListOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(list) == 0 {
+		return nil, nil, errors.New("embeddingProcessor metadata dir is empty")
+	}
+	//TODO collapse list to fileList
+	// 对目录下的文件按名字升序排序
+	treeSet := utils.NewTimestampTreeSet()
+	// sort
+	for _, f := range list {
+		treeSet.Add(f.Name)
+	}
+
+	it := treeSet.Iterator()
+	for it.Next() {
+		metadataFile := it.Value().(string)
+		metaFileList = append(metaFileList, metadataFile)
+		syncMetaData, err := m.Read(ctx, codebasePath, filepath.Join(types.SyncMedataDir, metadataFile), types.ReadOptions{})
+		if err != nil {
+			m.logger.Errorf("read metadata file %v failed: %v", metadataFile, err)
+			continue
+		}
+		if syncMetaData == nil {
+			m.logger.Errorf("sync file %s metadata is empty", metadataFile)
+			continue
+		}
+		var syncMetaObj *types.SyncMetadata
+
+		err = json.Unmarshal(syncMetaData, &syncMetaObj)
+		if err != nil {
+			m.logger.Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
+		}
+		files := syncMetaObj.FileList
+		for k, v := range files {
+			// add delete modify
+			fileModeMap[k] = v
+		}
+
+	}
+	return fileModeMap, metaFileList, nil
 }
 
 func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadSeekCloser, error) {
@@ -59,7 +119,7 @@ func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store,
 
 	return &minioCodebase{
 		cfg:    cfg,
-		client: NewMinioClientWrapper(client),
+		client: wrapper.NewMinioClientWrapper(client),
 		logger: logx.WithContext(ctx),
 	}, nil
 }
@@ -388,18 +448,24 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			return fmt.Errorf("failed to list objects: %w", object.Err)
 		}
 
-		// 构建 WalkContext
+		// Skip empty paths
+		relPath := strings.TrimPrefix(object.Key, prefix)
+		if relPath == "" {
+			continue
+		}
+
+		// 构建 WalkContext，使用相对路径
 		walkCtx := &WalkContext{
-			Path:         object.Key,
-			RelativePath: strings.TrimPrefix(object.Key, prefix),
+			Path:         relPath,
+			RelativePath: relPath,
 			Info: &types.FileInfo{
-				Name:    filepath.Base(object.Key),
+				Name:    filepath.Base(relPath),
 				Size:    object.Size,
 				IsDir:   object.Size == 0 && strings.HasSuffix(object.Key, "/"),
 				ModTime: object.LastModified,
 				Mode:    defaultFileMode,
 			},
-			ParentPath: filepath.Dir(object.Key),
+			ParentPath: filepath.Dir(relPath),
 		}
 
 		// 如果是目录，直接调用 walkFn，传入 nil reader

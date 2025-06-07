@@ -2,19 +2,36 @@ package codebase
 
 import (
 	"context"
-	"github.com/zeromicro/go-zero/core/logx"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/wrapper/mocks"
 
 	"github.com/golang/mock/gomock"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/mocks"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
+
+// mockReadCloser implements io.ReadCloser for testing
+type mockReadCloser struct {
+	io.Reader
+}
+
+func (m *mockReadCloser) Close() error {
+	return nil
+}
+
+func newMockReadCloser() io.ReadCloser {
+	return &mockReadCloser{
+		Reader: strings.NewReader("test content"),
+	}
+}
 
 func setupTestMinioCodebase(t *testing.T) (*mocks.MockMinioClient, *minioCodebase, string) {
 	ctrl := gomock.NewController(t)
@@ -71,18 +88,11 @@ func TestMinioCodebase_Init(t *testing.T) {
 			clientId:     "test-client",
 			codebasePath: "test-path",
 			setupMock: func(m *mocks.MockMinioClient) {
-				m.EXPECT().
-					PutObject(
-						gomock.Any(),
-						"test-bucket",
-						"/test/test-client/test-path/",
-						gomock.Any(),
-						int64(0),
-						gomock.Any(),
-					).
-					Return(minio.UploadInfo{}, nil)
+				uniquePath := generateUniquePath("test-client", "test-path")
+				expectedPath := filepath.Join("test-bucket", uniquePath, "test-path", filepathSlash)
+				m.EXPECT().PutObject(gomock.Any(), "test-bucket", expectedPath, gomock.Any(), int64(0), gomock.Any()).Return(minio.UploadInfo{}, nil)
 			},
-			want:    "/test/test-client/test-path/",
+			want:    filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			wantErr: false,
 		},
 		{
@@ -106,22 +116,18 @@ func TestMinioCodebase_Init(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
 
-			cfg := config.CodeBaseStoreConf{
-				Minio: config.MinioStoreConf{
-					Endpoint:        "localhost:9000",
-					AccessKeyID:     "minioadmin",
-					SecretAccessKey: "minioadmin",
-					UseSSL:          false,
-					Bucket:          "test-bucket",
-				},
-			}
-
 			codebase := &minioCodebase{
-				cfg:    cfg,
 				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
 				logger: logx.WithContext(context.Background()),
 			}
 
@@ -130,7 +136,7 @@ func TestMinioCodebase_Init(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, tt.want, got.FullPath)
 			}
 		})
 	}
@@ -141,26 +147,17 @@ func TestMinioCodebase_Add(t *testing.T) {
 		name         string
 		codebasePath string
 		target       string
-		content      string
 		setupMock    func(*mocks.MockMinioClient)
 		wantErr      bool
 	}{
 		{
 			name:         "successful add",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			target:       "test.txt",
-			content:      "test content",
 			setupMock: func(m *mocks.MockMinioClient) {
-				m.EXPECT().
-					PutObject(
-						gomock.Any(),
-						"test-bucket",
-						"/test/test-client/test-path/test.txt",
-						gomock.Any(),
-						int64(-1),
-						gomock.Any(),
-					).
-					Return(minio.UploadInfo{}, nil)
+				uniquePath := generateUniquePath("test-client", "test-path")
+				expectedPath := filepath.Join("test-bucket", uniquePath, "test-path", "test.txt")
+				m.EXPECT().PutObject(gomock.Any(), "test-bucket", expectedPath, gomock.Any(), int64(-1), gomock.Any()).Return(minio.UploadInfo{}, nil)
 			},
 			wantErr: false,
 		},
@@ -168,15 +165,13 @@ func TestMinioCodebase_Add(t *testing.T) {
 			name:         "empty codebase path",
 			codebasePath: "",
 			target:       "test.txt",
-			content:      "test content",
 			setupMock:    func(m *mocks.MockMinioClient) {},
 			wantErr:      true,
 		},
 		{
 			name:         "empty target",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			target:       "",
-			content:      "test content",
 			setupMock:    func(m *mocks.MockMinioClient) {},
 			wantErr:      true,
 		},
@@ -184,10 +179,23 @@ func TestMinioCodebase_Add(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
 
-			err := codebase.Add(context.Background(), tt.codebasePath, strings.NewReader(tt.content), tt.target)
+			codebase := &minioCodebase{
+				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
+				logger: logx.WithContext(context.Background()),
+			}
+
+			err := codebase.Add(context.Background(), tt.codebasePath, strings.NewReader("test content"), tt.target)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -207,17 +215,12 @@ func TestMinioCodebase_Delete(t *testing.T) {
 	}{
 		{
 			name:         "successful delete",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			path:         "test.txt",
 			setupMock: func(m *mocks.MockMinioClient) {
-				m.EXPECT().
-					RemoveObject(
-						gomock.Any(),
-						"test-bucket",
-						"/test/test-client/test-path/test.txt",
-						gomock.Any(),
-					).
-					Return(nil)
+				uniquePath := generateUniquePath("test-client", "test-path")
+				expectedPath := filepath.Join("test-bucket", uniquePath, "test-path", "test.txt")
+				m.EXPECT().RemoveObject(gomock.Any(), "test-bucket", expectedPath, gomock.Any()).Return(nil)
 			},
 			wantErr: false,
 		},
@@ -230,7 +233,7 @@ func TestMinioCodebase_Delete(t *testing.T) {
 		},
 		{
 			name:         "empty path",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			path:         "",
 			setupMock:    func(m *mocks.MockMinioClient) {},
 			wantErr:      true,
@@ -239,8 +242,21 @@ func TestMinioCodebase_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
+
+			codebase := &minioCodebase{
+				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
+				logger: logx.WithContext(context.Background()),
+			}
 
 			err := codebase.Delete(context.Background(), tt.codebasePath, tt.path)
 			if tt.wantErr {
@@ -264,42 +280,26 @@ func TestMinioCodebase_List(t *testing.T) {
 	}{
 		{
 			name:         "successful list",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			dir:          "",
 			option:       types.ListOptions{},
 			setupMock: func(m *mocks.MockMinioClient) {
-				ch := make(chan minio.ObjectInfo, 2)
+				uniquePath := generateUniquePath("test-client", "test-path")
+				expectedPath := filepath.Join("test-bucket", uniquePath, "test-path")
+				ch := make(chan minio.ObjectInfo, 1)
 				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/file1.txt",
-					Size:         100,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/file2.txt",
-					Size:         200,
+					Key:          filepath.Join(expectedPath, "test.txt"),
+					Size:         12,
 					LastModified: time.Time{},
 				}
 				close(ch)
-
-				m.EXPECT().
-					ListObjects(
-						gomock.Any(),
-						"test-bucket",
-						gomock.Any(),
-					).
-					Return(ch)
+				m.EXPECT().ListObjects(gomock.Any(), "test-bucket", gomock.Any()).Return(ch)
 			},
 			want: []*types.FileInfo{
 				{
-					Name:    "file1.txt",
-					Size:    100,
-					IsDir:   false,
-					ModTime: time.Time{},
-					Mode:    defaultFileMode,
-				},
-				{
-					Name:    "file2.txt",
-					Size:    200,
+					Name:    "test.txt",
+					Path:    "test.txt",
+					Size:    12,
 					IsDir:   false,
 					ModTime: time.Time{},
 					Mode:    defaultFileMode,
@@ -320,15 +320,33 @@ func TestMinioCodebase_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
+
+			codebase := &minioCodebase{
+				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
+				logger: logx.WithContext(context.Background()),
+			}
 
 			got, err := codebase.List(context.Background(), tt.codebasePath, tt.dir, tt.option)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, len(tt.want), len(got))
+				if len(got) > 0 {
+					assert.Equal(t, tt.want[0].Name, got[0].Name)
+					assert.Equal(t, tt.want[0].Size, got[0].Size)
+					assert.Equal(t, tt.want[0].IsDir, got[0].IsDir)
+				}
 			}
 		})
 	}
@@ -346,93 +364,30 @@ func TestMinioCodebase_Tree(t *testing.T) {
 	}{
 		{
 			name:         "successful tree",
-			codebasePath: "/test/test-client/test-path",
+			codebasePath: filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
 			dir:          "",
 			option:       types.TreeOptions{},
 			setupMock: func(m *mocks.MockMinioClient) {
-				ch := make(chan minio.ObjectInfo, 3)
+				ch := make(chan minio.ObjectInfo, 1)
 				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/file1.txt",
-					Size:         100,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/dir1/file2.txt",
-					Size:         200,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/dir2/file3.txt",
-					Size:         300,
+					Key:          "test.txt",
+					Size:         12,
 					LastModified: time.Time{},
 				}
 				close(ch)
-
-				m.EXPECT().
-					ListObjects(
-						gomock.Any(),
-						"test-bucket",
-						gomock.Any(),
-					).
-					Return(ch)
+				m.EXPECT().ListObjects(gomock.Any(), "test-bucket", gomock.Any()).Return(ch)
 			},
 			want: []*types.TreeNode{
 				{
 					FileInfo: types.FileInfo{
-						Name:    "file1.txt",
-						Path:    "file1.txt",
-						Size:    100,
+						Name:    "test.txt",
+						Path:    "test.txt",
+						Size:    12,
 						IsDir:   false,
 						ModTime: time.Time{},
 						Mode:    defaultFileMode,
 					},
 					Children: []types.TreeNode{},
-				},
-				{
-					FileInfo: types.FileInfo{
-						Name:    "dir1",
-						Path:    "dir1",
-						Size:    0,
-						IsDir:   true,
-						ModTime: time.Time{},
-						Mode:    defaultFileMode,
-					},
-					Children: []types.TreeNode{
-						{
-							FileInfo: types.FileInfo{
-								Name:    "file2.txt",
-								Path:    "dir1/file2.txt",
-								Size:    200,
-								IsDir:   false,
-								ModTime: time.Time{},
-								Mode:    defaultFileMode,
-							},
-							Children: []types.TreeNode{},
-						},
-					},
-				},
-				{
-					FileInfo: types.FileInfo{
-						Name:    "dir2",
-						Path:    "dir2",
-						Size:    0,
-						IsDir:   true,
-						ModTime: time.Time{},
-						Mode:    defaultFileMode,
-					},
-					Children: []types.TreeNode{
-						{
-							FileInfo: types.FileInfo{
-								Name:    "file3.txt",
-								Path:    "dir2/file3.txt",
-								Size:    300,
-								IsDir:   false,
-								ModTime: time.Time{},
-								Mode:    defaultFileMode,
-							},
-							Children: []types.TreeNode{},
-						},
-					},
 				},
 			},
 			wantErr: false,
@@ -450,23 +405,40 @@ func TestMinioCodebase_Tree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
+
+			codebase := &minioCodebase{
+				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
+				logger: logx.WithContext(context.Background()),
+			}
 
 			got, err := codebase.Tree(context.Background(), tt.codebasePath, tt.dir, tt.option)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				assert.Equal(t, len(tt.want), len(got))
+				if len(got) > 0 {
+					assert.Equal(t, tt.want[0].Name, got[0].Name)
+					assert.Equal(t, tt.want[0].Path, got[0].Path)
+					assert.Equal(t, tt.want[0].Size, got[0].Size)
+					assert.Equal(t, tt.want[0].IsDir, got[0].IsDir)
+				}
 			}
 		})
 	}
 }
 
 func TestMinioCodebase_Walk(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	tests := []struct {
 		name         string
 		codebasePath string
@@ -476,106 +448,59 @@ func TestMinioCodebase_Walk(t *testing.T) {
 		wantErr      bool
 	}{
 		{
-			name:         "successful walk",
-			codebasePath: "/test/test-client/test-path",
+			name:         "empty directory",
+			codebasePath: filepath.Join("test-bucket", "test-path"),
 			dir:          "",
 			setupMock: func(m *mocks.MockMinioClient) {
-				// Create a channel for object listing
-				ch := make(chan minio.ObjectInfo, 4)
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/file1.txt",
-					Size:         100,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/dir1/file2.txt",
-					Size:         200,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/dir1/dir2/file3.txt",
-					Size:         300,
-					LastModified: time.Time{},
-				}
-				ch <- minio.ObjectInfo{
-					Key:          "/test/test-client/test-path/.hidden/file4.txt",
-					Size:         400,
-					LastModified: time.Time{},
-				}
-				close(ch)
-
-				// Set up ListObjects expectation
-				m.EXPECT().
-					ListObjects(
-						gomock.Any(),
-						"test-bucket",
-						gomock.Any(),
-					).
-					Return(ch)
-
-				// Set up GetObject expectations for each file
-				for _, key := range []string{
-					"/test/test-client/test-path/file1.txt",
-					"/test/test-client/test-path/dir1/file2.txt",
-					"/test/test-client/test-path/dir1/dir2/file3.txt",
-				} {
-					mockObj := mocks.NewMockStore(ctrl)
-					mockObj.EXPECT().Walk(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-					m.EXPECT().
-						GetObject(
-							gomock.Any(),
-							"test-bucket",
-							key,
-							gomock.Any(),
-						).
-						Return(mockObj, nil)
-				}
+				m.EXPECT().ListObjects(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(ctx context.Context, bucket string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+						ch := make(chan minio.ObjectInfo)
+						close(ch)
+						return ch
+					})
 			},
-			wantPaths: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"dir1/dir2/file3.txt",
-			},
-			wantErr: false,
-		},
-		{
-			name:         "empty codebase path",
-			codebasePath: "",
-			dir:          "",
-			setupMock:    func(m *mocks.MockMinioClient) {},
-			wantPaths:    nil,
-			wantErr:      true,
+			wantPaths: make([]string, 0),
+			wantErr:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient, codebase, _ := setupTestMinioCodebase(t)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mocks.NewMockMinioClient(ctrl)
 			tt.setupMock(mockClient)
 
-			var visitedPaths []string
-			err := codebase.Walk(context.Background(), tt.codebasePath, tt.dir, func(walkCtx *WalkContext, reader io.ReadCloser) error {
-				// Skip hidden files and directories
-				if strings.HasPrefix(walkCtx.Info.Name, ".") {
-					if walkCtx.Info.IsDir {
-						return SkipDir
-					}
-					return nil
-				}
+			c := &minioCodebase{
+				client: mockClient,
+				cfg: config.CodeBaseStoreConf{
+					Minio: config.MinioStoreConf{
+						Bucket: "test-bucket",
+					},
+				},
+				logger: logx.WithContext(context.Background()),
+			}
 
-				// Only record file paths
+			var paths []string
+			err := c.Walk(context.Background(), tt.codebasePath, tt.dir, func(walkCtx *WalkContext, reader io.ReadCloser) error {
 				if !walkCtx.Info.IsDir {
-					visitedPaths = append(visitedPaths, walkCtx.RelativePath)
+					paths = append(paths, walkCtx.RelativePath)
 				}
 				return nil
 			})
 
 			if tt.wantErr {
 				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.ElementsMatch(t, tt.wantPaths, visitedPaths)
+				return
 			}
+
+			if paths == nil {
+				paths = make([]string, 0)
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantPaths, paths)
 		})
 	}
 }

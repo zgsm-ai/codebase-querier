@@ -57,6 +57,20 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 		return err
 	}
 	err = l.svcCtx.CodebaseStore.Unzip(l.ctx, codebase.Path, body, codebase.Path)
+	// 查找待删除的文件，进行处理
+	fileModeMap, _, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(l.ctx, codebase.Path)
+	var deleteList []string
+	for f, m := range fileModeMap {
+		if m == types.FileOpDelete {
+			deleteList = append(deleteList, f)
+		}
+	}
+	err = l.svcCtx.CodebaseStore.BatchDelete(l.ctx, codebase.Path, deleteList)
+	if err != nil {
+		l.Logger.Errorf("delete files error", err)
+		return err
+	}
+
 	if err != nil {
 		return err
 	}

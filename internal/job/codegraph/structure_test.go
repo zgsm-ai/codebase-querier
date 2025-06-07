@@ -1,6 +1,7 @@
 package codegraph
 
 import (
+	treeparser "github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"testing"
 
@@ -69,21 +70,21 @@ var TestVar = "test"
 
 	for _, def := range structure.Definitions {
 		switch def.Type {
-		case parser.Struct:
+		case string(treeparser.Struct):
 			if def.Name == "TestStruct" {
 				foundStruct = true
 			}
-		case parser.Interface:
+		case string(treeparser.Interface):
 			if def.Name == "TestInterface" {
 				foundInterface = true
 			}
-		case parser.Function:
+		case string(treeparser.Function):
 			if def.Name == "TestFunc" {
 				foundFunction = true
 			} else if def.Name == "TestMethod" {
 				foundMethod = true
 			}
-		case parser.Variable:
+		case string(treeparser.Variable):
 			if def.Name == "TestConst" {
 				foundConst = true
 			} else if def.Name == "TestVar" {

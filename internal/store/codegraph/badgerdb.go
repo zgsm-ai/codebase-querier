@@ -467,7 +467,7 @@ func (b BadgerDBGraph) DeleteAll(ctx context.Context) error {
 		return err
 	}
 
-	// 执行一次压缩
+	// 执行一次gc
 	return b.db.RunValueLogGC(0.1)
 }
 
@@ -491,4 +491,24 @@ func (b BadgerDBGraph) findSymbolInDocByRange(document *codegraphpb.Document, sy
 		}
 	}
 	return nil
+}
+
+func (b BadgerDBGraph) Delete(ctx context.Context, files []string) error {
+	logx.Debugf("start to delete docs:%v", files)
+	if len(files) == 0 {
+		return nil
+	}
+	var docKeys [][]byte
+	for _, v := range files {
+		if v == types.EmptyString {
+			logx.Errorf("Delete docs, file path is empty")
+			continue
+		}
+		docKeys = append(docKeys, DocKey(v))
+		docKeys = append(docKeys, StructKey(v))
+	}
+
+	err := b.db.DropPrefix(docKeys...)
+	logx.Debugf("docs delete end:%v", docKeys)
+	return err
 }

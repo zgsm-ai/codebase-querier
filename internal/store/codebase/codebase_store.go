@@ -67,7 +67,10 @@ type Store interface {
 	// BatchDelete deletes multiple files or directories
 	// paths: list of paths to delete
 	BatchDelete(ctx context.Context, codebasePath string, paths []string) error
+
 	DeleteAll(ctx context.Context, codebasePath string) error
+
+	GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error)
 }
 
 // WalkContext provides context information during directory traversal

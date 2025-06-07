@@ -30,6 +30,3 @@ main.exe
 /test/testdata/
 *.iml
 *.scip
-/codebase-indexer-demo/
-/example/
-/references/

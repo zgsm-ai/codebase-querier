@@ -8,11 +8,16 @@ import (
 	"time"
 )
 
+const tmpLogDir = "/tmp/logs"
+
 // newFileLogWriter initializes the indexFileLogWriter
 func newFileLogWriter(logDir string, fileNamePrefix string) (io.WriteCloser, error) {
+	if logDir == "" {
+		logDir = tmpLogDir
+	}
 	// Create log directory if it doesn't exist
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create log directory: %w", err)
+		return nil, fmt.Errorf("failed to create log directory %s, err: %w", logDir, err)
 	}
 
 	// Open log file
@@ -31,6 +36,7 @@ func logFileName(filenamePrefix string) string {
 func indexLogInfo(w io.Writer, format string, args ...interface{}) {
 	if w == nil {
 		fmt.Printf(format, args...)
+		return
 	}
 	format = fmt.Sprintf("[%s] - %s\n", time.Now().Format("2006-01-02 15:04:05"), format)
 	_, _ = fmt.Fprintf(w, format, args...)
