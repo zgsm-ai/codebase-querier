@@ -3,10 +3,11 @@ package scip
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
-	"path/filepath"
 )
 
 const (

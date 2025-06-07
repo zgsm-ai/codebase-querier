@@ -2,9 +2,12 @@ package scip
 
 import (
 	"context"
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/mocks"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/mocks"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +31,23 @@ func TestIndexGenerator_Generate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create test directory under /tmp
+	testDir := filepath.Join("/tmp", "test")
+	err := os.MkdirAll(testDir, 0755)
+	assert.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	// Determine the echo command based on OS
+	var echoCmd string
+	var echoArgs []string
+	if runtime.GOOS == "windows" {
+		echoCmd = "cmd"
+		echoArgs = []string{"/c", "echo", "scip-go"}
+	} else {
+		echoCmd = "echo"
+		echoArgs = []string{"scip-go"}
+	}
+
 	tests := []struct {
 		name         string
 		codebasePath string
@@ -38,13 +58,13 @@ func TestIndexGenerator_Generate(t *testing.T) {
 	}{
 		{
 			name:         "successful generation",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					MkDirs(gomock.Any(), "/tmp/test", types.CodebaseIndexDir).
+					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
 					Return(nil)
 				m.EXPECT().
-					Stat(gomock.Any(), "/tmp/test", "/tmp/test/go.mod").
+					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
 			config: &Config{
@@ -56,8 +76,8 @@ func TestIndexGenerator_Generate(t *testing.T) {
 							Name: "scip-go",
 							Commands: []*Command{
 								{
-									Base: "echo",
-									Args: []string{"scip-go"},
+									Base: echoCmd,
+									Args: echoArgs,
 								},
 							},
 						},
@@ -68,27 +88,27 @@ func TestIndexGenerator_Generate(t *testing.T) {
 		},
 		{
 			name:         "failed to create output directory",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					MkDirs(gomock.Any(), "/tmp/test", types.CodebaseIndexDir).
+					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
 					Return(assert.AnError)
 			},
 			config: &Config{
 				Languages: []*LanguageConfig{},
 			},
 			wantErr:     true,
-			errContains: "failed to create output directory",
+			errContains: "failed to create codebase index directory",
 		},
 		{
 			name:         "no matching language configuration",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					MkDirs(gomock.Any(), "/tmp/test", types.CodebaseIndexDir).
+					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
 					Return(nil)
 				m.EXPECT().
-					Stat(gomock.Any(), "/tmp/test", "/tmp/test/go.mod").
+					Stat(gomock.Any(), testDir, "go.mod").
 					Return(nil, assert.AnError)
 			},
 			config: &Config{
@@ -126,6 +146,12 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create test directory under /tmp
+	testDir := filepath.Join("/tmp", "test")
+	err := os.MkdirAll(testDir, 0755)
+	assert.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
 	tests := []struct {
 		name         string
 		codebasePath string
@@ -138,10 +164,10 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 	}{
 		{
 			name:         "language found without build tool",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					Stat(gomock.Any(), "/tmp/test", "/tmp/test/go.mod").
+					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
 			config: &Config{
@@ -161,10 +187,10 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 		},
 		{
 			name:         "language found with build tool",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					Stat(gomock.Any(), "/tmp/test", "/tmp/test/go.mod").
+					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
 			config: &Config{
@@ -193,10 +219,10 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 		},
 		{
 			name:         "no language found",
-			codebasePath: "/tmp/test",
+			codebasePath: testDir,
 			setupMock: func(m *mocks.MockStore) {
 				m.EXPECT().
-					Stat(gomock.Any(), "/tmp/test", "/tmp/test/go.mod").
+					Stat(gomock.Any(), testDir, "go.mod").
 					Return(nil, assert.AnError)
 			},
 			config: &Config{
@@ -220,21 +246,17 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 			tt.setupMock(store)
 
 			generator := NewIndexGenerator(tt.config, store)
-			index, build, err := generator.detectLanguageAndTool(context.Background(), tt.codebasePath)
+			indexTool, buildTool, err := generator.detectLanguageAndTool(context.Background(), tt.codebasePath)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
-				assert.Nil(t, index)
-				assert.Nil(t, build)
+				assert.Nil(t, indexTool)
+				assert.Nil(t, buildTool)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.wantIndex.Name, index.Name)
-				if tt.wantBuild != nil {
-					assert.Equal(t, tt.wantBuild.Name, build.Name)
-				} else {
-					assert.Nil(t, build)
-				}
+				assert.Equal(t, tt.wantIndex, indexTool)
+				assert.Equal(t, tt.wantBuild, buildTool)
 			}
 		})
 	}
@@ -248,13 +270,13 @@ func TestIndexOutputDir(t *testing.T) {
 	}{
 		{
 			name:         "simple path",
-			codebasePath: "/tmp/test",
-			expected:     filepath.Join("/tmp/test", types.CodebaseIndexDir),
+			codebasePath: filepath.Join("/tmp", "test"),
+			expected:     filepath.Join("/tmp", "test", types.CodebaseIndexDir),
 		},
 		{
 			name:         "nested path",
-			codebasePath: "/tmp/test/nested/path",
-			expected:     filepath.Join("/tmp/test/nested/path", types.CodebaseIndexDir),
+			codebasePath: filepath.Join("/tmp", "test", "nested", "path"),
+			expected:     filepath.Join("/tmp", "test", "nested", "path", types.CodebaseIndexDir),
 		},
 	}
 

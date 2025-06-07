@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -181,14 +182,26 @@ func TestCommandExecutor_Execute(t *testing.T) {
 	// Create a temporary directory for test
 	tmpDir := t.TempDir()
 
+	// Determine script extension and content based on OS
+	var scriptExt, successContent, failContent string
+	if runtime.GOOS == "windows" {
+		scriptExt = ".bat"
+		successContent = "@echo off\nexit /b 0"
+		failContent = "@echo off\nexit /b 1"
+	} else {
+		scriptExt = ".sh"
+		successContent = "#!/bin/sh\nexit 0"
+		failContent = "#!/bin/sh\nexit 1"
+	}
+
 	// Create a test script that will succeed
-	successScript := filepath.Join(tmpDir, "success.sh")
-	err := os.WriteFile(successScript, []byte("#!/bin/sh\nexit 0"), 0755)
+	successScript := filepath.Join(tmpDir, "success"+scriptExt)
+	err := os.WriteFile(successScript, []byte(successContent), 0755)
 	assert.NoError(t, err)
 
 	// Create a test script that will fail
-	failScript := filepath.Join(tmpDir, "fail.sh")
-	err = os.WriteFile(failScript, []byte("#!/bin/sh\nexit 1"), 0755)
+	failScript := filepath.Join(tmpDir, "fail"+scriptExt)
+	err = os.WriteFile(failScript, []byte(failContent), 0755)
 	assert.NoError(t, err)
 
 	tests := []struct {
