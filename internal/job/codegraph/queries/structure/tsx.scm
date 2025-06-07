@@ -3,98 +3,98 @@
 
 ;; Function declarations
 (function_declaration
-  name: (identifier) @name) @function
+  name: (identifier) @name) @function_declaration
 
 ;; Function expressions
 (variable_declarator
   name: (identifier) @name
-  value: (function)) @function
+  value: (function)) @variable_declarator
 
 ;; Arrow functions
 (variable_declarator
   name: (identifier) @name
-  value: (arrow_function)) @function
+  value: (arrow_function)) @variable_declarator
 
 ;; Class declarations
 (class_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @class_declaration
 
 ;; Class expressions
 (variable_declarator
   name: (identifier) @name
-  value: (class)) @class
+  value: (class)) @variable_declarator
 
 ;; Method definitions (inside classes)
 (method_definition
-  name: (property_identifier) @name) @function
+  name: (property_identifier) @name) @method_definition
 
 ;; Interface declarations
 (interface_declaration
-  name: (type_identifier) @name) @interface
+  name: (type_identifier) @name) @interface_declaration
 
 ;; Type alias declarations
 (type_alias_declaration
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @type_alias_declaration
 
 ;; Type declarations
 (type_declaration
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @type_declaration
 
 ;; Enum declarations
 (enum_declaration
-  name: (type_identifier) @name) @enum
+  name: (type_identifier) @name) @enum_declaration
 
 ;; Namespace declarations
 (namespace_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @namespace_declaration
 
 ;; Module declarations
 (module_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @module_declaration
 
 ;; Variable declarations
 (variable_declarator
-  name: (identifier) @name) @variable
+  name: (identifier) @name) @variable_declarator
 
 ;; Constant declarations
 (variable_declarator
   name: (identifier) @name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @variable
+  (#match? @name "^[A-Z][A-Z0-9_]*$")) @variable_declarator
 
 ;; Generic type declarations
 (type_parameter_declaration
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @type_parameter_declaration
 
 ;; Decorator declarations
 (decorator
   expression: (call_expression
-    function: (identifier) @name)) @function
+    function: (identifier) @name)) @decorator
 
 ;; Abstract class declarations
 (class_declaration
   name: (identifier) @name
-  (#has-ancestor? @name abstract_class_declaration)) @class
+  (#has-ancestor? @name abstract_class_declaration)) @class_declaration
 
 ;; Abstract method declarations
 (method_definition
   name: (property_identifier) @name
-  (#has-ancestor? @name abstract_method_declaration)) @function
+  (#has-ancestor? @name abstract_method_declaration)) @method_definition
 
 ;; Mapped type declarations
 (mapped_type_clause
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @mapped_type_clause
 
 ;; Conditional type declarations
 (conditional_type
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @conditional_type
 
 ;; Import type declarations
 (import_type
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @import_type
 
 ;; Export type declarations
 (export_type
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @export_type
 
 ;; JSX Function Components
 (export_statement
@@ -102,7 +102,7 @@
     (variable_declarator
       name: (identifier) @name
       value: (arrow_function
-        body: (jsx_element))))) @function
+        body: (jsx_element))))) @export_statement
 
 ;; JSX Class Components
 (class_declaration
@@ -113,31 +113,31 @@
       (#eq? @render "render")
       body: (statement_block
         (return_statement
-          (jsx_element)))))) @class
+          (jsx_element)))))) @class_declaration
 
 ;; JSX Element declarations (custom components)
 (jsx_element
   open_tag: (jsx_opening_element
-    name: (identifier) @name)) @class
+    name: (identifier) @name)) @jsx_element
 
 ;; JSX Self-closing elements
 (jsx_self_closing_element
-  name: (identifier) @name) @class
+  name: (identifier) @name) @jsx_self_closing_element
 
 ;; JSX Fragment declarations
-(jsx_fragment) @class
+(jsx_fragment) @jsx_fragment
 
 ;; JSX Namespace components
 (jsx_element
   open_tag: (jsx_opening_element
     name: (member_expression
       object: (identifier) @namespace
-      property: (property_identifier) @name))) @class
+      property: (property_identifier) @name))) @jsx_element
 
 ;; JSX Props interface declarations
 (interface_declaration
   name: (type_identifier) @name
-  (#match? @name "^.*Props$")) @interface
+  (#match? @name "^.*Props$")) @interface_declaration
 
 ;; React Hook declarations
 (variable_declaration
@@ -145,7 +145,7 @@
     name: (identifier) @name
     value: (call_expression
       function: (identifier) @hook
-      (#match? @hook "^use[A-Z]")))) @function
+      (#match? @hook "^use[A-Z]")))) @variable_declaration
 
 ;; React Context declarations
 (variable_declaration
@@ -156,21 +156,21 @@
         object: (identifier) @react
         property: (property_identifier) @create
         (#eq? @react "React")
-        (#eq? @create "createContext"))))) @class
+        (#eq? @create "createContext"))))) @class_declaration
 
 ;; React Component type declarations
 (type_alias_declaration
   name: (type_identifier) @name
   value: (union_type
     (type_identifier) @react
-    (#eq? @react "React"))) @type_alias
+    (#eq? @react "React"))) @type_alias_declaration
 
 ;; React Event handler declarations
 (method_definition
   name: (property_identifier) @name
-  (#match? @name "^handle.*$")) @function
+  (#match? @name "^handle.*$")) @method_definition
 
 ;; React Lifecycle method declarations
 (method_definition
   name: (property_identifier) @name
-  (#match? @name "^(componentDidMount|componentDidUpdate|componentWillUnmount|getDerivedStateFromProps|shouldComponentUpdate|getSnapshotBeforeUpdate|componentDidCatch|componentWillMount|componentWillReceiveProps|componentWillUpdate|UNSAFE_componentWillMount|UNSAFE_componentWillReceiveProps|UNSAFE_componentWillUpdate)$")) @function 
+  (#match? @name "^(componentDidMount|componentDidUpdate|componentWillUnmount|getDerivedStateFromProps|shouldComponentUpdate|getSnapshotBeforeUpdate|componentDidCatch|componentWillMount|componentWillReceiveProps|componentWillUpdate|UNSAFE_componentWillMount|UNSAFE_componentWillReceiveProps|UNSAFE_componentWillUpdate)$")) @method_definition 

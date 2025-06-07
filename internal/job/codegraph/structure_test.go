@@ -1,9 +1,9 @@
 package codegraph
 
 import (
-	treeparser "github.com/zgsm-ai/codebase-indexer/internal/job/parser"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"testing"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -59,57 +59,56 @@ var TestVar = "test"
 		t.Fatal("no definitions found")
 	}
 	assert.NotEmpty(t, structure.Path)
-	assert.NotEmpty(t, structure.Language)
-	// 验证结构体定义
-	foundStruct := false
-	foundInterface := false
-	foundFunction := false
-	foundMethod := false
-	foundConst := false
-	foundVar := false
+	assert.Equal(t, "go", structure.Language)
 
+	// 预期的位置信息 (tree-sitter 使用从0开始的行列号)
+	expectedRanges := map[string][]int32{
+		"TestStruct":    {4, 0, 7, 1},    // line 4: type TestStruct struct {
+		"TestInterface": {10, 0, 13, 1},  // line 10: type TestInterface interface {
+		"TestFunc":      {16, 0, 18, 1},  // line 16: func TestFunc(...)
+		"TestMethod":    {21, 0, 23, 1},  // line 21: func (s *TestStruct) TestMethod()
+		"TestConst":     {26, 0, 26, 24}, // line 26: const TestConst = "test"
+		"TestVar":       {29, 0, 29, 20}, // line 29: var TestVar = "test"
+	}
+
+	// 验证每个定义
+	foundDefs := make(map[string]bool)
 	for _, def := range structure.Definitions {
-		switch def.Type {
-		case string(treeparser.Struct):
-			if def.Name == "TestStruct" {
-				foundStruct = true
-			}
-		case string(treeparser.Interface):
-			if def.Name == "TestInterface" {
-				foundInterface = true
-			}
-		case string(treeparser.Function):
-			if def.Name == "TestFunc" {
-				foundFunction = true
-			} else if def.Name == "TestMethod" {
-				foundMethod = true
-			}
-		case string(treeparser.Variable):
-			if def.Name == "TestConst" {
-				foundConst = true
-			} else if def.Name == "TestVar" {
-				foundVar = true
-			}
+		foundDefs[def.Name] = true
+
+		// 验证类型
+		switch def.Name {
+		case "TestStruct":
+			assert.Equal(t, "type_declaration", def.Type)
+		case "TestInterface":
+			assert.Equal(t, "type_declaration", def.Type)
+		case "TestFunc":
+			assert.Equal(t, "function_declaration", def.Type)
+		case "TestMethod":
+			assert.Equal(t, "method_declaration", def.Type)
+		case "TestConst":
+			assert.Equal(t, "const_declaration", def.Type)
+		case "TestVar":
+			assert.Equal(t, "var_declaration", def.Type)
+		default:
+			t.Errorf("unexpected definition: %s", def.Name)
 		}
+
+		// 验证位置信息
+		expectedRange, ok := expectedRanges[def.Name]
+		if !ok {
+			t.Errorf("no expected range for definition: %s", def.Name)
+			continue
+		}
+
+		assert.Equal(t, expectedRange[0], def.Range[0], "wrong start line for %s", def.Name)
+		assert.Equal(t, expectedRange[1], def.Range[1], "wrong start column for %s", def.Name)
+		assert.Equal(t, expectedRange[2], def.Range[2], "wrong end line for %s", def.Name)
+		assert.Equal(t, expectedRange[3], def.Range[3], "wrong end column for %s", def.Name)
 	}
 
-	// 检查是否找到所有定义
-	if !foundStruct {
-		t.Error("TestStruct not found")
-	}
-	if !foundInterface {
-		t.Error("TestInterface not found")
-	}
-	if !foundFunction {
-		t.Error("TestFunc not found")
-	}
-	if !foundMethod {
-		t.Error("TestMethod not found")
-	}
-	if !foundConst {
-		t.Error("TestConst not found")
-	}
-	if !foundVar {
-		t.Error("TestVar not found")
+	// 确保所有预期的定义都被找到
+	for name := range expectedRanges {
+		assert.True(t, foundDefs[name], "definition %s was not found", name)
 	}
 }

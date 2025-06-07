@@ -78,7 +78,7 @@ func (p *Person) SayHello() string { return "Hello" }
 			// 获取节点的文本内容
 			content := node.Utf8Text(sourceCode)
 
-			t.Logf("  Capture: %-15s | Position: [%d:%d-%d:%d] | Content: %s\n",
+			t.Logf("  Capture: %-15s | Range: [%d:%d-%d:%d] | Content: %s\n",
 				captureName, startLine, startColumn, endLine, endColumn, content)
 		}
 

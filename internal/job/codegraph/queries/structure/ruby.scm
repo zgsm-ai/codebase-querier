@@ -1,5 +1,9 @@
 ;; Ruby structure query
-;; Captures class definitions, module definitions, method definitions, and more
+;; Captures method definitions, class definitions, module definitions, and more
+
+;; Method definitions
+(method
+  name: (identifier) @name) @method
 
 ;; Class definitions
 (class
@@ -7,15 +11,15 @@
 
 ;; Module definitions
 (module
-  name: (constant) @name) @class
-
-;; Method definitions
-(method
-  name: (identifier) @name) @function
+  name: (constant) @name) @module
 
 ;; Singleton method definitions
 (singleton_method
-  name: (identifier) @name) @function
+  name: (identifier) @name) @singleton_method
+
+;; Constant declarations
+(constant
+  name: (constant) @name) @constant
 
 ;; Constant assignments
 (assignment

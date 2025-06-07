@@ -2,28 +2,22 @@ package codegraph
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"path/filepath"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
+// StructureParser 用于解析代码结构
 type StructureParser struct {
-	languages []*parser.LanguageConfig // Language-specific configuration
 }
 
 // NewStructureParser creates a new generic parser with the given config.
 func NewStructureParser() (*StructureParser, error) {
-	languages, err := parser.GetLanguageConfigs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get languages config: %w", err)
-	}
-
-	return &StructureParser{
-		languages: languages,
-	}, nil
+	return &StructureParser{}, nil
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
@@ -31,15 +25,20 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStruc
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
-		return nil, fmt.Errorf("file %s has no extension, cannot determine language", codeFile.Path)
+		return nil, fmt.Errorf("file %s has no extension, cannot determine langConf", codeFile.Path)
 	}
-	language := parser.GetLanguageConfigByExt(s.languages, ext)
-	if language == nil {
-		return nil, fmt.Errorf("cannot find language config by ext %s", ext)
+	langConf := parser.GetLanguageConfigByExt(ext)
+	if langConf == nil {
+		return nil, fmt.Errorf("cannot find langConf config by ext %s", ext)
+	}
+	queryScm, ok := languageQueryConfig[langConf.Language]
+	if !ok {
+		return nil, fmt.Errorf("cannot find query config by lang %s", langConf.Language)
 	}
 
 	sitterParser := sitter.NewParser()
-	if err := sitterParser.SetLanguage(language.SitterLanguage); err != nil {
+	sitterLanguage := langConf.SitterLanguage()
+	if err := sitterParser.SetLanguage(sitterLanguage); err != nil {
 		return nil, err
 	}
 	content := codeFile.Content
@@ -49,7 +48,7 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStruc
 	}
 	defer tree.Close()
 
-	query, err := sitter.NewQuery(language.SitterLanguage, language.StructureQuery)
+	query, err := sitter.NewQuery(sitterLanguage, queryScm)
 	if err != nil && parser.IsRealErr(err) {
 		return nil, err
 	}
@@ -61,14 +60,14 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStruc
 	matches := qc.Matches(query, tree.RootNode(), content)
 
 	// 消费 matches，并调用 ProcessStructureMatch 处理匹配结果
-	processor := language.Processor
+	processor := newDefinitionProcessor()
 	definitions := make([]*codegraphpb.Definition, 0)
 	for {
 		m := matches.Next()
 		if m == nil {
 			break
 		}
-		def, err := processor.ProcessStructureMatch(m, query, tree.RootNode(), content)
+		def, err := processor.ProcessDefinitionNode(m, query, tree.RootNode(), content)
 		if err != nil {
 			continue // 跳过错误的匹配
 		}
@@ -79,6 +78,6 @@ func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStruc
 	return &codegraphpb.CodeStructure{
 		Definitions: definitions,
 		Path:        codeFile.Path,
-		Language:    string(language.Language),
+		Language:    string(langConf.Language),
 	}, nil
 }

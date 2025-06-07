@@ -101,7 +101,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 				allChunks = append(allChunks, &types.CodeChunk{
 					Content:    content,
 					FilePath:   codeFile.Path,
-					Position:   []int{int(startPos.Row), int(startPos.Column), int(endPos.Row), int(endPos.Column)},
+					Range:      []int{int(startPos.Row), int(startPos.Column), int(endPos.Row), int(endPos.Column)},
 					TokenCount: tokenCount,
 				})
 			}
@@ -214,7 +214,7 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath strin
 		chunks = append(chunks, &types.CodeChunk{
 			Content:    []byte(chunkContent),
 			FilePath:   filePath,
-			Position:   []int{startLine, startColumn, endLine, endColumn},
+			Range:      []int{startLine, startColumn, endLine, endColumn},
 			TokenCount: endTokenIdx - startTokenIdx,
 		})
 

@@ -4,20 +4,19 @@
 ;; Function definitions
 (function_definition
   declarator: (function_declarator
-    declarator: (identifier) @name)) @function
+    declarator: (identifier) @name)) @function_definition
 
 ;; Struct declarations
-(struct_specifier
-  name: (type_identifier) @name) @struct
+(struct_declaration
+  name: (type_identifier) @name) @struct_declaration
 
 ;; Union declarations
-(union_specifier
-  name: (type_identifier) @name) @struct
+(union_declaration
+  name: (type_identifier) @name) @union_declaration
 
 ;; Variable declarations
 (declaration
-  declarator: (init_declarator
-    declarator: (identifier) @name)) @variable
+  declarator: (identifier) @name) @declaration
 
 ;; Constant declarations
 (declaration
@@ -27,14 +26,9 @@
   (#eq? @qualifier "const")) @variable
 
 ;; Enum declarations
-(enum_specifier
-  name: (type_identifier) @name) @enum
+(enum_declaration
+  name: (type_identifier) @name) @enum_declaration
 
 ;; Type definitions (typedef)
-(type_definition
-  declarator: (type_identifier) @name) @type_alias
-
-;; Function declarations (prototypes)
-(declaration
-  declarator: (function_declarator
-    declarator: (identifier) @name)) @function 
+(typedef_declaration
+  declarator: (type_identifier) @name) @typedef_declaration 
