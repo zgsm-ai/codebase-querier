@@ -8,7 +8,7 @@
 ;; Function expressions
 (variable_declarator
   name: (identifier) @name
-  value: (function)) @variable_declarator
+  value: (function_expression)) @variable_declarator  ;; 修正: function → function_expression
 
 ;; Arrow functions
 (variable_declarator
@@ -22,7 +22,7 @@
 ;; Class expressions
 (variable_declarator
   name: (identifier) @name
-  value: (class)) @variable_declarator
+  value: (class_expression)) @variable_declarator       ;; 修正: class → class_expression
 
 ;; Method definitions (inside classes)
 (method_definition
@@ -36,9 +36,8 @@
 (type_alias_declaration
   name: (type_identifier) @name) @type_alias_declaration
 
-;; Type declarations
-(type_declaration
-  name: (type_identifier) @name) @type_declaration
+;; Type declarations（TypeScript 中通常用 type_alias_declaration 表示类型别名）
+;; 注：type_declaration 可能不是标准节点，建议统一使用 type_alias_declaration
 
 ;; Enum declarations
 (enum_declaration
@@ -56,10 +55,12 @@
 (variable_declarator
   name: (identifier) @name) @variable_declarator
 
-;; Constant declarations
+;; Constant declarations（建议通过修饰符判断，而非名称匹配）
 (variable_declarator
   name: (identifier) @name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @variable_declarator
+  parent: (variable_declaration
+    declaration_specifiers: (modifier) @modifier
+    (#eq? @modifier "const"))) @variable_declarator     ;; 修正: 基于 const 修饰符匹配
 
 ;; Generic type declarations
 (type_parameter_declaration
@@ -70,23 +71,26 @@
   expression: (call_expression
     function: (identifier) @name)) @decorator
 
-;; Abstract class declarations
+;; Abstract class declarations（修正祖先节点判断逻辑）
 (class_declaration
   name: (identifier) @name
-  (#has-ancestor? @name abstract_class_declaration)) @class_declaration
+  (modifiers
+    (modifier) @modifier
+    (#eq? @modifier "abstract"))) @class_declaration     ;; 直接匹配 abstract 修饰符
 
 ;; Abstract method declarations
 (method_definition
   name: (property_identifier) @name
-  (#has-ancestor? @name abstract_method_declaration)) @method_definition
+  (modifiers
+    (modifier) @modifier
+    (#eq? @modifier "abstract"))) @method_definition     ;; 直接匹配 abstract 修饰符
 
-;; Mapped type declarations
-(mapped_type_clause
-  name: (type_identifier) @name) @type_alias
+;; Mapped type declarations（可能需要调整节点路径）
+(mapped_type
+  type_identifier: (identifier) @name) @type_alias       ;; 假设 mapped_type 是正确节点
 
-;; Conditional type declarations
-(conditional_type
-  name: (type_identifier) @name) @type_alias
+;; Conditional type declarations（通常嵌套在类型表达式中，需具体分析）
+;; 注：conditional_type 可能不是顶层节点，需根据实际语法树调整
 
 ;; Import type declarations
 (import_type
@@ -94,4 +98,4 @@
 
 ;; Export type declarations
 (export_type
-  name: (type_identifier) @name) @type_alias 
+  name: (type_identifier) @name) @type_alias

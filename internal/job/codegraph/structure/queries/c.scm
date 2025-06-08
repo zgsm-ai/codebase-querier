@@ -7,11 +7,11 @@
     declarator: (identifier) @name)) @function_definition
 
 ;; Struct declarations
-(struct_declaration
+(struct_specifier
   name: (type_identifier) @name) @struct_declaration
 
 ;; Union declarations
-(union_declaration
+(union_specifier
   name: (type_identifier) @name) @union_declaration
 
 ;; Variable declarations
@@ -26,9 +26,9 @@
   (#eq? @qualifier "const")) @variable
 
 ;; Enum declarations
-(enum_declaration
+(enum_specifier
   name: (type_identifier) @name) @enum_declaration
 
 ;; Type definitions (typedef)
 (typedef_declaration
-  declarator: (type_identifier) @name) @typedef_declaration 
+  declarator: (type_identifier) @name) @typedef_declaration

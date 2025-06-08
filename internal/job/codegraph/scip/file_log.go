@@ -34,10 +34,10 @@ func logFileName(filenamePrefix string) string {
 }
 
 func indexLogInfo(w io.Writer, format string, args ...interface{}) {
+	format = fmt.Sprintf("[%s] - %s\n", time.Now().Format("2006-01-02 15:04:05"), format)
 	if w == nil {
 		fmt.Printf(format, args...)
 		return
 	}
-	format = fmt.Sprintf("[%s] - %s\n", time.Now().Format("2006-01-02 15:04:05"), format)
 	_, _ = fmt.Fprintf(w, format, args...)
 }

@@ -3,8 +3,12 @@ package test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/sourcegraph/scip/bindings/go/scip"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/structure"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -64,6 +68,57 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	parser := scipindex.NewIndexParser(ctx, localCodebase, graph)
 	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
+	assert.NoError(t, err)
+	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
+}
+
+func TestParseGoStructureIndexBadgerDB(t *testing.T) {
+	start := time.Now()
+	projectPath := "go/kubernetes"
+	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
+	storeConf := config.CodeBaseStoreConf{
+		Local: config.LocalStoreConf{
+			BasePath: testProjectsBaseDir,
+		},
+	}
+	ctx := context.Background()
+	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
+	assert.NoError(t, err)
+	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	defer graph.Close()
+	assert.NoError(t, err)
+	parser, err := structure.NewStructureParser()
+	assert.NoError(t, err)
+	var data []*codegraphpb.CodeStructure
+	err = localCodebase.Walk(ctx, codebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
+		if walkCtx.Info.IsDir {
+			return nil
+		}
+		if reader == nil {
+			return fmt.Errorf("reader is nil")
+		}
+		t.Logf("parsing file: %s", walkCtx.RelativePath)
+		bytes, err := io.ReadAll(reader)
+		if err != nil {
+			t.Logf("read file error: %v", err)
+			return err
+		}
+		parsed, err := parser.Parse(&types.CodeFile{
+			Path:         walkCtx.Path,
+			CodebasePath: codebasePath,
+			Content:      bytes,
+		})
+		if err != nil && !errors.Is(err, structure.ErrExtNotFound) && !errors.Is(err, structure.ErrLangConfNotFound) {
+			return err
+		}
+		if parsed == nil {
+			return nil
+		}
+		data = append(data, parsed)
+		return nil
+	}, codebase.WalkOptions{IgnoreError: true})
+	assert.NoError(t, err)
+	err = graph.BatchWriteCodeStructures(ctx, data)
 	assert.NoError(t, err)
 	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
 }
@@ -165,7 +220,8 @@ func TestInspectBadgerDB(t *testing.T) {
 			// 根据 key 前缀判断数据类型
 			switch {
 			case bytes.HasPrefix(key, []byte("doc:")):
-				doc, err := codegraph.DeserializeDocument(val)
+				var doc codegraphpb.Document
+				err := codegraph.DeserializeDocument(val, &doc)
 				if err != nil {
 					return err
 				}

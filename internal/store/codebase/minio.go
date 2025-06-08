@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -432,7 +433,7 @@ func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath 
 	return content, nil
 }
 
-func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {
+func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc, walkOpts WalkOptions) error {
 	prefix := filepath.Join(codebasePath, dir)
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
@@ -446,6 +447,10 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 	for object := range objectCh {
 		if object.Err != nil {
 			return fmt.Errorf("failed to list objects: %w", object.Err)
+		}
+
+		if slices.Contains(walkOpts.IgnoreExts, filepath.Ext(object.Key)) {
+			return nil
 		}
 
 		// Skip empty paths
@@ -474,7 +479,7 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			if errors.Is(err, SkipDir) {
 				continue
 			}
-			if err != nil {
+			if err != nil && !walkOpts.IgnoreError {
 				return err
 			}
 			continue
@@ -482,13 +487,13 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 
 		// 对于文件，获取对象并传入 reader
 		obj, err := m.client.GetObject(ctx, m.cfg.Minio.Bucket, object.Key, minio.GetObjectOptions{})
-		if err != nil {
+		if err != nil && !walkOpts.IgnoreError {
 			return fmt.Errorf("failed to get object %s: %w", object.Key, err)
 		}
 
 		err = walkFn(walkCtx, obj)
 		obj.Close()
-		if err != nil {
+		if err != nil && !walkOpts.IgnoreError {
 			return err
 		}
 	}

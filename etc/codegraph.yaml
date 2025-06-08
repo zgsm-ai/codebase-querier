@@ -37,8 +37,6 @@ languages:
       commands:
         - base: "scip-go"
           args:
-#            - " --project-root"
-#            - "__sourcePath__"
             - "--output"
             - "__outputPath__/index.scip"
 

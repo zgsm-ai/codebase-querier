@@ -3,39 +3,58 @@
 
 ;; Function definitions
 (function_definition
-  name: (identifier) @name) @function_definition
+  name: (identifier) @name) @function
 
 ;; Class definitions
 (class_definition
-  name: (identifier) @name) @class_definition
+  name: (identifier) @name) @class
 
-;; Decorated definitions
+;; Decorated functions
 (decorated_definition
   definition: (function_definition
-    name: (identifier) @name)) @decorated_definition
+    name: (identifier) @name)) @function
 
 ;; Variable assignments
 (assignment
-  left: (identifier) @name) @assignment
+  left: (identifier) @name) @variable
 
 ;; Constant assignments (uppercase)
 (assignment
   left: (identifier) @name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @assignment
+  (#match? @name "^[A-Z][A-Z0-9_]*$")) @constant
 
 ;; Method definitions (inside classes)
 (class_definition
   body: (block
     (function_definition
-      name: (identifier) @name))) @function
+      name: (identifier) @name))) @method
 
-;; Type aliases (Python 3.12+)
-(type_alias
-  name: (identifier) @name) @type_alias
+;; Type aliases
+(assignment 
+  left: (identifier) @name
+  right: (call
+    function: (identifier)
+    (#eq? @name "TypeVar"))) @type
 
 ;; Enum definitions (Python 3.4+)
-(call
-  function: (identifier) @enum_name
-  arguments: (argument_list
-    (identifier) @name)
-  (#eq? @enum_name "Enum")) @enum 
+(class_definition
+  name: (identifier) @name
+  superclasses: (argument_list
+    (identifier) @base
+    (#eq? @base "Enum"))) @enum
+
+;; Dataclass definitions
+(decorated_definition
+  (decorator
+    (expression (identifier) @decorator)
+    (#eq? @decorator "dataclass"))
+  definition: (class_definition
+    name: (identifier) @name)) @dataclass
+
+;; Protocol definitions
+(class_definition
+  name: (identifier) @name
+  superclasses: (argument_list
+    (identifier) @base
+    (#eq? @base "Protocol"))
+) @protocol

@@ -3,48 +3,56 @@
 
 ;; Function declarations
 (function_declaration
-  name: (identifier) @name) @function_declaration
+  name: (identifier) @name) @function
 
 ;; Function expressions
-(variable_declarator
-  name: (identifier) @name
-  value: (function)) @variable_declarator
+(variable_declaration
+  (variable_declarator
+    name: (identifier) @name
+    value: (function_expression))) @function
 
 ;; Arrow functions
-(variable_declarator
-  name: (identifier) @name
-  value: (arrow_function)) @variable_declarator
+(variable_declaration
+  (variable_declarator
+    name: (identifier) @name
+    value: (arrow_function))) @function
 
 ;; Class declarations
 (class_declaration
-  name: (identifier) @name) @class_declaration
+  name: (identifier) @name) @class
 
 ;; Class expressions
-(variable_declarator
-  name: (identifier) @name
-  value: (class)) @variable_declarator
+(variable_declaration
+  (variable_declarator
+    name: (identifier) @name
+    value: (class))) @class
 
 ;; Method definitions (inside classes)
 (method_definition
-  name: (property_identifier) @name) @method_definition
-
-;; Interface declarations (TypeScript)
-(interface_declaration
-  name: (type_identifier) @name) @interface
-
-;; Type alias declarations (TypeScript)
-(type_alias_declaration
-  name: (type_identifier) @name) @type_alias
+  name: (property_identifier) @name) @method
 
 ;; Variable declarations
-(variable_declarator
-  name: (identifier) @name) @variable_declarator
+(variable_declaration
+  (variable_declarator
+    name: (identifier) @name)) @variable
 
-;; Constant declarations
-(variable_declarator
-  name: (identifier) @name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @variable_declarator
+;; Constant declarations (const)
+(lexical_declaration
+  "const"
+  (variable_declarator
+    name: (identifier) @name)) @constant
 
-;; Enum declarations (TypeScript)
-(enum_declaration
-  name: (type_identifier) @name) @enum 
+;; Object properties
+(pair
+  key: (property_identifier) @name) @property
+
+;; Export declarations
+(export_statement
+  declaration: (function_declaration
+    name: (identifier) @name)) @export
+
+;; Export named declarations
+(export_statement
+  (export_clause
+    (export_specifier
+      name: (identifier) @name))) @export

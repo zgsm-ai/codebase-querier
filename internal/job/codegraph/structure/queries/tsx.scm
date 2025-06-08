@@ -8,7 +8,7 @@
 ;; Function expressions
 (variable_declarator
   name: (identifier) @name
-  value: (function)) @variable_declarator
+  value: (function_expression)) @variable_declarator  ;; 修正: function → function_expression
 
 ;; Arrow functions
 (variable_declarator
@@ -22,7 +22,7 @@
 ;; Class expressions
 (variable_declarator
   name: (identifier) @name
-  value: (class)) @variable_declarator
+  value: (class_expression)) @variable_declarator  ;; 修正: class → class_expression
 
 ;; Method definitions (inside classes)
 (method_definition
@@ -36,9 +36,9 @@
 (type_alias_declaration
   name: (type_identifier) @name) @type_alias_declaration
 
-;; Type declarations
-(type_declaration
-  name: (type_identifier) @name) @type_declaration
+;; Type declarations（建议统一使用 type_alias_declaration）
+(type_alias_declaration
+  name: (type_identifier) @name) @type_declaration  ;; 修正: 统一使用 type_alias_declaration
 
 ;; Enum declarations
 (enum_declaration
@@ -73,12 +73,16 @@
 ;; Abstract class declarations
 (class_declaration
   name: (identifier) @name
-  (#has-ancestor? @name abstract_class_declaration)) @class_declaration
+  (modifiers
+    (modifier) @modifier
+    (#eq? @modifier "abstract"))) @class_declaration  ;; 修正: 直接匹配 abstract 修饰符
 
 ;; Abstract method declarations
 (method_definition
   name: (property_identifier) @name
-  (#has-ancestor? @name abstract_method_declaration)) @method_definition
+  (modifiers
+    (modifier) @modifier
+    (#eq? @modifier "abstract"))) @method_definition  ;; 修正: 直接匹配 abstract 修饰符
 
 ;; Mapped type declarations
 (mapped_type_clause
@@ -156,7 +160,7 @@
         object: (identifier) @react
         property: (property_identifier) @create
         (#eq? @react "React")
-        (#eq? @create "createContext"))))) @class_declaration
+        (#eq? @create "createContext"))))) @variable_declaration  ;; 修正: @class_declaration → @variable_declaration
 
 ;; React Component type declarations
 (type_alias_declaration
@@ -173,4 +177,4 @@
 ;; React Lifecycle method declarations
 (method_definition
   name: (property_identifier) @name
-  (#match? @name "^(componentDidMount|componentDidUpdate|componentWillUnmount|getDerivedStateFromProps|shouldComponentUpdate|getSnapshotBeforeUpdate|componentDidCatch|componentWillMount|componentWillReceiveProps|componentWillUpdate|UNSAFE_componentWillMount|UNSAFE_componentWillReceiveProps|UNSAFE_componentWillUpdate)$")) @method_definition 
+  (#match? @name "^(componentDidMount|componentDidUpdate|componentWillUnmount|getDerivedStateFromProps|shouldComponentUpdate|getSnapshotBeforeUpdate|componentDidCatch|componentWillMount|componentWillReceiveProps|componentWillUpdate|UNSAFE_componentWillMount|UNSAFE_componentWillReceiveProps|UNSAFE_componentWillUpdate)$")) @method_definition

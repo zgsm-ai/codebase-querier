@@ -9,54 +9,50 @@
 
 ;; Class definitions
 (class_definition
-  name: (identifier) @name) @class_definition
+  name: (identifier) @name) @class
 
 ;; Object declarations
 (object_definition
-  name: (identifier) @name) @object_definition
+  name: (identifier) @name) @object
 
 ;; Trait definitions
 (trait_definition
-  name: (identifier) @name) @trait_definition
+  name: (identifier) @name) @trait
 
 ;; Method definitions
 (function_definition
-  name: (identifier) @name) @def
+  name: (identifier) @name) @method
 
 ;; Type alias definitions
 (type_definition
-  name: (identifier) @name) @type_definition
+  name: (identifier) @name) @type
 
-;; Enum declarations
-(enum_case
+;; Enum definitions (Scala 3)
+(enum_definition
   name: (identifier) @name) @enum
-
-;; Companion object declarations
-(object_definition
-  (modifiers
-    (modifier "companion"))?
-  name: (identifier) @name) @class_definition
 
 ;; Case class definitions
 (class_definition
-  (modifiers
-    (modifier "case"))?
+  modifier_list: (modifier_list
+    (identifier) @modifier
+    (#eq? @modifier "case"))
   name: (identifier) @name) @case_class
+
+;; Value definitions (val)
+(val_definition
+  pattern: (identifier) @name) @val
+
+;; Variable definitions (var)
+(var_definition
+  pattern: (identifier) @name) @var
+
+;; Package object definitions
+(package_object_definition
+  name: (identifier) @name) @package_object
 
 ;; Implicit class definitions
 (class_definition
-  (modifiers
-    (modifier "implicit"))?
-  name: (identifier) @name) @class_definition
-
-;; Package object declarations
-(package_object
-  name: (identifier) @name) @class_definition
-
-;; Value definitions (variables)
-(val_definition
-  name: (identifier) @name) @val_definition
-
-;; Variable definitions
-(var_definition
-  name: (identifier) @name) @var_definition 
+  modifier_list: (modifier_list
+    (identifier) @modifier
+    (#eq? @modifier "implicit"))
+  name: (identifier) @name) @implicit_class 

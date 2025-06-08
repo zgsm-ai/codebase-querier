@@ -1,48 +1,48 @@
 ;; Kotlin structure query
 ;; Captures class definitions, function definitions, variable declarations, and more
 
-;; Class definitions
+;; Class declarations
 (class_declaration
-  name: (simple_identifier) @name) @class_declaration
+  name: (type_identifier) @name) @class
 
-;; Interface definitions
+;; Interface declarations
 (interface_declaration
-  name: (simple_identifier) @name) @interface_declaration
+  name: (type_identifier) @name) @interface
 
 ;; Object declarations
 (object_declaration
-  name: (simple_identifier) @name) @object_declaration
+  name: (type_identifier) @name) @object
 
-;; Function definitions
+;; Function declarations
 (function_declaration
-  name: (simple_identifier) @name) @function_declaration
+  name: (identifier) @name) @function
 
 ;; Property declarations
 (property_declaration
-  name: (simple_identifier) @name) @property_declaration
+  name: (identifier) @name) @property
 
 ;; Constant declarations
 (property_declaration
   (modifiers
     (modifier) @modifier
     (#eq? @modifier "const"))
-  name: (simple_identifier) @name) @property_declaration
+  name: (identifier) @name) @constant
 
 ;; Type alias declarations
 (type_alias
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @type
 
 ;; Enum class declarations
 (enum_class
-  name: (simple_identifier) @name) @enum_class
+  name: (type_identifier) @name) @enum
 
 ;; Companion object declarations
 (companion_object
-  name: (simple_identifier) @name) @companion_object
+  (object_declaration 
+    name: (type_identifier) @name)) @companion
 
-;; Secondary constructor declarations
-(secondary_constructor
-  (constructor_delegation_call
-    (constructor_invocation
-      (user_type
-        (type_identifier) @name)))) @secondary_constructor 
+;; Constructor declarations
+(class_declaration
+  (primary_constructor
+    (class_parameter
+      name: (identifier) @name))) @constructor

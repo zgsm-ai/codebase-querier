@@ -23,27 +23,34 @@
 
 ;; Constant assignments
 (assignment
-  left: (constant) @name) @variable
+  left: (constant) @name) @constant
 
 ;; Constant assignments (convention: uppercase names)
 (assignment
   left: (identifier) @name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @variable
+  (#match? @name "^[A-Z][A-Z0-9_]*$")) @constant
 
-;; Module method definitions (inside modules)
+;; Module methods
 (module
   body: (body_statement
     (method
-      name: (identifier) @name))) @function
+      name: (identifier) @name))) @method
 
-;; Class method definitions (inside classes)
+;; Class methods
 (class
   body: (body_statement
     (singleton_method
-      name: (identifier) @name))) @function
+      name: (identifier) @name))) @method
 
-;; Instance method definitions (inside classes)
+;; Instance methods
 (class
   body: (body_statement
     (method
-      name: (identifier) @name))) @function 
+      name: (identifier) @name))) @method
+
+;; Attribute accessors
+(call
+  method: (identifier) @accessor
+  (#match? @accessor "^(attr_reader|attr_writer|attr_accessor)$")
+  arguments: (argument_list
+    (simple_symbol) @name)) @attribute 

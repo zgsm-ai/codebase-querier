@@ -20,7 +20,6 @@ type commandExecutor struct {
 	// build
 	buildCmds          []*exec.Cmd
 	indexCmds          []*exec.Cmd
-	logger             logx.Logger
 	indexFileLogWriter io.WriteCloser
 }
 
@@ -37,10 +36,9 @@ func newCommandExecutor(ctx context.Context,
 	if indexTool == nil || len(indexTool.Commands) == 0 {
 		return nil, fmt.Errorf("index commands are required")
 	}
-	logger := logx.WithContext(ctx)
 	indexFileLogger, err := newFileLogWriter(logDir, logFileNamePrefix(workDir))
 	if err != nil {
-		logger.Errorf("failed to create index log writer: %v", err)
+		logx.Errorf("failed to create index log writer: %v", err)
 	}
 	var logWriter io.Writer
 	if indexFileLogger != nil {
@@ -50,7 +48,6 @@ func newCommandExecutor(ctx context.Context,
 		workDir:            workDir,
 		buildCmds:          buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
 		indexCmds:          buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
-		logger:             logger,
 		indexFileLogWriter: indexFileLogger,
 	}, nil
 }
@@ -120,12 +117,12 @@ func (e *commandExecutor) Execute() error {
 	defer func() {
 		if e.indexFileLogWriter != nil {
 			if err := e.indexFileLogWriter.Close(); err != nil {
-				e.logger.Errorf("failed to close index log writer: %v", err)
+				logx.Errorf("failed to close index log writer: %v", err)
 			}
 		}
 	}()
 
-	e.logger.Debugf("[%s] start to execute index command", e.workDir)
+	logx.Debugf("[%s] start to execute index command", e.workDir)
 	indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index commands", e.workDir)
 
 	var err error
@@ -133,11 +130,11 @@ func (e *commandExecutor) Execute() error {
 	for _, cmd := range e.buildCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute build command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			e.logger.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
+			logx.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed:%v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
-			e.logger.Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
+			logx.Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution successfully", e.workDir)
 		}
 	}
@@ -145,16 +142,16 @@ func (e *commandExecutor) Execute() error {
 	for _, cmd := range e.indexCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			e.logger.Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
+			logx.Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed: %v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
-			e.logger.Debugf("[%s] index command execution successfully: %v", e.workDir, cmd)
+			logx.Debugf("[%s] index command execution successfully: %v", e.workDir, cmd)
 			indexLogInfo(e.indexFileLogWriter, "[%s] index command execution successfully", e.workDir)
 		}
 	}
 
-	e.logger.Debugf("[%s] index commands executed end, cost: %d ms", e.workDir, time.Since(start).Milliseconds())
+	logx.Debugf("[%s] index commands executed end, cost: %d ms", e.workDir, time.Since(start).Milliseconds())
 	indexLogInfo(e.indexFileLogWriter,
 		"[%s] index commands executed end, cost: %d ms\n", e.workDir, time.Since(start).Milliseconds())
 	return err

@@ -55,6 +55,9 @@ func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonReq
 
 	// 使用 Walk 方法递归遍历目录树
 	err = l.svcCtx.CodebaseStore.Walk(l.ctx, codebasePath, "", func(walkCtx *codebase_store.WalkContext, reader io.ReadCloser) error {
+		if walkCtx == nil || reader == nil {
+			return nil
+		}
 		// 跳过目录和隐藏文件
 		if walkCtx.Info.IsDir || strings.HasPrefix(walkCtx.Info.Name, ".") || walkCtx.Info.Name == types.SyncMedataDir {
 			if walkCtx.Info.IsDir {
@@ -81,7 +84,7 @@ func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonReq
 		})
 
 		return nil
-	})
+	}, codebase_store.WalkOptions{IgnoreError: true})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk directory: %w", err)

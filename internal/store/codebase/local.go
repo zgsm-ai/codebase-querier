@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -479,7 +480,7 @@ func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath 
 	return content, nil
 }
 
-func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error {
+func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc, walkOpts WalkOptions) error {
 	if codebasePath == types.EmptyString {
 		return errors.New("codebasePath cannot be empty")
 	}
@@ -492,9 +493,9 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 		return fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
-	fullPath := filepath.Join(codebasePath, dir)
-	return filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+	fullDir := filepath.Join(codebasePath, dir)
+	return filepath.Walk(fullDir, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil && !walkOpts.IgnoreError {
 			return err
 		}
 
@@ -506,17 +507,20 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			return nil
 		}
 
-		relPath, err := filepath.Rel(fullPath, path)
-		if err != nil {
+		relativePath, err := filepath.Rel(fullDir, filePath)
+		if err != nil && !walkOpts.IgnoreError {
 			return err
 		}
 
-		if relPath == "." {
+		if relativePath == "." {
+			return nil
+		}
+		if slices.Contains(walkOpts.IgnoreExts, filepath.Ext(filePath)) {
 			return nil
 		}
 
-		// Convert Windows path separators to forward slashes
-		relPath = filepath.ToSlash(relPath)
+		// Convert Windows filePath separators to forward slashes
+		relativePath = filepath.ToSlash(relativePath)
 
 		// 只处理文件，不处理目录
 		if info.IsDir() {
@@ -525,20 +529,27 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 
 		// 构建 WalkContext
 		walkCtx := &WalkContext{
-			Path:         path,
-			RelativePath: relPath,
+			Path:         filePath,
+			RelativePath: relativePath,
 			Info: &types.FileInfo{
 				Name:    info.Name(),
-				Path:    relPath,
+				Path:    relativePath,
 				Size:    info.Size(),
 				IsDir:   false,
 				ModTime: info.ModTime(),
 				Mode:    info.Mode(),
 			},
-			ParentPath: filepath.Dir(path),
+			ParentPath: filepath.Dir(filePath),
 		}
-
-		return walkFn(walkCtx, nil)
+		file, err := os.Open(filePath)
+		if err != nil && !walkOpts.IgnoreError {
+			return err
+		}
+		if file == nil {
+			return nil
+		}
+		defer file.Close()
+		return walkFn(walkCtx, file)
 	})
 }
 

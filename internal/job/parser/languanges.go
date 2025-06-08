@@ -45,99 +45,99 @@ type LanguageConfig struct {
 }
 
 // languageConfigs 定义了所有支持的语言配置
-var languageConfigs = map[Language]*LanguageConfig{
-	Go: {
+var languageConfigs = []*LanguageConfig{
+	{
 		Language: Go,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sittergo.Language())
 		},
 		SupportedExts: []string{".go"},
 	},
-	Java: {
+	{
 		Language: Java,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterjava.Language())
 		},
 		SupportedExts: []string{".java"},
 	},
-	Python: {
+	{
 		Language: Python,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterpython.Language())
 		},
 		SupportedExts: []string{".py"},
 	},
-	JavaScript: {
+	{
 		Language: JavaScript,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterjavascript.Language())
 		},
 		SupportedExts: []string{".js", ".jsx"},
 	},
-	TypeScript: {
+	{
 		Language: TypeScript,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sittertypescript.LanguageTypescript())
 		},
 		SupportedExts: []string{".ts"},
 	},
-	TSX: {
+	{
 		Language: TSX,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sittertypescript.LanguageTSX())
 		},
 		SupportedExts: []string{".tsx"},
 	},
-	Rust: {
+	{
 		Language: Rust,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterrust.Language())
 		},
 		SupportedExts: []string{".rs"},
 	},
-	C: {
+	{
 		Language: C,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterc.Language())
 		},
 		SupportedExts: []string{".c", ".h"},
 	},
-	CPP: {
+	{
 		Language: CPP,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sittercpp.Language())
 		},
 		SupportedExts: []string{".cpp", ".cc", ".cxx", ".hpp"},
 	},
-	CSharp: {
+	{
 		Language: CSharp,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sittercsharp.Language())
 		},
 		SupportedExts: []string{".cs"},
 	},
-	Ruby: {
+	{
 		Language: Ruby,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterruby.Language())
 		},
 		SupportedExts: []string{".rb"},
 	},
-	PHP: {
+	{
 		Language: PHP,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterphp.LanguagePHP())
 		},
 		SupportedExts: []string{".php", ".phtml"},
 	},
-	Kotlin: {
+	{
 		Language: Kotlin,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterkotlin.Language())
 		},
 		SupportedExts: []string{".kt", ".kts"},
 	},
-	Scala: {
+	{
 		Language: Scala,
 		SitterLanguage: func() *sitter.Language {
 			return sitter.NewLanguage(sitterscala.Language())
@@ -147,7 +147,7 @@ var languageConfigs = map[Language]*LanguageConfig{
 }
 
 // GetLanguageConfigs 获取所有语言配置
-func GetLanguageConfigs() map[Language]*LanguageConfig {
+func GetLanguageConfigs() []*LanguageConfig {
 	return languageConfigs
 }
 

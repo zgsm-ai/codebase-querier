@@ -62,7 +62,7 @@ type Store interface {
 	// Walk walks through the codebase and processes each file
 	// dir: the root directory to start walking from
 	// process: function to process each file
-	Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc) error
+	Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc, walkOpts WalkOptions) error
 
 	// BatchDelete deletes multiple files or directories
 	// paths: list of paths to delete
@@ -93,3 +93,8 @@ type WalkFunc func(walkCtx *WalkContext, reader io.ReadCloser) error
 // the directory named in the call is to be skipped. It is not returned
 // as an error by any function.
 var SkipDir = errors.New("skip this directory")
+
+type WalkOptions struct {
+	IgnoreError bool
+	IgnoreExts  []string
+}

@@ -1,6 +1,7 @@
 package structure
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -11,7 +12,11 @@ import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// StructureParser 用于解析代码结构
+var ErrExtNotFound = errors.New("file extension not found")
+var ErrLangConfNotFound = errors.New("langConf not found")
+var ErrQueryNotFound = errors.New("query not found")
+
+// Parser  用于解析代码结构
 type Parser struct {
 }
 
@@ -25,15 +30,15 @@ func (s Parser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, err
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
-		return nil, fmt.Errorf("file %s has no extension, cannot determine langConf", codeFile.Path)
+		return nil, ErrExtNotFound
 	}
 	langConf := parser.GetLanguageConfigByExt(ext)
 	if langConf == nil {
-		return nil, fmt.Errorf("cannot find langConf config by ext %s", ext)
+		return nil, ErrLangConfNotFound
 	}
 	queryScm, ok := languageQueryConfig[langConf.Language]
 	if !ok {
-		return nil, fmt.Errorf("cannot find query config by lang %s", langConf.Language)
+		return nil, ErrQueryNotFound
 	}
 
 	sitterParser := sitter.NewParser()
