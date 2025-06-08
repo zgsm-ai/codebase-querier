@@ -12,7 +12,6 @@ import (
 )
 
 type CodeSplitter struct {
-	languages    []*parser.LanguageConfig
 	tokenizer    tokenizer.Codec
 	splitOptions SplitOptions
 }
@@ -29,13 +28,7 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 		return nil, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
 
-	languages, err := parser.GetLanguageConfigs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get language configs: %w", err)
-	}
-
 	return &CodeSplitter{
-		languages:    languages,
 		tokenizer:    codec,
 		splitOptions: splitOptions,
 	}, nil
@@ -49,14 +42,14 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 		return nil, fmt.Errorf("file %s has no extension", codeFile.Path)
 	}
 
-	language := parser.GetLanguageConfigByExt(p.languages, ext)
+	language := parser.GetLanguageConfigByExt(ext)
 	if language == nil {
 		return nil, fmt.Errorf("unsupported language for extension %s", ext)
 	}
 	sitterParser := sitter.NewParser()
 
 	// 设置解析器语言（复用已创建的Parser）
-	if err := sitterParser.SetLanguage(language.SitterLanguage); err != nil {
+	if err := sitterParser.SetLanguage(language.SitterLanguage()); err != nil {
 		return nil, fmt.Errorf("failed to set parser language: %w", err)
 	}
 

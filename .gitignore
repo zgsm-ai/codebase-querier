@@ -30,3 +30,4 @@ main.exe
 /test/testdata/
 *.iml
 *.scip
+bin/*

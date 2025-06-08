@@ -12,16 +12,16 @@ import (
 )
 
 // StructureParser 用于解析代码结构
-type StructureParser struct {
+type Parser struct {
 }
 
 // NewStructureParser creates a new generic parser with the given config.
-func NewStructureParser() (*StructureParser, error) {
-	return &StructureParser{}, nil
+func NewStructureParser() (*Parser, error) {
+	return &Parser{}, nil
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s StructureParser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, error) {
+func (s Parser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, error) {
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {

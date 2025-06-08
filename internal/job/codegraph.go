@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/scip"
+	"github.com/zgsm-ai/codebase-indexer/internal/job/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
@@ -144,7 +144,7 @@ func (t *codegraphProcessor) parseCodeStructure() {
 			if err != nil {
 				continue
 			}
-			structureParser, err := codegraph.NewStructureParser()
+			structureParser, err := structure.NewStructureParser()
 			if err != nil {
 				t.logger.Errorf("init code structure parser err:%w", err)
 				// 继续处理

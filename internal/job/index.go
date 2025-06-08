@@ -12,6 +12,8 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"os"
+	"sync"
+	"sync/atomic"
 )
 
 const indexNodeEnableVal = "1"
@@ -19,14 +21,20 @@ const isIndexNodeEnv = "IS_INDEX_NODE"
 
 type indexJob struct {
 	logx.Logger
-	svcCtx            *svc.ServiceContext
-	ctx               context.Context
-	enableFlag        bool
-	embeddingTaskPool *ants.Pool
-	graphTaskPool     *ants.Pool
-	messageQueue      mq.MessageQueue
-	consumerGroup     string // 消费者组名称
+	svcCtx                *svc.ServiceContext
+	ctx                   context.Context
+	enableFlag            bool
+	embeddingTaskPool     *ants.Pool
+	graphTaskPool         *ants.Pool
+	messageQueue          mq.MessageQueue
+	consumerGroup         string   // 消费者组名称
+	syncMetaFileCountDown sync.Map // 清理同步元数据文件计数器,key为msgId,value为计数，每完成一个任务，计数-1，当计数为0时，删除文件列表
+}
 
+type cleanSyncMetaFile struct {
+	CodebasePath string       `json:"codebasePath"` // 代码库路径
+	Paths        []string     `json:"paths"`        // 需要删除的文件路径
+	counter      atomic.Int32 // 原子计数器
 }
 
 func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
@@ -66,8 +74,6 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 	s.embeddingTaskPool = embeddingTaskPool
 	s.graphTaskPool = graphTaskPool
 
-	// TODO: Implement ReclaimPendingMessages logic on startup if needed
-
 	return s, nil
 }
 
@@ -78,6 +84,33 @@ func (i *indexJob) Start() {
 	}
 
 	i.Logger.Info("index job started.")
+
+	// 启动一个协程，去清理同步元数据文件
+	go func() {
+		for {
+			select {
+			case <-i.ctx.Done():
+				i.Logger.Info("Context cancelled, exiting meta data clean Job.")
+				return
+			default:
+				i.syncMetaFileCountDown.Range(func(key, value any) bool {
+					// 如果value 为0 ，批量删除文件
+					meta := value.(*cleanSyncMetaFile)
+					if meta.counter.Load() == 0 {
+						i.Logger.Infof("clean sync meta file, codebasePath:%s, paths:%v", meta.CodebasePath, meta.Paths)
+						// TODO 当调用链和嵌入任务都成功时，清理元数据文件。
+						if err := i.svcCtx.CodebaseStore.BatchDelete(i.ctx, meta.CodebasePath, meta.Paths); err != nil {
+							i.Logger.Errorf("failed to delete codebase %s metadata : %v, err: %v", meta.CodebasePath, meta.Paths, err)
+						}
+						// 删除计数器
+						i.syncMetaFileCountDown.Delete(key)
+					}
+					return true
+				})
+			}
+		}
+	}()
+
 	// TODO 多消息合并，避免重复处理，尤其是代码图构建，间隔一定时间再触发下次构建。
 
 	// 轮询消息
@@ -134,6 +167,14 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		i.Logger.Errorf("sync file list is nil, not process %v", syncMsg)
 		return
 	}
+	meta := &cleanSyncMetaFile{
+		CodebasePath: syncMsg.CodebasePath,
+		Paths:        medataFileList,
+	}
+	meta.counter.Store(2) // 两个任务
+
+	// index job ; graph job
+	i.syncMetaFileCountDown.Store(syncMsg.SyncID, meta)
 
 	embeddingCtx, embeddingTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
 	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
@@ -152,6 +193,14 @@ func (i *indexJob) processMessage(msg *types.Message) {
 				if produceErr != nil {
 					i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
 				}
+			} else {
+				// TODO 让计数-1
+				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
+				if !ok {
+					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
+					return
+				}
+				value.(*cleanSyncMetaFile).counter.Add(-1)
 			}
 		})
 
@@ -180,6 +229,14 @@ func (i *indexJob) processMessage(msg *types.Message) {
 				if produceErr != nil {
 					i.Logger.Errorf("failed to re-queue message %s after graph failure: %v", msg.ID, produceErr)
 				}
+			} else {
+				// TODO 让计数-1
+				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
+				if !ok {
+					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
+					return
+				}
+				value.(*cleanSyncMetaFile).counter.Add(-1)
 			}
 		})
 
@@ -197,10 +254,7 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
 	}
-	// 当调用链和嵌入任务都成功时，清理元数据文件。
-	if err = i.svcCtx.CodebaseStore.BatchDelete(i.ctx, syncMsg.CodebasePath, medataFileList); err != nil {
-		i.Logger.Errorf("failed to delete codebase %s metadata : %v, err: %v", syncMsg.CodebasePath, medataFileList, err)
-	}
+
 }
 
 // parseSyncMessage
@@ -223,5 +277,6 @@ func (i *indexJob) Close() {
 	if err != nil {
 		i.Logger.Errorf("close message queue failed: %v", err)
 	}
+
 	i.Logger.Info("indexJob closed successfully.")
 }
