@@ -1,32 +1,20 @@
-;; Go structure query
-;; Captures function definitions, type definitions, variable declarations, and more
-
-;; Function declarations
 (function_declaration
-  name: (identifier) @name) @function_declaration
+  name: (identifier) @name) @definition.function
 
-;; Method declarations
+(import_declaration (import_spec_list (import_spec) @name )*  (import_spec )* @name ) @import
+
 (method_declaration
-  name: (field_identifier) @name) @method_declaration
+  name: (field_identifier) @name) @definition.method
 
-;; Type declarations (struct)
-(type_declaration
-  (type_spec
-    name: (type_identifier) @name
-    type: (struct_type))) @type_declaration
+(package_clause "package" (package_identifier) @name) @package
 
-;; Type declarations (interface)
-(type_declaration
-  (type_spec
-    name: (type_identifier) @name
-    type: (interface_type))) @type_declaration
+(type_declaration (type_spec name: (type_identifier) @name type: (interface_type))) @definition.interface
 
-;; Variable declarations
-(var_declaration
-  (var_spec
-    name: (identifier) @name)) @var_declaration
+(type_declaration (type_spec name: (type_identifier) @name type: (struct_type))) @definition.struct
 
-;; Constant declarations
-(const_declaration
-  (const_spec
-    name: (identifier) @name)) @const_declaration
+(type_declaration (type_spec name: (type_identifier) @name type: (type_identifier))) @definition.type_alias
+
+
+(var_declaration (var_spec name: (identifier) @name)) @definition.var
+
+(const_declaration (const_spec name: (identifier) @name)) @difinition.const

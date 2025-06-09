@@ -3,83 +3,76 @@
 
 ;; Method declarations
 (method_declaration
-  name: (identifier) @name) @method
+  name: (identifier) @name) @declaration.method
 
 ;; Class declarations
 (class_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @declaration.class
 
 ;; Interface declarations
 (interface_declaration
-  name: (identifier) @name) @interface
+  name: (identifier) @name) @declaration.interface
 
 ;; Struct declarations
 (struct_declaration
-  name: (identifier) @name) @struct
+  name: (identifier) @name) @declaration.struct
 
 ;; Property declarations
 (property_declaration
-  name: (identifier) @name) @property
+  name: (identifier) @name) @declaration.property
 
 ;; Delegate declarations
 (delegate_declaration
-  name: (identifier) @name) @delegate
+  name: (identifier) @name) @declaration.delegate
 
 ;; Event declarations
 (event_declaration
-  name: (identifier) @name) @event
+  name: (identifier) @name) @declaration.event
 
 ;; Constructor declarations
 (constructor_declaration
-  name: (identifier) @name) @constructor
+  name: (identifier) @name) @declaration.constructor
 
 ;; Destructor declarations
 (destructor_declaration
-  name: (identifier) @name) @destructor
+  name: (identifier) @name) @declaration.destructor
 
 ;; Enum declarations
 (enum_declaration
-  name: (identifier) @name) @enum
+  name: (identifier) @name) @declaration.enum
 
 ;; Field declarations
 (field_declaration
   (variable_declaration
     (variable_declarator
-      name: (identifier) @name))) @field
+      name: (identifier) @name))) @declaration.field
 
 ;; Constant declarations
 (field_declaration
-  modifier_list: (modifier_list
-    (modifier) @modifier
-    (#eq? @modifier "const"))
   (variable_declaration
     (variable_declarator
-      name: (identifier) @name))) @constant
+      name: (identifier) @name))) @declaration.constant
 
 ;; Indexer declarations
 (indexer_declaration
-  name: (identifier) @name) @indexer
+  type: (identifier) @name) @declaration.indexer
 
 ;; Operator declarations
 (operator_declaration
-  name: (identifier) @name) @operator
+  type: (identifier) @name) @declaration.operator
 
 ;; Type parameter declarations
 (type_parameter
-  name: (identifier) @name) @type_parameter
+  name: (identifier) @name) @declaration.type_parameter
 
 ;; Record definitions (C# 9.0+)
 (record_declaration
-  name: (identifier) @name) @record
-
-;; Record struct definitions (C# 10.0+)
-(record_struct_declaration
-  name: (identifier) @name) @record_struct
+  name: (identifier) @name) @declaration.record
 
 ;; Local function definitions
 (local_function_statement
-  name: (identifier) @name) @local_function
+  name: (identifier) @name) @declaration.local_function
 
 ;; Conversion operator definitions
 (conversion_operator_declaration
-  type: (identifier) @name) @conversion_operator
+  type: (identifier) @name) @declaration.conversion_operator

@@ -1,3 +1,5 @@
+(import_statement ) @import @name
+(import_from_statement )  @import_from @name
 ;; Python structure query
 ;; Captures function definitions, class definitions, variable declarations, and more
 
@@ -12,7 +14,7 @@
 ;; Decorated functions
 (decorated_definition
   definition: (function_definition
-    name: (identifier) @name)) @function
+                name: (identifier) @name)) @function
 
 ;; Variable assignments
 (assignment
@@ -26,22 +28,22 @@
 ;; Method definitions (inside classes)
 (class_definition
   body: (block
-    (function_definition
-      name: (identifier) @name))) @method
+          (function_definition
+            name: (identifier) @name))) @method
 
 ;; Type aliases
-(assignment 
+(assignment
   left: (identifier) @name
   right: (call
-    function: (identifier)
-    (#eq? @name "TypeVar"))) @type
+           function: (identifier)
+           (#eq? @name "TypeVar"))) @type
 
 ;; Enum definitions (Python 3.4+)
 (class_definition
   name: (identifier) @name
   superclasses: (argument_list
-    (identifier) @base
-    (#eq? @base "Enum"))) @enum
+                  (identifier) @base
+                  (#eq? @base "Enum"))) @enum
 
 ;; Dataclass definitions
 (decorated_definition
@@ -49,12 +51,12 @@
     (expression (identifier) @decorator)
     (#eq? @decorator "dataclass"))
   definition: (class_definition
-    name: (identifier) @name)) @dataclass
+                name: (identifier) @name)) @dataclass
 
 ;; Protocol definitions
 (class_definition
   name: (identifier) @name
   superclasses: (argument_list
-    (identifier) @base
-    (#eq? @base "Protocol"))
-) @protocol
+                  (identifier) @base
+                  (#eq? @base "Protocol"))
+  ) @protocol

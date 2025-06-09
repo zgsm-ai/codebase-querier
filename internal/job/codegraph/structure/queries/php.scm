@@ -23,20 +23,19 @@
 
 ;; Namespace definitions
 (namespace_definition
-  name: (name) @name) @namespace_definition
+  name: (namespace_name) @name) @namespace_definition
 
 ;; Property declarations
 (property_declaration
   (property_element
-    name: (variable_name) @name)) @property_declaration
+    (variable_name) @name)) @property_declaration
 
 ;; Constant declarations
 (const_declaration
-  (const_element
-    name: (name) @name)) @const_declaration
+  (const_element (name) @name)) @const_declaration
 
 ;; Variable declarations
-(variable_declaration
+(static_variable_declaration
   (variable_name) @name) @variable_declaration
 
 ;; Type alias declarations (using)
@@ -45,4 +44,4 @@
 
 ;; Enum declarations (PHP 8.1+)
 (enum_declaration
-  name: (name) @name) @enum 
+  name: (name) @name) @enum

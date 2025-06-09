@@ -3,15 +3,11 @@
 
 ;; Class declarations
 (class_declaration
-  name: (type_identifier) @name) @class
-
-;; Interface declarations
-(interface_declaration
-  name: (type_identifier) @name) @interface
+  name: (identifier) @name) @class
 
 ;; Object declarations
 (object_declaration
-  name: (type_identifier) @name) @object
+  name: (identifier) @name) @object
 
 ;; Function declarations
 (function_declaration
@@ -19,30 +15,21 @@
 
 ;; Property declarations
 (property_declaration
-  name: (identifier) @name) @property
+   (identifier) @name) @property
 
-;; Constant declarations
-(property_declaration
-  (modifiers
-    (modifier) @modifier
-    (#eq? @modifier "const"))
-  name: (identifier) @name) @constant
 
 ;; Type alias declarations
 (type_alias
-  name: (type_identifier) @name) @type
+   (identifier) @name) @type
 
 ;; Enum class declarations
-(enum_class
-  name: (type_identifier) @name) @enum
+(enum_entry
+  (identifier) @name) @enum
 
 ;; Companion object declarations
 (companion_object
-  (object_declaration 
-    name: (type_identifier) @name)) @companion
+    name: (identifier) @name) @companion
 
 ;; Constructor declarations
 (class_declaration
-  (primary_constructor
-    (class_parameter
-      name: (identifier) @name))) @constructor
+    name: (identifier) @name) @constructor

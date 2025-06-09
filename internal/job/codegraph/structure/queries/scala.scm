@@ -31,13 +31,6 @@
 (enum_definition
   name: (identifier) @name) @enum
 
-;; Case class definitions
-(class_definition
-  modifier_list: (modifier_list
-    (identifier) @modifier
-    (#eq? @modifier "case"))
-  name: (identifier) @name) @case_class
-
 ;; Value definitions (val)
 (val_definition
   pattern: (identifier) @name) @val
@@ -47,12 +40,5 @@
   pattern: (identifier) @name) @var
 
 ;; Package object definitions
-(package_object_definition
+(package_object
   name: (identifier) @name) @package_object
-
-;; Implicit class definitions
-(class_definition
-  modifier_list: (modifier_list
-    (identifier) @modifier
-    (#eq? @modifier "implicit"))
-  name: (identifier) @name) @implicit_class 

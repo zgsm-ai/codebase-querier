@@ -17,13 +17,18 @@ const queryExt = ".scm"
 var languageQueryConfig map[parser.Language]string
 
 func init() {
+	mustLoad()
+
+}
+
+func mustLoad() {
 	languageQueryConfig = make(map[parser.Language]string)
 	configs := parser.GetLanguageConfigs()
 	for _, lang := range configs {
 		queryPath := makeStructureQueryPath(lang.Language)
 		structureQueryContent, err := scmFS.ReadFile(queryPath)
 		if err != nil {
-			panic(fmt.Sprintf("failed to read structure query file %s for %s: %v", queryPath, lang, err))
+			panic(fmt.Sprintf("failed to read structure query file %s for %s: %v", queryPath, lang.Language, err))
 		}
 		// 校验query
 		langParser := sitter.NewParser()
@@ -40,7 +45,6 @@ func init() {
 		langParser.Close()
 		languageQueryConfig[lang.Language] = string(structureQueryContent)
 	}
-
 }
 
 func makeStructureQueryPath(lang parser.Language) string {

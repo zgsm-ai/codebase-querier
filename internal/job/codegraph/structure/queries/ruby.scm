@@ -17,9 +17,6 @@
 (singleton_method
   name: (identifier) @name) @singleton_method
 
-;; Constant declarations
-(constant
-  name: (constant) @name) @constant
 
 ;; Constant assignments
 (assignment
@@ -33,24 +30,24 @@
 ;; Module methods
 (module
   body: (body_statement
-    (method
-      name: (identifier) @name))) @method
+          (method
+            name: (identifier) @name))) @method
 
 ;; Class methods
 (class
   body: (body_statement
-    (singleton_method
-      name: (identifier) @name))) @method
+          (singleton_method
+            name: (identifier) @name))) @method
 
 ;; Instance methods
 (class
   body: (body_statement
-    (method
-      name: (identifier) @name))) @method
+          (method
+            name: (identifier) @name))) @method
 
 ;; Attribute accessors
 (call
   method: (identifier) @accessor
   (#match? @accessor "^(attr_reader|attr_writer|attr_accessor)$")
   arguments: (argument_list
-    (simple_symbol) @name)) @attribute 
+               (simple_symbol) @name)) @attribute

@@ -4,63 +4,56 @@
 ;; Function definitions
 (function_definition
   declarator: (function_declarator
-    declarator: (identifier) @name)) @function
+                declarator: (identifier) @name)) @definition.function
 
 ;; Class declarations
 (class_specifier
-  name: (type_identifier) @name) @class
+  name: (type_identifier) @name) @definition.class
 
 ;; Struct declarations
 (struct_specifier
-  name: (type_identifier) @name) @struct
+  name: (type_identifier) @name) @definition.struct
 
 ;; Method definitions (member functions)
 (function_definition
   declarator: (function_declarator
-    declarator: (qualified_identifier
-      name: (identifier) @name))) @method
+                declarator: (qualified_identifier
+                              name: (identifier) @name))) @definition.method
 
 ;; Constructor definitions
 (function_definition
   declarator: (function_declarator
-    declarator: (qualified_identifier
-      name: (identifier) @name))
-  (#match? @name "^[A-Z]")) @constructor
+                declarator: (qualified_identifier
+                              name: (identifier) @name))
+  (#match? @name "^[A-Z]")) @definition.constructor
 
-;; Namespace definitions
-(namespace_definition
-  name: (identifier) @name) @namespace
 
 ;; Template declarations
 (template_declaration
-  declaration: (declaration
-    declarator: (identifier) @name)) @template
-
-;; Using declarations
-(using_declaration
-  name: (identifier) @name) @using
+  (function_definition
+    declarator: (identifier) @name)) @declaration.template
 
 ;; Variable declarations
 (declaration
   declarator: (init_declarator
-    declarator: (identifier) @name)) @variable
+                declarator: (identifier) @name)) @declaration.variable
 
 ;; Member variable declarations
 (field_declaration
-  declarator: (field_identifier) @name) @field
+  declarator: (field_identifier) @name) @declaration.field
 
 ;; Union declarations
 (union_specifier
-  name: (type_identifier) @name) @union
+  name: (type_identifier) @name) @definition.union
 
 ;; Enum declarations
 (enum_specifier
-  name: (type_identifier) @name) @enum
+  name: (type_identifier) @name) @definition.enum
 
 ;; Type alias declarations (using)
 (alias_declaration
-  name: (type_identifier) @name) @type_alias
+  name: (type_identifier) @name) @declaration.type_alias
 
 ;; Typedef declarations
 (type_definition
-  declarator: (type_identifier) @name) @typedef
+  declarator: (type_identifier) @name) @definition.typedef

@@ -1,30 +1,34 @@
 ;; Java structure query
 ;; Captures class definitions, interface definitions, method definitions, and more
 
+(package_declaration ) @name @decllaration.package
+
+(import_declaration ) @name @declaration.import
+
 ;; Class declarations
 (class_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @declaration.class
 
 ;; Interface declarations
 (interface_declaration
-  name: (identifier) @name) @interface
+  name: (identifier) @name) @declaration.interface
 
 ;; Method declarations
 (method_declaration
-  name: (identifier) @name) @method
+  name: (identifier) @name) @declaration.method
 
 ;; Constructor declarations
 (constructor_declaration
-  name: (identifier) @name) @constructor
+  name: (identifier) @name) @declaration.constructor
 
 ;; Enum declarations
 (enum_declaration
-  name: (identifier) @name) @enum
+  name: (identifier) @name) @declaration.enum
 
 ;; Field declarations
 (field_declaration
   declarator: (variable_declarator
-    name: (identifier) @name)) @field
+                name: (identifier) @name)) @declaration.field
 
 ;; Constant field declarations (static final)
 (field_declaration
@@ -32,20 +36,20 @@
     "static"
     "final")
   (variable_declarator
-    name: (identifier) @name)) @constant
+    name: (identifier) @name)) @declaration.constant
 
 ;; Enum constants
 (enum_constant
-  name: (identifier) @name) @enum_constant
+  name: (identifier) @name) @declaration.enum_constant
 
 ;; Type parameters
 (type_parameters
-  (type_parameter) @type_parameter)
+  (type_parameter) @type_parameter) @declaration.type_parameters
 
 ;; Annotation declarations
 (annotation_type_declaration
-  name: (identifier) @name) @annotation
+  name: (identifier) @name) @declaration.annotation
 
 ;; Record declarations (Java 14+)
 (record_declaration
-  name: (identifier) @name) @record
+  name: (identifier) @name) @declaration.record

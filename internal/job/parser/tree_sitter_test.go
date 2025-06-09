@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -142,4 +143,50 @@ func TestWalk(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestWalkRecur(t *testing.T) {
+	parser := sitter.NewParser()
+	lang := sitter.NewLanguage(sittergo.Language())
+	err := parser.SetLanguage(lang)
+	assert.NoError(t, err)
+	// 示例Go代码
+	sourceCode := []byte(`
+		package main
+
+		import "fmt"
+
+		// 计算两数之和
+		func add(a, b int) int {
+			return a + b
+		}
+
+		func main() {
+			fmt.Println(add(3, 5))
+		}
+	`)
+	// 解析代码生成语法树
+	tree := parser.Parse(sourceCode, nil)
+	defer tree.Close()
+	// 获取根节点并创建遍历器
+	rootNode := tree.RootNode()
+
+	var dfs func(node *sitter.Node, depth int)
+	dfs = func(node *sitter.Node, depth int) {
+		if node == nil {
+			return
+		}
+
+		// 处理节点（示例：打印节点类型和位置）
+		startLine := node.StartPosition().Row
+		endLine := node.EndPosition().Row
+		indent := strings.Repeat("  ", depth) // 缩进表示层级
+		fmt.Printf("%sNode: %-15s | Lines: %d-%d | content: %s\n",
+			indent, node.Kind(), startLine, endLine, node.Utf8Text(sourceCode))
+		childCount := node.ChildCount()
+		for i := uint(0); i < childCount; i++ {
+			dfs(node.Child(i), depth+1)
+		}
+	}
+	dfs(rootNode, 0)
 }
