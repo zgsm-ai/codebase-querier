@@ -20,13 +20,17 @@ var ErrQueryNotFound = errors.New("query not found")
 type Parser struct {
 }
 
+type ParseOptions struct {
+	IncludeContent bool
+}
+
 // NewStructureParser creates a new generic parser with the given config.
 func NewStructureParser() (*Parser, error) {
 	return &Parser{}, nil
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s Parser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, error) {
+func (s *Parser) Parse(codeFile *types.CodeFile, opts ParseOptions) (*codegraphpb.CodeStructure, error) {
 	// Extract file extension
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
@@ -46,8 +50,8 @@ func (s Parser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, err
 	if err := sitterParser.SetLanguage(sitterLanguage); err != nil {
 		return nil, err
 	}
-	content := codeFile.Content
-	tree := sitterParser.Parse(content, nil)
+	code := codeFile.Content
+	tree := sitterParser.Parse(code, nil)
 	if tree == nil {
 		return nil, fmt.Errorf("failed to parse file")
 	}
@@ -62,17 +66,16 @@ func (s Parser) Parse(codeFile *types.CodeFile) (*codegraphpb.CodeStructure, err
 	// 执行 query，并处理匹配结果
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
-	matches := qc.Matches(query, tree.RootNode(), content)
+	matches := qc.Matches(query, tree.RootNode(), code)
 
 	// 消费 matches，并调用 ProcessStructureMatch 处理匹配结果
-	processor := newDefinitionProcessor()
 	definitions := make([]*codegraphpb.Definition, 0)
 	for {
 		m := matches.Next()
 		if m == nil {
 			break
 		}
-		def, err := processor.ProcessDefinitionNode(m, query, tree.RootNode(), content)
+		def, err := s.ProcessDefinitionNode(m, query, tree.RootNode(), code, opts)
 		if err != nil {
 			continue // 跳过错误的匹配
 		}

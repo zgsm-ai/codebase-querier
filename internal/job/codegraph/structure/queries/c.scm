@@ -1,4 +1,6 @@
-(preproc_include ) @definition.include @name
+(preproc_include
+  "#include" @name
+  ) @definition.include
 
 (preproc_def )  @definition.macro @name
 

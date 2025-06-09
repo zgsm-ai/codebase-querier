@@ -120,21 +120,18 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 		return nil, errs.NewMissingParamError(filePath)
 	}
 	// 1. 获取文档
-	var doc *codegraphpb.Document
+	var doc codegraphpb.Document
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(DocKey(opts.FilePath))
 		if err != nil {
 			return err
 		}
 		return item.Value(func(val []byte) error {
-			return DeserializeDocument(val, doc)
+			return DeserializeDocument(val, &doc)
 		})
 	})
 	if err != nil {
 		return nil, err
-	}
-	if doc == nil {
-		return nil, fmt.Errorf("document not found: %s", opts.FilePath)
 	}
 
 	var res []*types.GraphNode
@@ -142,9 +139,9 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 
 	// Find root symbols based on query options
 	if opts.SymbolName != "" {
-		foundSymbols = b.querySymbolsByNameAndLine(doc, opts)
+		foundSymbols = b.querySymbolsByNameAndLine(&doc, opts)
 	} else {
-		foundSymbols = b.querySymbolsByPosition(doc, opts)
+		foundSymbols = b.querySymbolsByPosition(&doc, opts)
 	}
 
 	// Check if any root symbols were found
@@ -154,6 +151,18 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	// root
 	// 找定义节点，以定义节点为根节点进行深度遍历
 	for _, s := range foundSymbols {
+		// 如果当前Symbol 就是定义，加入
+		if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
+			res = append(res, &types.GraphNode{
+				FilePath:   doc.Path,
+				SymbolName: s.Name,
+				Identifier: s.Identifier,
+				Position:   types.ToPosition(s.Range),
+				NodeType:   string(types.NodeTypeDefinition),
+			})
+			continue
+		}
+		// 不是定义节点，找它的relation中的定义节点
 		relations := s.Relations
 		if len(relations) == 0 {
 			continue
@@ -179,14 +188,14 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	//		res = append(res, graphNode)
 	//	}
 	//}
-
+	// TODO 一层递归，返回内容，range可能需要从struct_file中获取，或者将tree_sitter 获取到的定义range和当前的合并。
 	// Build the rest of the tree recursively
 	// We need to build children for the root nodes found
 	for _, rootNode := range res {
 		// Pass the corresponding original symbol proto to the recursive function
 		b.buildChildrenRecursive(rootNode, opts.MaxLayer)
 	}
-
+	//TODO symbolName 不一致，有些是 scip-go开头，有些是函数名。统一为函数名。 数据结构需要优化下， 定义-> 引用行-> 定义函数/变量（这里是否要前面的引用行合并）-> 引用。 即函数A被函数B调用（在某行），函数B被函数C调用。
 	return res, nil
 }
 
@@ -216,10 +225,10 @@ func (b BadgerDBGraph) convertSymbolToGraphNode(filePath string, symbol *codegra
 		FilePath:   filePath,
 		SymbolName: symbol.Identifier,
 		Position:   types.ToPosition(symbol.Range), // Use the helper function from types
-		Content:    symbol.Content,
-		NodeType:   string(nodeType),
-		Children:   []*types.GraphNode{}, // Initialize children slice
-		Parent:     nil,                  // Parent will be set by the caller when building the tree
+		// Content:    symbol.Content, TODO one-layer return
+		NodeType: string(nodeType),
+		Children: []*types.GraphNode{}, // Initialize children slice
+		Caller:   nil,                  // Parent will be set by the caller when building the tree
 	}
 
 	return graphNode
@@ -292,6 +301,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 	identifier := node.Identifier
 	position := node.Position
 	// 根据path和position，定义到 symbol，从而找到它的relation
+	// TODO node 节点如果自己就是Symbol 定义节点，则它的relation是知道的，不需要再查找；如果它是relation中的定义，则它的relation是0，需要定位到它在document 中的symbol。这里多查了一次，有点消耗性能
 	var document codegraphpb.Document
 	err := b.findDocument(DocKey(symbolPath), &document)
 	if err != nil {
@@ -304,7 +314,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 
 	var children []*types.GraphNode
 
-	// 找到symbol 的relation. 只有定义的symbol 有reference，
+	// 找到symbol 的relation. 只有定义的symbol 有reference，引用节点的relation是定义节点
 	if len(symbol.Relations) > 0 {
 		for _, r := range symbol.Relations {
 			if r.RelationType == codegraphpb.RelationType_RELATION_REFERENCE {
@@ -314,7 +324,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 					SymbolName: r.Name,
 					Identifier: r.Identifier,
 					Position:   types.ToPosition(r.Range),
-					NodeType:   string(types.NodeTypeDefinition),
+					NodeType:   string(types.NodeTypeReference),
 				})
 			}
 		}
@@ -327,7 +337,10 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 		if err != nil {
 			return
 		}
-		// 定义symbol
+		if structFile.Path == types.EmptyString { // 没找到
+			logx.Debugf("cannot found symbol %s struct file by symbol path %s", identifier, symbolPath)
+		}
+		// 定义symbol TODO 这里找到了定义，它的relation 需要处理，这里不处理，后面的递归，又重新处理。这里的递归，和入口上面的递归，需要合并下。逻辑相似
 		foundDefSymbol := b.findSymbolInStruct(&structFile, position)
 		children = append(children, &types.GraphNode{
 			FilePath:   foundDefSymbol.Path,
@@ -485,8 +498,8 @@ func (b BadgerDBGraph) findSymbolInDocByRange(document *codegraphpb.Document, sy
 			logx.Debugf("findSymbolInDocByRange invalid range in doc:%s, less than 2: %v", s.Identifier, s.Range)
 			continue
 		}
-		// 开始行、列一致
-		if s.Range[0] == symbolRange[0] && s.Range[1] == symbolRange[1] {
+		// 开始行、TODO 列一致   这里，当前tree-sitter 捕获的是 整个函数体，而scip则是name，暂时先只通过行号处理（要确保local被过滤）
+		if s.Range[0] == symbolRange[0] {
 			return s
 		}
 	}

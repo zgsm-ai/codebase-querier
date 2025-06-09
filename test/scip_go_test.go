@@ -90,6 +90,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 	parser, err := structure.NewStructureParser()
 	assert.NoError(t, err)
 	var data []*codegraphpb.CodeStructure
+	count := 0
 	err = localCodebase.Walk(ctx, codebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
 		if walkCtx.Info.IsDir {
 			return nil
@@ -97,17 +98,18 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 		if reader == nil {
 			return fmt.Errorf("reader is nil")
 		}
-		t.Logf("parsing file: %s", walkCtx.RelativePath)
+		count++
+		t.Logf("cnt: %d,parsing file: %s", count, walkCtx.RelativePath)
 		bytes, err := io.ReadAll(reader)
 		if err != nil {
 			t.Logf("read file error: %v", err)
 			return err
 		}
 		parsed, err := parser.Parse(&types.CodeFile{
-			Path:         walkCtx.Path,
+			Path:         walkCtx.RelativePath,
 			CodebasePath: codebasePath,
 			Content:      bytes,
-		})
+		}, structure.ParseOptions{IncludeContent: false})
 		if err != nil && !errors.Is(err, structure.ErrExtNotFound) && !errors.Is(err, structure.ErrLangConfNotFound) {
 			return err
 		}
@@ -116,13 +118,15 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 		}
 		data = append(data, parsed)
 		return nil
-	}, codebase.WalkOptions{IgnoreError: true})
+	}, codebase.WalkOptions{IgnoreError: true, ExcludePrefixes: []string{"vendor"}, IncludePrefixes: []string{"cmd"}, IncludeExts: []string{".go"}})
+	t.Logf("parse time cost: %v seconds", time.Since(start).Seconds())
 	assert.NoError(t, err)
 	err = graph.BatchWriteCodeStructures(ctx, data)
 	assert.NoError(t, err)
-	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
+	t.Logf("write time cost: %v seconds", time.Since(start).Seconds())
 }
 
+// TestQueryBadgerDB run tests above at first.
 func TestQueryBadgerDB(t *testing.T) {
 	start := time.Now()
 	projectPath := "go/kubernetes"
@@ -134,19 +138,6 @@ func TestQueryBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	defer graph.Close()
 
-	// 2. 初始化 codebase store
-	storeConf := config.CodeBaseStoreConf{
-		Local: config.LocalStoreConf{
-			BasePath: testProjectsBaseDir,
-		},
-	}
-	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
-	assert.NoError(t, err)
-
-	// 3. 解析和写入数据
-	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
-	parser := scipindex.NewIndexParser(ctx, localCodebase, graph)
-	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
 	t.Logf("store time: %f seconds", time.Since(start).Seconds())
 
@@ -158,6 +149,7 @@ func TestQueryBadgerDB(t *testing.T) {
 		StartLine:  37,
 		EndLine:    37,
 		SymbolName: "GetControlPlaneEndpoint",
+		MaxLayer:   3,
 	})
 	if err != nil {
 		t.Logf("queryPath error: %v\n", err)

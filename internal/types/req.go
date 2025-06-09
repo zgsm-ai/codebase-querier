@@ -51,7 +51,7 @@ type RelationQueryOptions struct {
 	EndColumn      int    `form:"endColumn"`                    // 结束列
 	SymbolName     string `form:"symbolName,optional"`          // 符号名（可选）
 	IncludeContent int    `form:"includeContent,default=0"`     // 是否返回代码内容（1=是，0=否，默认0）
-	MaxLayer       int    `form:"maxLayer,optional,default=10"` // 最大层级数（默认10）
+	MaxLayer       int    `form:"maxLayer,optional,default=1"` // 最大层级数（默认1）
 }
 
 type RelationResponseData struct {

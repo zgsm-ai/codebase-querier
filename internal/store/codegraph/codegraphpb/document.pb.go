@@ -171,7 +171,7 @@ type Symbol struct {
 	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"` // 符号名 (符号的唯一标识符，例如 SCIP 符号描述符)
 	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Path       string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`       // 所在文件的相对路径
-	Content    string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"` // 符号内容（代码片段）
+	Content    []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"` // 符号内容（代码片段）
 	// Role 在这里表示这个 Symbol 出现点在该文件中的角色 (比如是定义点、引用点)
 	// 假设 types.SymbolRole 可以映射到 Protobuf enum，或者直接使用 RelationType
 	// 为了简单和统一，我们在这里复用 RelationType 来表示出现点的角色
@@ -235,11 +235,11 @@ func (x *Symbol) GetPath() string {
 	return ""
 }
 
-func (x *Symbol) GetContent() string {
+func (x *Symbol) GetContent() []byte {
 	if x != nil {
 		return x.Content
 	}
-	return ""
+	return nil
 }
 
 func (x *Symbol) GetRole() RelationType {
@@ -350,7 +350,7 @@ const file_internal_store_codegraph_document_proto_rawDesc = "" +
 	"identifier\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\tR\acontent\x12-\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\x12-\n" +
 	"\x04role\x18\x05 \x01(\x0e2\x19.codegraphpb.RelationTypeR\x04role\x12\x12\n" +
 	"\x04type\x18\x06 \x01(\x05R\x04type\x12\x1c\n" +
 	"\tnamespace\x18\a \x01(\tR\tnamespace\x12\x14\n" +

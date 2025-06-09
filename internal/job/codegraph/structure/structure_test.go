@@ -49,7 +49,7 @@ var TestVar = "test"
 	structure, err := parser.Parse(&types.CodeFile{
 		Content: code,
 		Path:    "test.go",
-	})
+	}, ParseOptions{})
 	if err != nil {
 		t.Fatalf("failed to parse file structure: %v", err)
 	}

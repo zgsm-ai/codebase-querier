@@ -515,8 +515,25 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 		if relativePath == "." {
 			return nil
 		}
-		if slices.Contains(walkOpts.IgnoreExts, filepath.Ext(filePath)) {
+		fileExt := filepath.Ext(relativePath)
+		if slices.Contains(walkOpts.ExcludeExts, fileExt) {
 			return nil
+		}
+
+		if len(walkOpts.IncludeExts) > 0 && !slices.Contains(walkOpts.IncludeExts, fileExt) {
+			return nil
+		}
+
+		for _, p := range walkOpts.ExcludePrefixes {
+			if strings.HasPrefix(relativePath, p) {
+				return nil
+			}
+		}
+
+		for _, p := range walkOpts.IncludePrefixes {
+			if !strings.HasPrefix(relativePath, p) {
+				return nil
+			}
 		}
 
 		// Convert Windows filePath separators to forward slashes

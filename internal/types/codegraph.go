@@ -38,7 +38,7 @@ type GraphNode struct {
 	Content    string       `json:"content"`
 	NodeType   string       `json:"nodeType"`
 	Children   []*GraphNode `json:"children"`
-	Parent     *GraphNode   `json:"parent"`
+	Caller     *GraphNode   `json:"caller,omitempty"`
 }
 
 type Position struct {

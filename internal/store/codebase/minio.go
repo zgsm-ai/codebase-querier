@@ -449,7 +449,7 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			return fmt.Errorf("failed to list objects: %w", object.Err)
 		}
 
-		if slices.Contains(walkOpts.IgnoreExts, filepath.Ext(object.Key)) {
+		if slices.Contains(walkOpts.ExcludeExts, filepath.Ext(object.Key)) {
 			return nil
 		}
 
@@ -458,6 +458,7 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 		if relPath == "" {
 			continue
 		}
+		// TODO 应用过滤策略
 
 		// 构建 WalkContext，使用相对路径
 		walkCtx := &WalkContext{

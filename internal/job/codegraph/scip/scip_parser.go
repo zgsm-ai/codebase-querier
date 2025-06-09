@@ -3,12 +3,10 @@ package scip
 import (
 	"context"
 	"fmt"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"io"
 	"path/filepath"
-	"strings"
-
-	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -154,7 +152,7 @@ func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
 					continue
 				}
 				if getSymbolRoleFromOccurrence(occ) != codegraphpb.RelationType_RELATION_DEFINITION {
-					return
+					continue
 				}
 				// 只保存定义，symbol 会在多个文件中重复出现，因为有引用的存在
 				result.AllOccurrenceDefinitions[occ.Symbol] = buildSymbol(occ, d.RelativePath)
@@ -215,7 +213,6 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 		}
 		symbolDef, ok := allSymbolDefinitions[symbolName]
 		if ok {
-			symbolDef.Content = strings.Join(sym.Documentation, types.EmptyString)
 			symbolDef.Relations = append(symbolDef.Relations, rels...)
 		} else { //TODO 带冒号的: scip-go gomod k8s.io/kubernetes . `k8s.io/kubernetes/cluster/images/etcd-version-monitor`/gatherer:MetricFamily. 项目内一些奇怪的东西，应该在prepareVisit中被访问的
 			//logx.Errorf("symbols defSymbol %s definition not found in allSymbolDefinitions", symbolName)
@@ -261,7 +258,8 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 			if symbolDef != nil {
 				// 引用->定义
 				occurSymbol.Relations = append([]*codegraphpb.Relation(nil), &codegraphpb.Relation{
-					Name:         symbolDef.Identifier,
+					Name:         symbolDef.Name,
+					Identifier:   symbolDef.Identifier,
 					FilePath:     symbolDef.Path,
 					Range:        symbolDef.Range,
 					RelationType: codegraphpb.RelationType_RELATION_DEFINITION,
@@ -269,6 +267,7 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 				// 定义 -> 引用
 				symbolDef.Relations = append(symbolDef.Relations, &codegraphpb.Relation{
 					Name:         occurSymbol.Identifier,
+					Identifier:   occurSymbol.Identifier,
 					FilePath:     relativePath,
 					Range:        occ.Range,
 					RelationType: codegraphpb.RelationType_RELATION_REFERENCE,

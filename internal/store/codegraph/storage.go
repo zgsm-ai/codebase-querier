@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -35,14 +36,14 @@ const (
 	SymPrefix    = "sym:" // 符号数据前缀
 )
 
-// DocKey 键生成函数
+// DocKey 键生成函数  unix path
 func DocKey(path string) []byte {
-	return []byte(fmt.Sprintf("%s%s", DocPrefix, path))
+	return []byte(fmt.Sprintf("%s%s", DocPrefix, utils.ToUnixPath(path)))
 }
 
-// StructKey 键生成函数
+// StructKey 键生成函数 unix path
 func StructKey(path string) []byte {
-	return []byte(fmt.Sprintf("%s%s", StructPrefix, path))
+	return []byte(fmt.Sprintf("%s%s", StructPrefix, utils.ToUnixPath(path)))
 }
 
 // SerializeDocument 序列化函数

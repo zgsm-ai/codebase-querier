@@ -18,21 +18,13 @@ var (
 
 const name = "name"
 
-// BaseProcessor provides common functionality for all language processors
-type BaseProcessor struct {
-}
-
-// newDefinitionProcessor creates a new base processor
-func newDefinitionProcessor() *BaseProcessor {
-	return &BaseProcessor{}
-}
-
 // ProcessDefinitionNode provides shared functionality for processing structure matches
-func (p *BaseProcessor) ProcessDefinitionNode(
+func (p *Parser) ProcessDefinitionNode(
 	match *sitter.QueryMatch,
 	query *sitter.Query,
 	root *sitter.Node,
-	content []byte,
+	code []byte,
+	opts ParseOptions,
 ) (*codegraphpb.Definition, error) {
 	if len(match.Captures) == 0 {
 		return nil, ErrNoCaptures
@@ -56,9 +48,9 @@ func (p *BaseProcessor) ProcessDefinitionNode(
 	if defNode == nil || nameNode == nil {
 		return nil, ErrMissingNode
 	}
-
+	// TODO range 有问题，golang  import (xxx xxx xxx) 捕获的是整体。
 	// 获取名称
-	nodeName := nameNode.Utf8Text(content)
+	nodeName := nameNode.Utf8Text(code)
 	if nodeName == "" {
 		return nil, fmt.Errorf("no name found for Definition")
 	}
@@ -71,9 +63,15 @@ func (p *BaseProcessor) ProcessDefinitionNode(
 	endLine := endPoint.Row
 	endColumn := endPoint.Column
 
+	var content []byte
+	if opts.IncludeContent {
+		content = code[defNode.StartByte():defNode.EndByte()]
+	}
+
 	return &codegraphpb.Definition{
-		Type:  defType,
-		Name:  nodeName,
-		Range: []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
+		Type:    defType,
+		Name:    nodeName,
+		Range:   []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
+		Content: content,
 	}, nil
 }

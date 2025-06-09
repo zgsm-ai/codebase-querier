@@ -70,7 +70,7 @@ func NewCodegraphProcessor(ctx context.Context,
 func (t *codegraphProcessor) Process() error {
 	t.logger.Infof("start to execute codegraph processor %v", t.msg)
 
-	// 启动一个协程去将所有文件的结构提取处理
+	// 启动一个协程去将所有文件的结构提取处理 TODO ,循环启协程并发处理， + ignorePatterns ignoreExts 去跳过部分文件/目录
 	go t.parseCodeStructure()
 
 	start := time.Now()
@@ -155,7 +155,7 @@ func (t *codegraphProcessor) parseCodeStructure() {
 				CodebasePath: t.msg.CodebasePath,
 				Name:         filepath.Base(path),
 				Content:      content,
-			})
+			}, structure.ParseOptions{IncludeContent: false})
 			if err != nil {
 				t.logger.Errorf("code structure parse err:%w", err)
 				// 继续处理

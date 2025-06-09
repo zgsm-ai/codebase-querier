@@ -91,7 +91,8 @@ type Definition struct {
 	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`           // 定义类型
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`           // 名称
 	Range         []int32                `protobuf:"varint,3,rep,packed,name=range,proto3" json:"range,omitempty"` // [startLine, startColumn, endLine, endColumn] (0-based)
-	Signature     string                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"` // 完整签名
+	Signature     string                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"` // 签名
+	Content       []byte                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -154,21 +155,29 @@ func (x *Definition) GetSignature() string {
 	return ""
 }
 
+func (x *Definition) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
 var File_internal_store_codegraph_structure_proto protoreflect.FileDescriptor
 
 const file_internal_store_codegraph_structure_proto_rawDesc = "" +
 	"\n" +
-	"(internal/store/codegraph/structure.proto\x12\vcodegraphpb\"~\n" +
-	"\x11CodeFileStructure\x12\x12\n" +
+	"(internal/store/codegraph/structure.proto\x12\vcodegraphpb\"z\n" +
+	"\rCodeStructure\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1a\n" +
 	"\blanguage\x18\x02 \x01(\tR\blanguage\x129\n" +
-	"\vdefinitions\x18\x03 \x03(\v2\x17.codegraphpb.DefinitionR\vdefinitions\"h\n" +
+	"\vdefinitions\x18\x03 \x03(\v2\x17.codegraphpb.DefinitionR\vdefinitions\"\x82\x01\n" +
 	"\n" +
 	"Definition\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05range\x18\x03 \x03(\x05R\x05range\x12\x1c\n" +
-	"\tsignature\x18\x04 \x01(\tR\tsignatureB2Z0internal/store/codegraph/codegraphpb;codegraphpbb\x06proto3"
+	"\tsignature\x18\x04 \x01(\tR\tsignature\x12\x18\n" +
+	"\acontent\x18\x05 \x01(\fR\acontentB2Z0internal/store/codegraph/codegraphpb;codegraphpbb\x06proto3"
 
 var (
 	file_internal_store_codegraph_structure_proto_rawDescOnce sync.Once

@@ -95,6 +95,9 @@ type WalkFunc func(walkCtx *WalkContext, reader io.ReadCloser) error
 var SkipDir = errors.New("skip this directory")
 
 type WalkOptions struct {
-	IgnoreError bool
-	IgnoreExts  []string
+	IgnoreError     bool
+	ExcludeExts     []string
+	IncludeExts     []string
+	ExcludePrefixes []string
+	IncludePrefixes []string
 }
