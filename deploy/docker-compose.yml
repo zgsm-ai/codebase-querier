@@ -25,7 +25,7 @@ services:
       - "5432:5432/tcp"
     networks:
       - shenma
-      -
+
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.31.0
     command:

@@ -26,8 +26,8 @@ IndexTask:
     Timeout: 180s
 
 Cleaner:
-  Cron: "0 0 0 * * *"
-  CodebaseExpireDays: 7
+  Cron: "0 0 * * *"
+  CodebaseExpireDays: 3
 
 Redis:
   Addr: 0.0.0.0:6379

@@ -19,7 +19,6 @@ const lockTimteoutSeconds = time.Second * 120
 type cleaner struct {
 	svcCtx *svc.ServiceContext
 	ctx    context.Context
-	logger logx.Logger
 	cron   *cron.Cron
 }
 
@@ -31,7 +30,7 @@ func (c *cleaner) Close() {
 func (c *cleaner) Start() {
 	//TODO implement me
 	c.cron.Start() // 启动 Cron
-	c.logger.Infof("cleaner task started")
+	logx.Infof("cleaner job started")
 }
 
 func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
@@ -102,6 +101,6 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	return &cleaner{
 		svcCtx: svcCtx,
 		ctx:    ctx,
-		logger: logx.WithContext(ctx),
+		cron:   cr,
 	}, nil
 }

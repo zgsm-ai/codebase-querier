@@ -48,6 +48,6 @@ func main() {
 
 	handler.RegisterHandlers(server, svcCtx)
 
-	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
+	fmt.Printf("Started server at %s:%d\n", c.Host, c.Port)
 	server.Start()
 }

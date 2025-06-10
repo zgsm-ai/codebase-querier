@@ -48,7 +48,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 	}
 
 	if !s.enableFlag {
-		s.Logger.Infof("Job is disabled, IS_INDEX_NODE flag is %d, not subscribe message queue", s.enableFlag)
+		s.Logger.Infof("IS_INDEX_NODE flag is %t, not subscribe message queue", s.enableFlag)
 		return s, nil
 	}
 

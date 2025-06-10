@@ -34,6 +34,7 @@ type weaviateWrapper struct {
 
 func New(ctx context.Context, cfg config.VectorStoreConf, embedder embeddings.Embedder, reranker Reranker) (Store, error) {
 	store, err := weaviate.New(
+		weaviate.WithScheme(schemeHttp),
 		weaviate.WithHost(cfg.Weaviate.Endpoint),
 		weaviate.WithAPIKey(cfg.Weaviate.APIKey),
 		weaviate.WithIndexName(cfg.Weaviate.IndexName),
