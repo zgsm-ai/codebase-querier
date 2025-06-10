@@ -3,10 +3,12 @@ package logic
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"net/http"
+	"time"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -29,7 +31,6 @@ func NewUploadFilesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Uploa
 }
 
 func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Request) error {
-	// TODO 删除的处理
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 	codebaseName := req.CodebaseName
@@ -74,7 +75,52 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	if err != nil {
 		return err
 	}
+	var publishStatus = model.PublishStatusPending
+	syncHistory := model.SyncHistory{
+		CodebaseId:    codebase.Id,
+		PublishStatus: string(publishStatus),
+		PublishTime:   sql.NullTime{Time: time.Now()},
+	}
+	if _, err = l.svcCtx.SyncHistoryModel.Insert(l.ctx, &syncHistory); err != nil {
+		logx.Errorf("insert sync history %v error:%v", syncHistory, err)
+		return nil
+	}
+
 	l.Logger.Debugf("uploadFiles successfully: %s, %s, %s", clientId, clientPath, codebaseName)
+	syncId := syncHistory.Id
+	if syncHistory.Id == 0 {
+		syncId = time.Now().Unix()
+	}
+	// 发送文件消息
+	msg := &types.CodebaseSyncMessage{
+		SyncID:       syncId,
+		CodebaseID:   codebase.Id,
+		CodebasePath: codebase.Path,
+		CodebaseName: codebase.Name,
+	}
+	bytes, err := json.Marshal(msg)
+	if err != nil {
+		logx.Errorf("marshal message error:%v", err)
+		publishStatus = model.PublishStatusFailed
+	} else {
+		//TODO 发送失败，本地记录，重发。
+		err = l.svcCtx.MessageQueue.Produce(l.ctx, l.svcCtx.Config.IndexTask.Topic, bytes, types.ProduceOptions{})
+		if err != nil {
+			logx.Errorf("produce message error:%v", err)
+			publishStatus = model.PublishStatusFailed
+		}
+		publishStatus = model.PublishStatusSuccess
+	}
+
+	// 更新
+	syncHistory.PublishStatus = string(publishStatus)
+	syncHistory.PublishTime = sql.NullTime{Time: time.Now()}
+	syncHistory.Message = string(bytes)
+	if _, err = l.svcCtx.SyncHistoryModel.Insert(l.ctx, &syncHistory); err != nil {
+		logx.Errorf("update sync history %v error:%v", syncHistory, err)
+		return nil
+	}
+
 	return nil
 }
 

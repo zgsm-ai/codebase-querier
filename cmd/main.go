@@ -4,16 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-
+	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/rest"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
 	"github.com/zgsm-ai/codebase-indexer/internal/job"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
-
-	"github.com/zeromicro/go-zero/core/conf"
-	"github.com/zeromicro/go-zero/rest"
+	"github.com/zgsm-ai/codebase-indexer/migrations"
+	"net/http"
 )
 
 var configFile = flag.String("f", "etc/conf.yaml", "the config file")
@@ -26,11 +25,11 @@ func main() {
 
 	logx.MustSetup(c.Log)
 
-	if err := model.AutoMigrate(c.Database); err != nil {
+	if err := migrations.AutoMigrate(c.Database); err != nil {
 		panic(err)
 	}
 
-	server := rest.MustNewServer(c.RestConf)
+	server := rest.MustNewServer(c.RestConf, rest.WithFileServer("/static/", http.Dir("api/static/")))
 	defer server.Stop()
 
 	serverCtx, cancelFunc := context.WithCancel(context.Background())

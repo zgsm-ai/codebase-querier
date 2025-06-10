@@ -11,7 +11,7 @@ import (
 func NewRedisClient(c config.RedisConfig) (*redis.Client, error) {
 	// 构建原生Redis客户端配置
 	rdbCfg := redis.Options{
-		Addr:         c.Host,
+		Addr:         c.Addr,
 		Password:     c.Password,
 		DB:           c.DB,
 		PoolSize:     c.PoolSize,

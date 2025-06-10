@@ -243,15 +243,15 @@ func (mr *MockStoreMockRecorder) Unzip(ctx, codebasePath, source, target interfa
 }
 
 // Walk mocks base method.
-func (m *MockStore) Walk(ctx context.Context, codebasePath, dir string, walkFn codebase.WalkFunc) error {
+func (m *MockStore) Walk(ctx context.Context, codebasePath, dir string, walkFn codebase.WalkFunc, walkOpts codebase.WalkOptions) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Walk", ctx, codebasePath, dir, walkFn)
+	ret := m.ctrl.Call(m, "Walk", ctx, codebasePath, dir, walkFn, walkOpts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Walk indicates an expected call of Walk.
-func (mr *MockStoreMockRecorder) Walk(ctx, codebasePath, dir, walkFn interface{}) *gomock.Call {
+func (mr *MockStoreMockRecorder) Walk(ctx, codebasePath, dir, walkFn, walkOpts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockStore)(nil).Walk), ctx, codebasePath, dir, walkFn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Walk", reflect.TypeOf((*MockStore)(nil).Walk), ctx, codebasePath, dir, walkFn, walkOpts)
 }

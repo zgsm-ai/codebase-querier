@@ -7,7 +7,7 @@ import (
 
 	"github.com/tiktoken-go/tokenizer"
 	sitter "github.com/tree-sitter/go-tree-sitter"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/parser"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 

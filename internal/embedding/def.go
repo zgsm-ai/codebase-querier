@@ -1,6 +1,6 @@
 package embedding
 
-import "github.com/zgsm-ai/codebase-indexer/internal/job/parser"
+import "github.com/zgsm-ai/codebase-indexer/internal/parser"
 
 // languageChunkNodeKind 定义各语言的语义切块节点类型
 var languageChunkNodeKind = map[parser.Language][]string{

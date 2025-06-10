@@ -73,7 +73,7 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 			l.logger.Errorf("sync file %s metadata is empty", metadataFile)
 			continue
 		}
-		var syncMetaObj *types.SyncMetadata
+		var syncMetaObj *types.SyncMetadataFile
 
 		err = json.Unmarshal(syncMetaData, &syncMetaObj)
 		if err != nil {

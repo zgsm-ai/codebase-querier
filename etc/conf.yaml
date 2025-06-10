@@ -8,10 +8,10 @@ Auth:
 
 Database:
   Driver: postgres
-  DataSource: postgres://shenma:${DB_PASSWORD}@localhost:5432/codebase_indexer?sslmode=disable
+  DataSource: postgres://shenma:shenma@localhost:5432/codebase_indexer?sslmode=disable
   AutoMigrate:
     enable: true
-    scripts: migrations/
+
 IndexTask:
   Topic: "your-topic"
   EmbeddingTask:
@@ -30,9 +30,7 @@ Cleaner:
   CodebaseExpireDays: 7
 
 Redis:
-  Host: 0.0.0.0
-  PoolSize: 10
-  MinIdleConn: 10
+  Addr: 0.0.0.0:6379
 
 MessageQueue:
   Type: redis

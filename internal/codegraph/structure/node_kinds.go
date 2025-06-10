@@ -1,6 +1,6 @@
 package structure
 
-import "github.com/zgsm-ai/codebase-indexer/internal/job/parser"
+import "github.com/zgsm-ai/codebase-indexer/internal/parser"
 
 // DefinitionNodeKind 定义了各语言在 tree-sitter 中的原始节点类型
 var DefinitionNodeKind = map[parser.Language][]string{

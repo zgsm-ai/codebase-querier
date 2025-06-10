@@ -2,11 +2,12 @@ package svc
 
 import (
 	"context"
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/postgres"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"github.com/zgsm-ai/codebase-indexer/internal/job/embedding"
+	"github.com/zgsm-ai/codebase-indexer/internal/embedding"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/cache"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -28,6 +29,7 @@ type ServiceContext struct {
 	CodeSplitter      *embedding.CodeSplitter
 	Cache             cache.Store[any]
 	redisClient       *redis.Client // 保存Redis客户端引用以便关闭
+	StructureParser   *structure.Parser
 }
 
 // Close closes the shared Redis client
@@ -90,7 +92,11 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
-
+	parser, err := structure.NewStructureParser()
+	if err != nil {
+		return nil, err
+	}
+	svcCtx.StructureParser = parser
 	svcCtx.CodebaseModel = model.NewCodebaseModel(sqlConn)
 	svcCtx.IndexHistoryModel = model.NewIndexHistoryModel(sqlConn)
 	svcCtx.SyncHistoryModel = model.NewSyncHistoryModel(sqlConn)

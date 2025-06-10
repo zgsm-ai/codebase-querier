@@ -42,6 +42,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/v1/relations",
 				Handler: relationHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/files/structure",
+				Handler: structureHandler(serverCtx),
+			},
 		},
 		rest.WithPrefix("/codebase-indexer"),
 	)

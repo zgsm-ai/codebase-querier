@@ -81,7 +81,7 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 			m.logger.Errorf("sync file %s metadata is empty", metadataFile)
 			continue
 		}
-		var syncMetaObj *types.SyncMetadata
+		var syncMetaObj *types.SyncMetadataFile
 
 		err = json.Unmarshal(syncMetaData, &syncMetaObj)
 		if err != nil {

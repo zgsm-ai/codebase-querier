@@ -6,10 +6,15 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
+	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
+	"time"
 )
+
+const cleanLockKey = "codebase-indexer:cleaner:lock"
+const lockTimteoutSeconds = time.Second * 120
 
 type cleaner struct {
 	svcCtx *svc.ServiceContext
@@ -34,6 +39,26 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	cr := cron.New() // 创建默认 Cron 实例（支持秒级精度）
 	// 添加任务（参数：Cron 表达式, 要执行的函数）
 	_, err := cr.AddFunc(svcCtx.Config.Cleaner.Cron, func() {
+		// aquice lock
+		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimteoutSeconds)
+		if err != nil {
+			logx.Errorf("cleaner try lock error: %v", err)
+			return
+		}
+		if !locked {
+			logx.Infof("cleaner lock %s is already locked ,return", cleanLockKey)
+			return
+		}
+		defer func(DistLock redisstore.DistributedLock, ctx context.Context, key string) {
+			err := DistLock.Unlock(ctx, key)
+			if err != nil {
+				logx.Errorf("cleaner unlock %s error: %v", cleanLockKey, err)
+			}
+			logx.Errorf("cleaner unlock successfully.")
+		}(svcCtx.DistLock, ctx, cleanLockKey)
+
+		logx.Infof("cleaner get lock %s successfully, start.", cleanLockKey)
+
 		codebases, err := svcCtx.CodebaseModel.FindExpiredCodebase(ctx, svcCtx.Config.Cleaner.CodebaseExpireDays)
 		if err != nil {
 			logx.Errorf("find expired codebase error: %v", err)

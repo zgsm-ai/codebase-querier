@@ -6,14 +6,13 @@ type Database struct {
 	Driver      string
 	DataSource  string
 	AutoMigrate struct {
-		Enable  bool
-		Scripts string `json:",optional"`
+		Enable bool
 	}
 }
 
 // RedisConfig Redis配置
 type RedisConfig struct {
-	Host           string
+	Addr           string
 	Password       string        `json:",optional"`
 	DB             int           `json:",default=0"`
 	PoolSize       int           `json:",default=10"`

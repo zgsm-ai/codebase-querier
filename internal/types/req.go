@@ -18,7 +18,7 @@ type FileContentRequest struct {
 	CodebasePath string `form:"codebasePath"`                   // 项目绝对路径
 	FilePath    string `form:"filePath"`                      // 文件相对路径
 	StartLine   int    `form:"startLine,optional,default=1"`  // 开始行（默认1）
-	EndLine     int    `form:"endLine",optional,default=100"` // 结束行（默认100，-1=全部）
+	EndLine     int    `form:"endLine,optional,default=100"` // 结束行（默认100，-1=全部）
 }
 
 type FileUploadRequest struct {
@@ -118,3 +118,19 @@ type ReadOptions struct {
 }
 
 
+type StructreItem struct {
+	Name     string   `json:"name"`     // 节点名字
+	ItemType string   `json:"type"`     // 节点类型（definition=定义，reference=引用）
+	Position Position `json:"position"` // 代码位置
+	Content  string   `json:"content"`  // 代码内容
+}
+
+type StructureRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+	FilePath     string `form:"filePath"`     // 文件相对路径
+}
+
+type StructureResponseData struct {
+	List []*StructreItem `json:"list"` // 关系树列表
+}
