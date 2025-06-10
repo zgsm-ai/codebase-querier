@@ -61,7 +61,7 @@ type RelationResponseData struct {
 type SemanticFileItem struct {
 	Content  string  `json:"Content"`  // 代码片段
 	FilePath string  `json:"filePath"` // 文件相对路径
-	Score    float64 `json:"score"`    // 匹配得分
+	Score    float32 `json:"score"`    // 匹配得分
 }
 
 type SemanticSearchRequest struct {
@@ -72,7 +72,7 @@ type SemanticSearchRequest struct {
 }
 
 type SemanticSearchResponseData struct {
-	List []SemanticFileItem `json:"list"` // 检索结果列表
+	List []*SemanticFileItem `json:"list"` // 检索结果列表
 }
 
 // TreeNode 表示目录树中的一个节点，可以是目录或文件

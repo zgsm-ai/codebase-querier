@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"time"
 
 	"github.com/pkg/errors"
@@ -185,7 +186,7 @@ func (t *embeddingProcessor) processAddFile(syncFile *types.SyncFile) error {
 	}
 
 	// 保存到向量库
-	err = t.svcCtx.VectorStore.UpsertCodeChunks(t.ctx, codeChunks)
+	err = t.svcCtx.VectorStore.UpsertCodeChunks(t.ctx, codeChunks, vector.Options{})
 	if err != nil {
 		return err
 	}
@@ -203,7 +204,7 @@ func (t *embeddingProcessor) processDeleteFile(file *types.SyncFile) error {
 		},
 	}
 
-	resp, err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, del)
+	resp, err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, del, vector.Options{})
 	t.logger.Debugf("process delete file resp:%v", resp)
 	return err
 }

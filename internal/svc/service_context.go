@@ -75,7 +75,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		return nil, err
 	}
 
-	embedder, err := vector.NewEmbedder(ctx, c.VectorStore.Embedder)
+	embedder, err := vector.NewEmbedder(c.VectorStore.Embedder)
 	if err != nil {
 		return nil, err
 	}

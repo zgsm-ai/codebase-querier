@@ -7,6 +7,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 const cleanLockKey = "codebase-indexer:cleaner:lock"
-const lockTimteoutSeconds = time.Second * 120
+const lockTimeout = time.Second * 120
 
 type cleaner struct {
 	svcCtx *svc.ServiceContext
@@ -39,7 +40,7 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	// 添加任务（参数：Cron 表达式, 要执行的函数）
 	_, err := cr.AddFunc(svcCtx.Config.Cleaner.Cron, func() {
 		// aquice lock
-		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimteoutSeconds)
+		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimeout)
 		if err != nil {
 			logx.Errorf("cleaner try lock error: %v", err)
 			return
@@ -72,7 +73,7 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo clean vector store
-			_, err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.Id}})
+			_, err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.Id}}, vector.Options{})
 			if err != nil {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue

@@ -18,9 +18,7 @@ type VectorStoreConf struct {
 type WeaviateConf struct {
 	Endpoint     string // HTTP端点
 	APIKey       string // API密钥
-	IndexName    string // 索引名称
 	BatchSize    int    // 批处理大小
-	Namespace    string //
 	ClassName    string
 	MaxDocuments int
 }

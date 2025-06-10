@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -51,7 +51,9 @@ func (l *SemanticLogic) SemanticSearch(req *types.SemanticSearchRequest) (resp *
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 	// TODO  向量库隔离
-	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK, vectorstores.WithNameSpace(codebase.ClientPath))
+	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK,
+		vector.Options{CodebaseId: codebase.Id,
+			CodebasePath: codebase.Path, CodebaseName: codebase.Name})
 	if err != nil {
 		return nil, err
 	}

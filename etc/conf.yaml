@@ -48,10 +48,8 @@ VectorStore:
     MaxDocuments: 20
     Endpoint: "http://localhost:8080"
     ApiKey: "your-api-key"
-    IndexName: "my-vector-index"
     BatchSize: 100
-    Namespace: "your-namespace"
-    ClassName: "your-class-name"
+    ClassName: "CodebaseIndex"
   Embedder:
     Timeout: 10s
     MaxRetries: 3

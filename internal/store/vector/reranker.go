@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tmc/langchaingo/schema"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"net/http"
 	"sort"
 	"time"
@@ -19,14 +19,14 @@ const (
 )
 
 type Reranker interface {
-	Rerank(ctx context.Context, query string, docs []schema.Document) ([]schema.Document, error)
+	Rerank(ctx context.Context, query string, docs []*types.SemanticFileItem) ([]*types.SemanticFileItem, error)
 }
 
 type rerank struct {
 	config config.RerankerConf
 }
 
-func (r *rerank) Rerank(ctx context.Context, query string, docs []schema.Document) ([]schema.Document, error) {
+func (r *rerank) Rerank(ctx context.Context, query string, docs []*types.SemanticFileItem) ([]*types.SemanticFileItem, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
@@ -36,7 +36,7 @@ func (r *rerank) Rerank(ctx context.Context, query string, docs []schema.Documen
 		rerankDocuments: func() []string {
 			contents := make([]string, len(docs))
 			for i, doc := range docs {
-				contents[i] = doc.PageContent
+				contents[i] = doc.Content
 			}
 			return contents
 		}(),
@@ -81,14 +81,14 @@ func (r *rerank) Rerank(ctx context.Context, query string, docs []schema.Documen
 	}
 
 	scoredDocs := make([]struct {
-		Doc   schema.Document
+		Doc   *types.SemanticFileItem
 		Score float64
 		Index int
 	}, len(docs))
 
 	for i := range docs {
 		scoredDocs[i] = struct {
-			Doc   schema.Document
+			Doc   *types.SemanticFileItem
 			Score float64
 			Index int
 		}{
@@ -102,13 +102,8 @@ func (r *rerank) Rerank(ctx context.Context, query string, docs []schema.Documen
 		return scoredDocs[i].Score > scoredDocs[j].Score
 	})
 
-	rerankedDocs := make([]schema.Document, len(docs))
+	rerankedDocs := make([]*types.SemanticFileItem, len(docs))
 	for i, sd := range scoredDocs {
-		if sd.Doc.Metadata == nil {
-			sd.Doc.Metadata = make(map[string]any)
-		}
-		sd.Doc.Score = float32(sd.Score)
-
 		rerankedDocs[i] = sd.Doc
 	}
 
