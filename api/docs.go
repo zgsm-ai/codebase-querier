@@ -2,5 +2,5 @@ package api
 
 import "embed"
 
-//go:embed static
+//go:embed docs
 var SwaggerFS embed.FS

@@ -29,7 +29,7 @@ func main() {
 		panic(err)
 	}
 
-	server := rest.MustNewServer(c.RestConf, rest.WithFileServer("/static/", http.Dir("api/static/")))
+	server := rest.MustNewServer(c.RestConf, rest.WithFileServer("/swagger/", http.Dir("api/docs/")))
 	defer server.Stop()
 
 	serverCtx, cancelFunc := context.WithCancel(context.Background())
