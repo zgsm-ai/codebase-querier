@@ -193,7 +193,7 @@ func (t *codegraphProcessor) parseCodeStructure() {
 func (t *codegraphProcessor) updateTaskSuccess() {
 	progress := float64(1)
 	m := &model.IndexHistory{
-		ID:                int32(t.taskHistoryId),
+		ID:                t.taskHistoryId,
 		Status:            types.TaskStatusSuccess,
 		Progress:          &progress,
 		EndTime:           utils.CurrentTime(),
@@ -204,7 +204,9 @@ func (t *codegraphProcessor) updateTaskSuccess() {
 	}
 
 	// 更新任务
-	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).Updates(m); err != nil {
+	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).
+		Where(t.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
+		Updates(m); err != nil {
 		// 任务已经成功
 		t.logger.Errorf("update embedding embeddingProcessor history %d failed: %v, model:%v", t.msg.CodebaseID, err, m)
 	}

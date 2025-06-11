@@ -91,7 +91,9 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			}
 			// todo update db status
 			cb.Status = string(model.CodebaseStatusExpired)
-			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).Updates(cb); err != nil {
+			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).
+				Where(svcCtx.Querier.Codebase.ID.Eq(cb.ID)).
+				Updates(cb); err != nil {
 				logx.Errorf("update codebase %s status expired error: %v", cb.Path, err)
 				return
 			}

@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"strings"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
@@ -58,18 +57,6 @@ func NewPostgresDB(c config.Database) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(c.Pool.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(c.Pool.ConnMaxLifetime)
 	sqlDB.SetConnMaxIdleTime(c.Pool.ConnMaxIdleTime)
-
-	// 如果配置了自动迁移
-	if c.AutoMigrate.Enable {
-		err = db.AutoMigrate(
-			&model.Codebase{},
-			&model.IndexHistory{},
-			&model.SyncHistory{},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to auto migrate: %v", err)
-		}
-	}
 
 	return db, nil
 }

@@ -21,7 +21,7 @@ type Response[T any] struct {
 }
 
 func Ok(w http.ResponseWriter) {
-	httpx.Ok(w)
+	httpx.OkJson(w, wrapResponse(nil))
 }
 
 func Error(w http.ResponseWriter, e error) {

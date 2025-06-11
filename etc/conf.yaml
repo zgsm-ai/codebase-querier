@@ -3,7 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 #Timeout: 30000 #ms
 Timeout: 3000000 #ms，debug使用，300s
-Verbose: true
+Verbose: false
 Mode: dev # dev,test,rt,pre, pro
 Auth:
   UserInfoHeader: "x-userinfo"

@@ -110,7 +110,9 @@ func (t *embeddingProcessor) updateTaskSuccess() {
 	}
 
 	// 更新任务
-	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).Updates(m); err != nil {
+	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).
+		Where(t.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
+		Updates(m); err != nil {
 		// 任务已经成功
 		t.logger.Errorf("update embedding embeddingProcessor history %d failed: %v, model:%v", t.msg.CodebaseID, err, m)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
 	"github.com/zgsm-ai/codebase-indexer/internal/job"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
+	"github.com/zgsm-ai/codebase-indexer/migrations"
 	"net/http"
 )
 
@@ -23,6 +24,10 @@ func main() {
 	conf.MustLoad(*configFile, &c, conf.UseEnv())
 
 	logx.MustSetup(c.Log)
+
+	if err := migrations.AutoMigrate(c.Database); err != nil {
+		panic(err)
+	}
 
 	server := rest.MustNewServer(c.RestConf, rest.WithFileServer("/swagger/", http.Dir("api/docs/")))
 	defer server.Stop()

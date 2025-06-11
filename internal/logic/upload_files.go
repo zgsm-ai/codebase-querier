@@ -148,7 +148,9 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	syncHistory.PublishTime = utils.CurrentTime()
 	messageStr := string(bytes)
 	syncHistory.Message = &messageStr
-	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Updates(&syncHistory); err != nil {
+	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).
+		Where(l.svcCtx.Querier.SyncHistory.ID.Eq(syncHistory.ID)).
+		Updates(&syncHistory); err != nil {
 		l.Logger.Errorf("update sync history %v error: %v", syncHistory, err)
 		return err
 	}
