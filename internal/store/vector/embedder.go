@@ -19,7 +19,7 @@ type CodeChunkEmbedding struct {
 	Embedding []float32
 }
 
-type embedder struct {
+type customEmbedder struct {
 	config           config.EmbedderConf
 	embeddingService *openai.EmbeddingService
 }
@@ -28,14 +28,14 @@ func NewEmbedder(cfg config.EmbedderConf) (Embedder, error) {
 
 	embeddingService := openai.NewEmbeddingService(option.WithBaseURL(cfg.APIBase), option.WithAPIKey(cfg.APIKey))
 
-	return &embedder{
+	return &customEmbedder{
 		embeddingService: &embeddingService,
 		config:           cfg,
 	}, nil
 
 }
 
-func (e *embedder) EmbedCodeChunks(ctx context.Context, chunks []*types.CodeChunk) ([]*CodeChunkEmbedding, error) {
+func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.CodeChunk) ([]*CodeChunkEmbedding, error) {
 	if len(chunks) == 0 {
 		return []*CodeChunkEmbedding{}, nil
 	}
@@ -73,7 +73,7 @@ func (e *embedder) EmbedCodeChunks(ctx context.Context, chunks []*types.CodeChun
 	return embeds, nil
 }
 
-func (e *embedder) EmbedQuery(ctx context.Context, query string) ([]float32, error) {
+func (e *customEmbedder) EmbedQuery(ctx context.Context, query string) ([]float32, error) {
 	if e.config.StripNewLines {
 		query = strings.ReplaceAll(query, "\n", " ")
 	}
@@ -87,7 +87,7 @@ func (e *embedder) EmbedQuery(ctx context.Context, query string) ([]float32, err
 	return vectors[0], nil
 }
 
-func (e *embedder) doEmbeddings(ctx context.Context, textsByte [][]byte) ([][]float32, error) {
+func (e *customEmbedder) doEmbeddings(ctx context.Context, textsByte [][]byte) ([][]float32, error) {
 	texts := make([]string, len(textsByte))
 	for _, b := range textsByte {
 		texts = append(texts, string(b))

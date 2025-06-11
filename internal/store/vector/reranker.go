@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"net/http"
-	"sort"
-	"time"
 )
 
 const (
@@ -22,36 +22,96 @@ type Reranker interface {
 	Rerank(ctx context.Context, query string, docs []*types.SemanticFileItem) ([]*types.SemanticFileItem, error)
 }
 
-type rerank struct {
+type customReranker struct {
 	config config.RerankerConf
 }
 
-func (r *rerank) Rerank(ctx context.Context, query string, docs []*types.SemanticFileItem) ([]*types.SemanticFileItem, error) {
+type rerankerRequest struct {
+	Model     string   `json:"model"`
+	Query     string   `json:"query"`
+	Documents []string `json:"documents"`
+	TopN      int      `json:"top_n"`
+}
+
+type rerankerResponse struct {
+	Model string `json:"model"`
+	Usage struct {
+		TotalTokens  int `json:"total_tokens"`
+		PromptTokens int `json:"prompt_tokens"`
+	} `json:"usage"`
+	Results []struct {
+		Index    int `json:"index"`
+		Document struct {
+			Text string `json:"text"`
+		} `json:"document"`
+		RelevanceScore float32 `json:"relevance_score"`
+	} `json:"results"`
+}
+
+// request
+//
+//	{
+//	   "model": "gte-reranker-modernbert-base",
+//	   "query": "What is the capital of the United States?",
+//	   "documents": [
+//	       "The Commonwealth of the .",
+//	       "Carson City is the capital city ."
+//	   ],
+//	   "top_n": 10
+//	}
+
+// response
+// {
+//    "model": "gte-reranker-modernbert-base",
+//    "usage": {
+//        "total_tokens": 38,
+//        "prompt_tokens": 38
+//    },
+//    "results": [
+//        {
+//            "index": 1,
+//            "document": {
+//                "text": "Carson City is the capital city ."
+//            },
+//            "relevance_score": 0.822102963924408
+//        },
+//        {
+//            "index": 0,
+//            "document": {
+//                "text": "The Commonwealth of the ."
+//            },
+//            "relevance_score": 0.8087424039840698
+//        }
+//    ]
+//}
+
+func (r *customReranker) Rerank(ctx context.Context, query string, docs []*types.SemanticFileItem) ([]*types.SemanticFileItem, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
 
-	requestBody := map[string]any{
-		rerankQuery: query,
-		rerankDocuments: func() []string {
-			contents := make([]string, len(docs))
-			for i, doc := range docs {
-				contents[i] = doc.Content
-			}
-			return contents
-		}(),
+	contents := make([]string, len(docs))
+	for i, doc := range docs {
+		contents[i] = doc.Content
+	}
+
+	requestBody := &rerankerRequest{
+		Model:     r.config.Model,
+		Query:     query,
+		Documents: contents,
+		TopN:      len(docs), // Request all documents to be ranked
 	}
 
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal rerank request body: %w", err)
+		return nil, fmt.Errorf("failed to marshal customReranker request body: %w", err)
 	}
 
 	rerankEndpoint := r.config.APIBase
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rerankEndpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create rerank request: %w", err)
+		return nil, fmt.Errorf("failed to create customReranker request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -59,59 +119,41 @@ func (r *rerank) Rerank(ctx context.Context, query string, docs []*types.Semanti
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send rerank request to %s: %w", rerankEndpoint, err)
+		return nil, fmt.Errorf("failed to send customReranker request to %s: %w", rerankEndpoint, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		errorBody := new(bytes.Buffer)
-		errorBody.ReadFrom(resp.Body)
-		return nil, fmt.Errorf("rerank API returned non-OK status %d: %s, body: %s", resp.StatusCode, resp.Status, errorBody.String())
+		_, _ = errorBody.ReadFrom(resp.Body)
+		return nil, fmt.Errorf("customReranker API returned non-OK status %d: %s, body: %s", resp.StatusCode, resp.Status, errorBody.String())
 	}
 
-	var responseBody map[string][]float64
-
+	var responseBody rerankerResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
-		return nil, fmt.Errorf("failed to decode rerank response body: %w", err)
+		return nil, fmt.Errorf("failed to decode customReranker response body: %w", err)
 	}
 
-	scores, ok := responseBody[rerankScores]
-	if !ok || len(scores) != len(docs) {
-		return nil, fmt.Errorf("invalid rerank API response format or score count mismatch: expected %d scores, got %d", len(docs), len(scores))
+	if len(responseBody.Results) == 0 {
+		return nil, fmt.Errorf("reranker returned empty results")
 	}
 
-	scoredDocs := make([]struct {
-		Doc   *types.SemanticFileItem
-		Score float64
-		Index int
-	}, len(docs))
-
-	for i := range docs {
-		scoredDocs[i] = struct {
-			Doc   *types.SemanticFileItem
-			Score float64
-			Index int
-		}{
-			Doc:   docs[i],
-			Score: scores[i],
-			Index: i,
-		}
-	}
-
-	sort.SliceStable(scoredDocs, func(i, j int) bool {
-		return scoredDocs[i].Score > scoredDocs[j].Score
-	})
-
+	// Create a mapping from original index to reranked position
 	rerankedDocs := make([]*types.SemanticFileItem, len(docs))
-	for i, sd := range scoredDocs {
-		rerankedDocs[i] = sd.Doc
+	for i, result := range responseBody.Results {
+		if result.Index >= len(docs) {
+			return nil, fmt.Errorf("invalid index %d in reranker response", result.Index)
+		}
+		rerankedDocs[i] = docs[result.Index]
+		// Store the relevance score in the document if needed
+		rerankedDocs[i].Score = result.RelevanceScore
 	}
 
 	return rerankedDocs, nil
 }
 
 func NewReranker(c config.RerankerConf) Reranker {
-	return &rerank{
+	return &customReranker{
 		config: c,
 	}
 }

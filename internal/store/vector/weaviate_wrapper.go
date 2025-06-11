@@ -2,18 +2,22 @@ package vector
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"math"
+	"strings"
+
 	"github.com/go-openapi/strfmt"
 	"github.com/google/uuid"
 	goweaviate "github.com/weaviate/weaviate-go-client/v5/weaviate"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/auth"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/filters"
+	"github.com/weaviate/weaviate-go-client/v5/weaviate/graphql"
 	"github.com/weaviate/weaviate/entities/models"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"math"
-	"strings"
 )
 
 const (
@@ -28,19 +32,22 @@ type weaviateWrapper struct {
 	ctx       context.Context
 	reranker  Reranker
 	embedder  Embedder
-	client    *goweaviate.Client // langchaingo not supported delete
+	client    *goweaviate.Client
 	className string
 	cfg       config.VectorStoreConf
 	logger    logx.Logger
 }
 
 func New(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
-	// langchaingo not supported delete
 	client, err := goweaviate.NewClient(goweaviate.Config{
 		Host:       cfg.Weaviate.Endpoint,
 		Scheme:     schemeHttp,
 		AuthConfig: auth.ApiKey{Value: cfg.Weaviate.APIKey},
 	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Weaviate client: %w", err)
+	}
 
 	store := &weaviateWrapper{
 		client:    client,
@@ -51,20 +58,21 @@ func New(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, rer
 		cfg:       cfg,
 		logger:    logx.WithContext(ctx),
 	}
-	if err != nil {
-		return nil, err
-	}
 
 	// init class
 	err = store.createClassWithAutoTenantEnabled(ctx, client)
-	return store, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to create class: %w", err)
+	}
+
+	return store, nil
 }
 
 func (r *weaviateWrapper) DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) (any, error) {
 	if len(chunks) == 0 {
 		return nil, nil // Nothing to delete
 	}
-	tenant, err := r.generateTenantName(chunks[0].CodebaseId)
+	tenant, err := r.generateTenantName(chunks[0].CodebasePath)
 	if err != nil {
 		return nil, err
 	}
@@ -103,67 +111,104 @@ func (r *weaviateWrapper) DeleteCodeChunks(ctx context.Context, chunks []*types.
 func (r *weaviateWrapper) SimilaritySearch(ctx context.Context, query string, numDocuments int, options Options) ([]*types.SemanticFileItem, error) {
 	embedQuery, err := r.embedder.EmbedQuery(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
-	tenantName, err := r.generateTenantName(options.CodebaseId)
+	tenantName, err := r.generateTenantName(options.CodebasePath)
 	if err != nil {
-		return nil, err
-	}
-	res, err := r.client.GraphQL().Get().
-		WithNearVector(r.client.GraphQL().
-			NearVectorArgBuilder().
-			WithVector(embedQuery)).
-		WithClassName(r.className).
-		WithTenant(tenantName).
-		WithLimit(numDocuments).Do(ctx)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate tenant name: %w", err)
 	}
 
-	return r.unmarshalResponse(res)
+	// Define GraphQL fields using proper Field type
+	fields := []graphql.Field{
+		{Name: responseKey},
+		{Name: types.MetadataFilePath},
+		{Name: "_additional", Fields: []graphql.Field{
+			{Name: "certainty"},
+			{Name: "distance"},
+			{Name: "id"},
+		}},
+	}
+
+	// Build GraphQL query with proper tenant filter
+	nearVector := r.client.GraphQL().NearVectorArgBuilder().
+		WithVector(embedQuery)
+
+	res, err := r.client.GraphQL().Get().
+		WithClassName(r.className).
+		WithFields(fields...).
+		WithNearVector(nearVector).
+		WithLimit(numDocuments).
+		WithTenant(tenantName).
+		Do(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute similarity search: %w", err)
+	}
+
+	// Improved error handling for response validation
+	if res == nil || res.Data == nil {
+		return nil, fmt.Errorf("received empty response from Weaviate")
+	}
+
+	items, err := r.unmarshalResponse(res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return items, nil
 }
 
 func (r *weaviateWrapper) unmarshalResponse(res *models.GraphQLResponse) ([]*types.SemanticFileItem, error) {
-	if len(res.Errors) > 0 {
-		err := make([]string, 0, len(res.Errors))
-		for _, e := range res.Errors {
-			err = append(err, e.Message)
-		}
-		return nil, fmt.Errorf("err response from vector store: %s", strings.Join(err, ", "))
+	// Get the data for our class
+	data, ok := res.Data["Get"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'Get' field not found or has wrong type")
 	}
 
-	data, ok := res.Data["Get"].(map[string]any)[r.className]
-	if !ok || data == nil {
-		return nil, ErrEmptyResponse
+	results, ok := data[r.className].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: class data not found or has wrong type")
 	}
-	dataList, ok := data.([]any)
 
-	docs := make([]*types.SemanticFileItem, 0, len(dataList))
-	if !ok || len(dataList) == 0 {
-		return docs, nil
-	}
-	for _, item := range dataList {
-		itemMap, ok := item.(map[string]any)
+	items := make([]*types.SemanticFileItem, 0, len(results))
+	for _, result := range results {
+		obj, ok := result.(map[string]interface{})
 		if !ok {
-			return nil, ErrInvalidResponse
+			continue
 		}
-		//TODO the real key
-		content, ok := itemMap[responseKey].(string)
+
+		// Extract additional properties
+		additional, ok := obj["_additional"].(map[string]interface{})
 		if !ok {
-			return nil, ErrInvalidResponse
+			continue
 		}
-		var score float64
-		if additional, ok := itemMap["_additional"].(map[string]any); ok {
-			score, _ = additional["certainty"].(float64)
+
+		// Create SemanticFileItem with proper fields
+		item := &types.SemanticFileItem{
+			Content:  getStringValue(obj, responseKey),
+			FilePath: getStringValue(obj, types.MetadataFilePath),
+			Score:    float32(getFloatValue(additional, "certainty")), // Convert float64 to float32
 		}
-		delete(itemMap, responseKey)
-		docs = append(docs, &types.SemanticFileItem{
-			Content:  content,
-			Score:    float32(score),
-			FilePath: itemMap[types.MetadataFilePath].(string),
-		})
+
+		items = append(items, item)
 	}
-	return docs, nil
+
+	return items, nil
+}
+
+// Helper functions for safe type conversion
+func getStringValue(obj map[string]interface{}, key string) string {
+	if val, ok := obj[key].(string); ok {
+		return val
+	}
+	return ""
+}
+
+func getFloatValue(obj map[string]interface{}, key string) float64 {
+	if val, ok := obj[key].(float64); ok {
+		return val
+	}
+	return 0
 }
 
 func (r *weaviateWrapper) Close() {
@@ -173,7 +218,7 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 	if len(docs) == 0 {
 		return nil
 	}
-	tenantName, err := r.generateTenantName(docs[0].CodebaseId)
+	tenantName, err := r.generateTenantName(docs[0].CodebasePath)
 	if err != nil {
 		return err
 	}
@@ -212,10 +257,10 @@ func (r *weaviateWrapper) Query(ctx context.Context, query string, topK int, opt
 	if err != nil {
 		return nil, err
 	}
-	// TODO 调用reranker模型进行重排
+	//  调用reranker模型进行重排
 	rerankedDocs, err := r.reranker.Rerank(ctx, query, documents)
 	if err != nil {
-		r.logger.Errorf("failed rerank docs: %v", err)
+		r.logger.Errorf("failed customReranker docs: %v", err)
 	}
 	if len(rerankedDocs) == 0 {
 		rerankedDocs = documents
@@ -255,9 +300,11 @@ func (r *weaviateWrapper) createClassWithAutoTenantEnabled(ctx context.Context, 
 	return err
 }
 
-func (r *weaviateWrapper) generateTenantName(codebaseId int64) (string, error) {
-	if codebaseId == 0 {
+// generateTenantName 使用 MD5 哈希生成合规租户名（32字符，纯十六进制）
+func (r *weaviateWrapper) generateTenantName(codebasePath string) (string, error) {
+	if codebasePath == types.EmptyString {
 		return "", ErrInvalidCodebaseId
 	}
-	return fmt.Sprintf("tenant-%d", codebaseId), nil
+	hash := md5.Sum([]byte(codebasePath))   // 计算 MD5 哈希
+	return hex.EncodeToString(hash[:]), nil // 转为32位十六进制字符串
 }
