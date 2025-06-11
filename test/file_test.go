@@ -31,7 +31,7 @@ func TestFileUpload(t *testing.T) {
 		ExtraMetadata string
 	}{
 		ClientId:      "test-client-123",
-		CodebasePath:  filepath.Join("/tmp", "test", "test-project"),
+		CodebasePath:  "/tmp/test/test-project",
 		CodebaseName:  "test-project",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 	}
@@ -177,7 +177,7 @@ func TestFileDownload(t *testing.T) {
 	req := types.FileContentRequest{
 		ClientId:     "test-client-123",
 		CodebasePath: "/tmp/test/test-project",
-		FilePath:     "test.go",
+		FilePath:     "src/main.go",
 		StartLine:    1,
 		EndLine:      3,
 	}
@@ -198,6 +198,7 @@ func TestFileDownload(t *testing.T) {
 	// Read and verify response
 	content, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
+	t.Logf("content:%s", string(content))
 	assert.Contains(t, string(content), "package main")
 }
 
