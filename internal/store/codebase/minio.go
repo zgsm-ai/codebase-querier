@@ -181,7 +181,7 @@ func (m *minioCodebase) Add(ctx context.Context, codebasePath string, source io.
 	return nil
 }
 
-func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error {
+func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader) error {
 	// Create a temporary file to store the zip content
 	tmpFile, err := io.ReadAll(source)
 	if err != nil {
@@ -193,18 +193,16 @@ func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source i
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
 
-	basePath := filepath.Join(codebasePath, target)
-
 	// Extract each file
 	for _, file := range zipReader.File {
 		if file.FileInfo().IsDir() {
 			continue
 		}
 
-		objectName := filepath.Join(basePath, file.Name)
+		objectName := filepath.Join(codebasePath, file.Name)
 
 		// Check for zip slip vulnerability
-		if !strings.HasPrefix(objectName, basePath) {
+		if !strings.HasPrefix(objectName, codebasePath) {
 			return fmt.Errorf("illegal file path: %s", file.Name)
 		}
 

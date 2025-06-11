@@ -12,7 +12,7 @@ const CodebaseIndexDir = ".shenma"
 const SyncMedataDir = ".shenma_sync"
 const IndexFileName = "index.scip"
 
-// SyncMetadataFile 代码变更事件结构体
+// SyncMetadataFile 元数据同步文件
 type SyncMetadataFile struct {
 	ClientID      string            `json:"clientId"`      // 客户端ID（可选）
 	CodebasePath  string            `json:"codebasePath"`  // 项目根路径

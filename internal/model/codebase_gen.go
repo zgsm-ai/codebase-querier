@@ -82,14 +82,14 @@ func (m *defaultCodebaseModel) FindOne(ctx context.Context, id int64) (*Codebase
 }
 
 func (m *defaultCodebaseModel) Insert(ctx context.Context, data *Codebase) (sql.Result, error) {
-	query := fmt.Sprintf("insert into %s (%s) values ($1, $2, $3, $4, $5, $6, $7, $8)", m.table, codebaseRowsExpectAutoSet)
-	ret, err := m.conn.ExecCtx(ctx, query, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
+	query := fmt.Sprintf("insert into %s (%s) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)", m.table, codebaseRowsExpectAutoSet)
+	ret, err := m.conn.ExecCtx(ctx, query, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.Status, data.FileCount, data.TotalSize, data.ExtraMetadata)
 	return ret, err
 }
 
 func (m *defaultCodebaseModel) Update(ctx context.Context, data *Codebase) error {
 	query := fmt.Sprintf("update %s set %s where id = $1", m.table, codebaseRowsWithPlaceHolder)
-	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.FileCount, data.TotalSize, data.ExtraMetadata)
+	_, err := m.conn.ExecCtx(ctx, query, data.Id, data.ClientId, data.UserId, data.Name, data.ClientPath, data.Path, data.Status,  data.FileCount, data.TotalSize, data.ExtraMetadata)
 	return err
 }
 

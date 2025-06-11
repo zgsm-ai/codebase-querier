@@ -79,7 +79,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 
 func (i *indexJob) Start() {
 	if !i.enableFlag {
-		i.Logger.Infof("index job is disabled, IS_INDEX_NODE flag is %d", i.enableFlag)
+		i.Logger.Infof("index job is disabled, IS_INDEX_NODE flag is %t", i.enableFlag)
 		return
 	}
 

@@ -1,5 +1,5 @@
 -- goctl model pg datasource --dir internal/model  --style go_zero --url   postgres://root:password@127.0.0.1:5432/codebase_indexer?sslmode=disabl --table  --table codebase,sync_history,index_history
-CREATE database codebase_indexer with OWNER shenma;
+
 -- Project repository table
 CREATE TABLE codebase
 (
@@ -49,8 +49,10 @@ CREATE SEQUENCE codebase_id_seq
     NO MAXVALUE CACHE 1;
 
 ALTER SEQUENCE codebase_id_seq OWNED BY codebase.id;
-ALTER TABLE ONLY codebase ALTER COLUMN id SET DEFAULT nextval('codebase_id_seq'::regclass);
-ALTER TABLE ONLY codebase ADD CONSTRAINT codebase_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY codebase
+    ALTER COLUMN id SET DEFAULT nextval('codebase_id_seq'::regclass);
+ALTER TABLE ONLY codebase
+    ADD CONSTRAINT codebase_pkey PRIMARY KEY (id);
 -- 唯一索引
 CREATE UNIQUE INDEX idx_codebase_client_id_path ON codebase (client_id, client_path);
 
@@ -60,7 +62,7 @@ CREATE TABLE sync_history
 (
     id             integer     NOT NULL,
     codebase_id    INT         NOT NULL,                   -- codebase.id
-    message        JSON        NOT NULL,
+    message        JSON,
     publish_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- pending, success, failed
     publish_time   TIMESTAMP,
     created_at     TIMESTAMP            DEFAULT CURRENT_TIMESTAMP,
@@ -91,8 +93,10 @@ CREATE SEQUENCE sync_history_id_seq
     NO MAXVALUE CACHE 1;
 
 ALTER SEQUENCE sync_history_id_seq OWNED BY sync_history.id;
-ALTER TABLE ONLY sync_history ALTER COLUMN id SET DEFAULT nextval('sync_history_id_seq'::regclass);
-ALTER TABLE ONLY sync_history ADD CONSTRAINT sync_history_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY sync_history
+    ALTER COLUMN id SET DEFAULT nextval('sync_history_id_seq'::regclass);
+ALTER TABLE ONLY sync_history
+    ADD CONSTRAINT sync_history_pkey PRIMARY KEY (id);
 
 CREATE INDEX idx_sync_history_codebase_id ON sync_history USING btree (codebase_id);
 CREATE INDEX idx_sync_history_publish_status ON sync_history USING btree (publish_status);
@@ -105,10 +109,10 @@ CREATE TABLE index_history
     codebase_id         INTEGER     not null, -- codebase.id
     codebase_path       TEXT        not null, -- codebase
     codebase_name       TEXT        not null, -- codebase
-    total_file_count    INTEGER     NOT NULL,
-    total_success_count INTEGER     NOT NULL,
-    total_fail_count    INTEGER     NOT NULL,
-    total_ignore_count  INTEGER     NOT NULL,
+    total_file_count    INTEGER ,
+    total_success_count INTEGER ,
+    total_fail_count    INTEGER,
+    total_ignore_count  INTEGER,
     task_type           VARCHAR(50) NOT NULL, -- vector, relation
     status              VARCHAR(50) NOT NULL, -- pending, running, success, failed
     progress            float,                -- index job progress
@@ -163,5 +167,7 @@ CREATE SEQUENCE index_history_id_seq
     NO MAXVALUE CACHE 1;
 
 ALTER SEQUENCE index_history_id_seq OWNED BY index_history.id;
-ALTER TABLE ONLY index_history ALTER COLUMN id SET DEFAULT nextval('index_history_id_seq'::regclass);
-ALTER TABLE ONLY index_history ADD CONSTRAINT index_history_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY index_history
+    ALTER COLUMN id SET DEFAULT nextval('index_history_id_seq'::regclass);
+ALTER TABLE ONLY index_history
+    ADD CONSTRAINT index_history_pkey PRIMARY KEY (id);

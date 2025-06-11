@@ -25,7 +25,7 @@ func Ok(w http.ResponseWriter) {
 }
 
 func Error(w http.ResponseWriter, e error) {
-	httpx.OkJson(w, wrapResponse(e))
+	httpx.WriteJson(w, http.StatusBadRequest, wrapResponse(e))
 }
 
 func Bytes(w http.ResponseWriter, v []byte) {

@@ -1,7 +1,9 @@
 Name: codebase-indexer
 Host: 0.0.0.0
 Port: 8888
-Timeout: 30000 #ms
+#Timeout: 30000 #ms
+Timeout: 3000000 #ms，debug使用，300s
+Verbose: true
 Mode: dev # dev,test,rt,pre, pro
 Auth:
   UserInfoHeader: "x-userinfo"
@@ -13,7 +15,7 @@ Database:
     enable: true
 
 IndexTask:
-  Topic: "your-topic"
+  Topic: "codebase-indexer:sync"
   EmbeddingTask:
     PoolSize: 10
     MaxConcurrency: 10
@@ -38,7 +40,7 @@ MessageQueue:
 CodeBaseStore:
   type: local
   local:
-    BasePath: tmp/
+    BasePath: /codebase-store
 
 VectorStore:
   Type: weaviate
@@ -46,8 +48,7 @@ VectorStore:
   MaxRetries: 5
   Weaviate:
     MaxDocuments: 20
-    Endpoint: "http://localhost:8080"
-    ApiKey: "your-api-key"
+    Endpoint: "localhost:8080"
     BatchSize: 100
     ClassName: "CodebaseIndex"
   Embedder:
@@ -70,8 +71,9 @@ VectorStore:
 
 Log:
   Mode: console # console,file,volume
+  ServiceName: "codebase-indexer"
   Encoding: plain # json,plain
-  Path: logs
+  Path: "/app/logs"
   Level: info # debug,info,error,severe
   KeepDays: 15
   MaxSize: 100 # MB per file, take affect when Rotation is size.

@@ -45,6 +45,7 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 	// 根据元数据获取代码文件列表
 	// 递归目录，进行处理，并发
 	// 获取代码文件列表
+	fileModeMap = make(map[string]string)
 	list, err := l.List(ctx, codebasePath, types.SyncMedataDir, types.ListOptions{})
 	if err != nil {
 		return nil, nil, err
@@ -186,7 +187,7 @@ func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.
 	return nil
 }
 
-func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error {
+func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader) error {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
 		return err
@@ -214,14 +215,12 @@ func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source i
 	}
 	defer zipReader.Close()
 
-	basePath := filepath.Join(codebasePath, target)
-
 	// Extract each file
 	for _, file := range zipReader.File {
-		filePath := filepath.Join(basePath, file.Name)
+		filePath := filepath.Join(codebasePath, file.Name)
 
 		// Check for zip slip vulnerability
-		if !strings.HasPrefix(filePath, basePath) {
+		if !strings.HasPrefix(filePath, codebasePath) {
 			return fmt.Errorf("illegal file path: %s", file.Name)
 		}
 

@@ -49,6 +49,11 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	sqlConn := postgres.New(
 		c.Database.DataSource,
 	)
+	// 检查数据库连接是否成功
+	_, err = sqlConn.Exec("SELECT 1")
+	if err != nil {
+		return nil, err
+	}
 
 	// 创建Redis客户端
 	client, err := redisstore.NewRedisClient(c.Redis)

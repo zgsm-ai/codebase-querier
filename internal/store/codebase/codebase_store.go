@@ -21,7 +21,7 @@ type Store interface {
 	// Unzip extracts a zip file into the codebase
 	// source: the source reader containing the zip file
 	// target: the target directory where files should be extracted
-	Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error
+	Unzip(ctx context.Context, codebasePath string, source io.Reader) error
 
 	// Delete removes a file or directory from the codebase
 	// path: the path to the file or directory to delete

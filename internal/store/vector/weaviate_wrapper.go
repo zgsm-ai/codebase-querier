@@ -39,10 +39,14 @@ type weaviateWrapper struct {
 }
 
 func New(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
+	var authConf auth.Config
+	if cfg.Weaviate.APIKey != types.EmptyString {
+		authConf = auth.ApiKey{Value: cfg.Weaviate.APIKey}
+	}
 	client, err := goweaviate.NewClient(goweaviate.Config{
 		Host:       cfg.Weaviate.Endpoint,
 		Scheme:     schemeHttp,
-		AuthConfig: auth.ApiKey{Value: cfg.Weaviate.APIKey},
+		AuthConfig: authConf,
 	})
 
 	if err != nil {
