@@ -10,16 +10,16 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-func compareCodebaseHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func codebaseTreeHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.CodebaseHashRequest
+		var req types.CodebaseTreeRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return
 		}
 
-		l := logic.NewCompareCodebaseLogic(r.Context(), svcCtx)
-		resp, err := l.CompareCodebase(&req)
+		l := logic.NewCodebaseTreeLogic(r.Context(), svcCtx)
+		resp, err := l.CodebaseTree(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {

@@ -2,6 +2,8 @@ package types
 
 import (
 	"encoding/json"
+	"io/fs"
+	"time"
 )
 
 type Codebase struct {
@@ -32,4 +34,19 @@ const (
 type SyncFile struct {
 	Path string
 	Op   FileOp
+}
+
+// TreeNode 表示目录树中的一个节点，可以是目录或文件
+type TreeNode struct {
+	FileInfo
+	Children []*TreeNode `json:"children,omitempty"` // 子节点（仅目录有）
+}
+
+type FileInfo struct {
+	Name    string    `json:"Language"`          // 节点名称
+	Path    string    `json:"path"`              // 节点路径
+	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
+	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
+	IsDir   bool      `json:"IsDir"`             // 是否是目录
+	Mode    fs.FileMode
 }

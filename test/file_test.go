@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/response"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/response"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -202,7 +203,7 @@ func TestFileDownload(t *testing.T) {
 	assert.Contains(t, string(content), "package main")
 }
 
-func TestCodebaseCompare(t *testing.T) {
+func TestCodebaseHash(t *testing.T) {
 	// Prepare test data
 	req := types.CodebaseHashRequest{
 		ClientId:     "test-client-123",
@@ -238,9 +239,24 @@ func TestCodebaseCompare(t *testing.T) {
 }
 
 func TestProjectTree(t *testing.T) {
+	// Test data
+	testData := struct {
+		clientId     string
+		codebasePath string
+		depth        int
+		includeFiles int
+		subDir       string
+	}{
+		clientId:     "test-client-123",
+		codebasePath: "/tmp/test/test-project",
+		depth:        3,
+		includeFiles: 1,
+		subDir:       "",
+	}
+
 	// Send request to local service
-	testDir := "/tmp/test/test-project"
-	url := fmt.Sprintf("%s/codebase-indexer/api/v1/tree?path=%s", baseURL, testDir)
+	url := fmt.Sprintf("%s/codebase-indexer/api/v1/codebases/directory?clientId=%s&codebasePath=%s&depth=%d&includeFiles=%d&subDir=%s",
+		baseURL, testData.clientId, testData.codebasePath, testData.depth, testData.includeFiles, testData.subDir)
 
 	client := &http.Client{
 		Timeout: time.Second * 10,
@@ -251,40 +267,49 @@ func TestProjectTree(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result []types.TreeNode
+	var result response.Response[types.CodebaseTreeResponseData]
 	err = json.NewDecoder(resp.Body).Decode(&result)
+	t.Logf("resp:%+v", &result)
 	assert.NoError(t, err)
 
 	// Verify response structure
 	assert.NotEmpty(t, result, "Project tree should not be empty")
 
 	// Helper function to find node by name
-	var findNode func([]types.TreeNode, string) *types.TreeNode
-	findNode = func(nodes []types.TreeNode, name string) *types.TreeNode {
+	var findNode func([]*types.TreeNode, string) *types.TreeNode
+	findNode = func(nodes []*types.TreeNode, name string) *types.TreeNode {
 		for i := range nodes {
 			if nodes[i].Name == name {
-				return &nodes[i]
+				return nodes[i]
 			}
 		}
 		return nil
 	}
 
-	// Verify root node
-	rootNode := findNode(result, filepath.Base(testDir))
+	// Verify root node (should be "src" since we specified it as subDir)
+	rootNode := findNode(result.Data.DirectoryTree, "src")
 	assert.NotNil(t, rootNode, "Root node should exist")
 	assert.True(t, rootNode.IsDir, "Root node should be a directory")
 
-	// Verify expected files exist
-	expectedFiles := []string{"test.go", "go.mod"}
+	// Verify expected files exist in the src directory
+	expectedFiles := []string{"main.go", "api/handler.go"}
 	for _, file := range expectedFiles {
-		found := false
-		for _, node := range rootNode.Children {
-			if node.Name == file {
-				found = true
-				assert.False(t, node.IsDir, "%s should be a file", file)
-				break
+		baseName := filepath.Base(file)
+		dirName := filepath.Dir(file)
+
+		var node *types.TreeNode
+		if dirName == "." {
+			node = findNode(rootNode.Children, baseName)
+		} else {
+			dirNode := findNode(rootNode.Children, dirName)
+			if dirNode != nil {
+				node = findNode(dirNode.Children, baseName)
 			}
 		}
-		assert.True(t, found, "Expected file %s in project tree", file)
+
+		assert.NotNil(t, node, "Expected file %s in project tree", file)
+		if node != nil {
+			assert.False(t, node.IsDir, "%s should be a file", file)
+		}
 	}
 }

@@ -18,21 +18,21 @@ import (
 	"io"
 )
 
-type CompareCodebasesLogic struct {
+type CodebaseHash struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewCompareCodebaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CompareCodebasesLogic {
-	return &CompareCodebasesLogic{
+func NewCompareCodebaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CodebaseHash {
+	return &CodebaseHash{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseHashRequest) (resp *types.CodebaseHashResponseData, err error) {
+func (l *CodebaseHash) GetCodebaseHash(req *types.CodebaseHashRequest) (resp *types.CodebaseHashResponseData, err error) {
 	clientCodebasePath := req.CodebasePath
 	clientId := req.ClientId
 	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)

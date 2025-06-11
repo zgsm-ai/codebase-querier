@@ -412,54 +412,134 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
 	}
 
+	// 使用 map 来构建目录树
+	nodeMap := make(map[string]*types.TreeNode)
 	fullPath := filepath.Join(codebasePath, dir)
-	entries, err := os.ReadDir(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %w", err)
-	}
 
-	var nodes []*types.TreeNode
-	for _, entry := range entries {
-		info, err := entry.Info()
+	err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			continue
-		}
-
-		// 应用过滤规则
-		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(entry.Name()) {
-			continue
-		}
-		if option.IncludePattern != nil && !option.IncludePattern.MatchString(entry.Name()) {
-			continue
+			return err
 		}
 
 		// 跳过隐藏文件和目录
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
+		if strings.HasPrefix(info.Name(), ".") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
-		// 只返回文件，不返回目录
-		if entry.IsDir() {
-			continue
+		// 获取相对路径
+		relPath, err := filepath.Rel(fullPath, path)
+		if err != nil {
+			return err
 		}
 
-		relPath := filepath.Join(dir, entry.Name())
-		node := &types.TreeNode{
-			FileInfo: types.FileInfo{
-				Name:    entry.Name(),
-				Path:    relPath,
-				Size:    info.Size(),
-				IsDir:   false,
-				ModTime: info.ModTime(),
-				Mode:    info.Mode(),
-			},
-			Children: []types.TreeNode{},
+		// 应用过滤规则
+		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if option.IncludePattern != nil && !option.IncludePattern.MatchString(relPath) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
-		nodes = append(nodes, node)
+		// 检查深度限制
+		if option.MaxDepth > 0 {
+			depth := len(strings.Split(relPath, string(filepath.Separator)))
+			if depth > option.MaxDepth {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+
+		var currentPath string
+		var parts []string
+
+		// 如果是根目录本身，跳过
+		if relPath == "." {
+			return nil
+		}
+
+		// 如果是根目录下的文件或目录
+		if !strings.Contains(relPath, string(filepath.Separator)) {
+			currentPath = relPath
+			parts = []string{relPath}
+		} else {
+			// 处理子目录中的文件和目录
+			parts = strings.Split(relPath, string(filepath.Separator))
+			currentPath = parts[0]
+		}
+
+		// 处理路径中的每一级
+		for i, part := range parts {
+			if part == "" {
+				continue
+			}
+
+			if i > 0 {
+				currentPath = filepath.Join(currentPath, part)
+			}
+
+			// 如果节点已存在，跳过
+			if _, exists := nodeMap[currentPath]; exists {
+				continue
+			}
+
+			// 创建新节点
+			isLast := i == len(parts)-1
+			var size int64
+			if isLast && !info.IsDir() {
+				size = info.Size()
+			}
+
+			node := &types.TreeNode{
+				FileInfo: types.FileInfo{
+					Name:    part,
+					Path:    currentPath,
+					IsDir:   isLast && info.IsDir(),
+					Size:    size,
+					ModTime: info.ModTime(),
+					Mode:    info.Mode(),
+				},
+				Children: make([]*types.TreeNode, 0),
+			}
+
+			// 将节点添加到 map
+			nodeMap[currentPath] = node
+
+			// 如果不是根级节点，添加到父节点的子节点列表
+			if i > 0 {
+				parentPath := filepath.Dir(currentPath)
+				if parent, exists := nodeMap[parentPath]; exists {
+					parent.Children = append(parent.Children, node)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk directory: %w", err)
 	}
 
-	return nodes, nil
+	// 构建根节点列表
+	var rootNodes []*types.TreeNode
+	for path, node := range nodeMap {
+		if !strings.Contains(path, string(filepath.Separator)) {
+			rootNodes = append(rootNodes, node)
+		}
+	}
+
+	return rootNodes, nil
 }
 
 func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath string, option types.ReadOptions) ([]byte, error) {
