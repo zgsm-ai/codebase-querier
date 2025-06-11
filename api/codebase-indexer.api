@@ -8,7 +8,8 @@
 //
 ////go:embed docs/swagger.json
 //var FS embed.FS
-
+// go install gorm.io/gen/tools/gentool@latest
+// gentool -db postgres -dsn "host=localhost user=shenma password=shenma dbname=codebase_indexer port=5432 sslmode=disable TimeZone=Asia/Shanghai"   -tables "codebase,index_history,sync_history"   -outPath "./internal/dao/query" -fieldNullable True -fieldWithIndexTag True -fieldWithTypeTag True -modelPkgName model
 syntax = "v1"
 
 type Position {

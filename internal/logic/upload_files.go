@@ -2,15 +2,15 @@ package logic
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
+	"gorm.io/gorm"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -41,15 +41,15 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	l.Logger.Debugf("uploadFiles request: %s, %s, %s", clientId, clientPath, codebaseName)
 
 	// 判断是否存在
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientPath)
-	if err != nil && !errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 
 	userUid := utils.ParseJWTUserInfo(r, l.svcCtx.Config.Auth.UserInfoHeader)
 	// 存在 则 直接插入， 不存在则需要先init
 	// 数据库唯一索引
-	if errors.Is(err, model.ErrNotFound) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		codebase, err = l.initCodebase(clientId, clientPath, userUid, codebaseName, metadata)
 		if err != nil {
 			return err
@@ -105,26 +105,27 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 
 	// Create sync history
 	var publishStatus = model.PublishStatusPending
-	syncHistory := &model.SyncHistory{
-		CodebaseId:    codebase.Id,
+
+	syncHistory := model.SyncHistory{
+		CodebaseID:    codebase.ID,
 		PublishStatus: string(publishStatus),
-		PublishTime:   sql.NullTime{Time: time.Now()},
+		PublishTime:   utils.CurrentTime(),
 	}
-	if _, err = l.svcCtx.SyncHistoryModel.Insert(l.ctx, syncHistory); err != nil {
+	if err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Save(&syncHistory); err != nil {
 		l.Logger.Errorf("insert sync history %v error: %v", syncHistory, err)
 		return err
 	}
 
 	l.Logger.Debugf("uploadFiles successfully: %s, %s, %s", clientId, clientPath, codebaseName)
-	syncId := syncHistory.Id
+	syncId := syncHistory.ID
 	if syncId == 0 {
-		syncId = time.Now().Unix()
+		syncId = int32(time.Now().Unix())
 	}
 
 	// 发送文件消息
 	msg := &types.CodebaseSyncMessage{
 		SyncID:       syncId,
-		CodebaseID:   codebase.Id,
+		CodebaseID:   codebase.ID,
 		CodebasePath: codebase.Path,
 		CodebaseName: codebase.Name,
 	}
@@ -144,9 +145,10 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 
 	// Update sync history
 	syncHistory.PublishStatus = string(publishStatus)
-	syncHistory.PublishTime = sql.NullTime{Time: time.Now()}
-	syncHistory.Message = sql.NullString{String: string(bytes)}
-	if err = l.svcCtx.SyncHistoryModel.Update(l.ctx, syncHistory); err != nil {
+	syncHistory.PublishTime = utils.CurrentTime()
+	messageStr := string(bytes)
+	syncHistory.Message = &messageStr
+	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Updates(&syncHistory); err != nil {
 		l.Logger.Errorf("update sync history %v error: %v", syncHistory, err)
 		return err
 	}
@@ -175,19 +177,17 @@ func (l *UploadFilesLogic) initCodebase(clientId string, clientPath string, user
 		return nil, err
 	}
 	codebaseModel := &model.Codebase{
-		ClientId:   clientId,
-		UserId:     userUId,
-		Name:       codebaseName,
-		ClientPath: clientPath,
-		Status:     model.CodebaseStatusActive,
-		Path:       codebaseStore.FullPath,
-		ExtraMetadata: sql.NullString{
-			String: metadata,
-		},
+		ClientID:      clientId,
+		UserID:        userUId,
+		Name:          codebaseName,
+		ClientPath:    clientPath,
+		Status:        string(model.CodebaseStatusActive),
+		Path:          codebaseStore.FullPath,
+		ExtraMetadata: &metadata,
 	}
-	_, err = l.svcCtx.CodebaseModel.Insert(l.ctx, codebaseModel)
-	// 不是 唯一索引冲突 TODO define this error
-	if err != nil && !errors.Is(err, model.UniqueIndexConflictErr) {
+	err = l.svcCtx.Querier.Codebase.WithContext(l.ctx).Save(codebaseModel)
+	if err != nil && !errors.Is(err, gorm.ErrDuplicatedKey) {
+		// 不是 唯一索引冲突
 		return nil, err
 	}
 	return codebaseModel, nil

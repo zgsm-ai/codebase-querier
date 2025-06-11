@@ -2,16 +2,16 @@ package job
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -32,11 +32,11 @@ type codegraphProcessor struct {
 	graphStore      graphstore.GraphStore
 	logger          logx.Logger
 	syncFileModeMap map[string]string
-	taskHistoryId   int64
-	totalFileCnt    int
-	successFileCnt  int
-	failedFileCnt   int
-	ignoreFileCnt   int
+	taskHistoryId   int32
+	totalFileCnt    int32
+	successFileCnt  int32
+	failedFileCnt   int32
+	ignoreFileCnt   int32
 }
 
 func NewCodegraphProcessor(ctx context.Context,
@@ -124,7 +124,7 @@ func (t *codegraphProcessor) parseCodeStructure() {
 	start := time.Now()
 	var data []*codegraphpb.CodeStructure
 
-	t.totalFileCnt = len(t.syncFileModeMap)
+	t.totalFileCnt = int32(len(t.syncFileModeMap))
 
 	// 新增、修改的，重新解析； 删除的，直接删除
 	var deleteFiles []string
@@ -167,21 +167,23 @@ func (t *codegraphProcessor) parseCodeStructure() {
 
 	t.logger.Infof("code structure parsed successfully, cost: %d s, msg: %v", time.Since(start), t.msg)
 
+	dataSize := int32(len(data))
 	if len(data) > 0 {
 		if err := t.graphStore.BatchWriteCodeStructures(t.ctx, data); err != nil {
 			t.logger.Errorf("code structure parsed data write err:%w", err)
 			//
-			t.failedFileCnt += len(data)
+			t.failedFileCnt += dataSize
 		} else {
-			t.successFileCnt += len(data)
+			t.successFileCnt += dataSize
 		}
 	}
+	deleteSize := int32(len(deleteFiles))
 	if len(deleteFiles) > 0 {
 		if err := t.graphStore.Delete(t.ctx, deleteFiles); err != nil {
 			t.logger.Errorf("code structure parse delete docs error:%w", err)
-			t.failedFileCnt += len(deleteFiles)
+			t.failedFileCnt += deleteSize
 		} else {
-			t.successFileCnt += len(data)
+			t.successFileCnt += deleteSize
 		}
 	}
 	t.logger.Infof("code structure saved successfully, cost: %d s, msg: %v, total:%d, success:%d, failed:%d", time.Since(start),
@@ -189,19 +191,20 @@ func (t *codegraphProcessor) parseCodeStructure() {
 }
 
 func (t *codegraphProcessor) updateTaskSuccess() {
+	progress := float64(1)
 	m := &model.IndexHistory{
-		Id:               t.taskHistoryId,
-		Status:           types.TaskStatusSuccess,
-		Progress:         sql.NullFloat64{Float64: 1, Valid: true},
-		EndTime:          sql.NullTime{Time: time.Now(), Valid: true},
-		TotalFileCount:   int64(t.totalFileCnt),
-		SuccessFileCount: int64(t.successFileCnt),
-		FailFileCount:    int64(t.failedFileCnt),
-		IgnoreFileCount:  int64(t.ignoreFileCnt),
+		ID:                int32(t.taskHistoryId),
+		Status:            types.TaskStatusSuccess,
+		Progress:          &progress,
+		EndTime:           utils.CurrentTime(),
+		TotalFileCount:    &t.totalFileCnt,
+		TotalSuccessCount: &t.successFileCnt,
+		TotalFailCount:    &t.failedFileCnt,
+		TotalIgnoreCount:  &t.ignoreFileCnt,
 	}
 
 	// 更新任务
-	if err := t.svcCtx.IndexHistoryModel.Update(t.ctx, m); err != nil {
+	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).Updates(m); err != nil {
 		// 任务已经成功
 		t.logger.Errorf("update embedding embeddingProcessor history %d failed: %v, model:%v", t.msg.CodebaseID, err, m)
 	}
@@ -217,7 +220,10 @@ func (t *codegraphProcessor) handleIfTaskFailed(err error) bool {
 		if errors.Is(err, errs.RunTimeout) {
 			status = types.TaskStatusTimeout
 		}
-		err = t.svcCtx.IndexHistoryModel.UpdateStatus(t.ctx, t.taskHistoryId, status, err.Error())
+		_, err = t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).
+			Where(t.svcCtx.Querier.IndexHistory.ID.Eq(int32(t.taskHistoryId))).
+			UpdateColumnSimple(t.svcCtx.Querier.IndexHistory.Status.Value(status),
+				t.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
 		if err != nil {
 			t.logger.Errorf("update embedding embeddingProcessor history failed: %v", t.msg.CodebaseID, err)
 		}
@@ -229,18 +235,17 @@ func (t *codegraphProcessor) handleIfTaskFailed(err error) bool {
 func (t *codegraphProcessor) initTaskHistory() error {
 	// 插入一条任务记录
 	embedTaskHistory := &model.IndexHistory{
-		SyncId:       t.msg.SyncID,
-		CodebaseId:   t.msg.CodebaseID,
+		SyncID:       t.msg.SyncID,
+		CodebaseID:   t.msg.CodebaseID,
 		CodebasePath: t.msg.CodebasePath,
-		TaskType:     taskTypeEmbedding,
+		TaskType:     taskTypeCodegraph,
 		Status:       types.TaskStatusPending,
-		Progress:     sql.NullFloat64{Float64: 0, Valid: true},
-		StartTime:    sql.NullTime{Time: time.Now(), Valid: true},
+		StartTime:    utils.CurrentTime(),
 	}
-	if _, err := t.svcCtx.IndexHistoryModel.Insert(t.ctx, embedTaskHistory); err != nil {
+	if err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).Save(embedTaskHistory); err != nil {
 		t.logger.Errorf("insert embeddingProcessor history %v failed: %v", embedTaskHistory, err)
 		return errs.InsertDatabaseFailed
 	}
-	t.taskHistoryId = embedTaskHistory.Id
+	t.taskHistoryId = embedTaskHistory.ID
 	return nil
 }

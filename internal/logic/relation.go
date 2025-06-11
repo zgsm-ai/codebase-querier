@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
+	"gorm.io/gorm"
 	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -32,8 +32,8 @@ func NewRelationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Relation
 func (l *RelationLogic) Relation(req *types.RelationQueryOptions) (resp *types.RelationResponseData, err error) {
 	clientId := req.ClientId
 	clientCodebasePath := req.CodebasePath
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
-	if errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 	if err != nil {

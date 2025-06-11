@@ -89,7 +89,7 @@ func (r *weaviateWrapper) DeleteCodeChunks(ctx context.Context, chunks []*types.
 				filters.Where().
 					WithPath([]string{types.MetadataCodebaseId}).
 					WithOperator(filters.Equal).
-					WithValueInt(chunk.CodebaseId),
+					WithValueInt(int64(chunk.CodebaseId)),
 				filters.Where().
 					WithPath([]string{types.MetadataFilePath}).
 					WithOperator(filters.Equal).

@@ -2,40 +2,50 @@ package svc
 
 import (
 	"context"
-	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
-
 	"github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/stores/postgres"
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/query"
 	"github.com/zgsm-ai/codebase-indexer/internal/embedding"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/cache"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/database"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
 	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
+	"gorm.io/gorm"
 )
 
 type ServiceContext struct {
-	Config            config.Config
-	CodebaseModel     model.CodebaseModel
-	IndexHistoryModel model.IndexHistoryModel
-	SyncHistoryModel  model.SyncHistoryModel
-	CodebaseStore     codebase.Store
-	MessageQueue      mq.MessageQueue
-	DistLock          redisstore.DistributedLock
-	Embedder          vector.Embedder
-	VectorStore       vector.Store
-	CodeSplitter      *embedding.CodeSplitter
-	Cache             cache.Store[any]
-	redisClient       *redis.Client // 保存Redis客户端引用以便关闭
-	StructureParser   *structure.Parser
+	Config          config.Config
+	db              *gorm.DB
+	Querier         *query.Query
+	CodebaseStore   codebase.Store
+	MessageQueue    mq.MessageQueue
+	DistLock        redisstore.DistributedLock
+	Embedder        vector.Embedder
+	VectorStore     vector.Store
+	CodeSplitter    *embedding.CodeSplitter
+	Cache           cache.Store[any]
+	redisClient     *redis.Client // 保存Redis客户端引用以便关闭
+	StructureParser *structure.Parser
 }
 
-// Close closes the shared Redis client
+// Close closes the shared Redis client and database connection
 func (s *ServiceContext) Close() error {
+	var errs []error
 	if s.redisClient != nil {
-		return s.redisClient.Close()
+		if err := s.redisClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.db != nil {
+		if err := database.CloseDB(s.db); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errs[0] // 返回第一个错误
 	}
 	return nil
 }
@@ -46,14 +56,15 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		Config: c,
 	}
 
-	sqlConn := postgres.New(
-		c.Database.DataSource,
-	)
-	// 检查数据库连接是否成功
-	_, err = sqlConn.Exec("SELECT 1")
+	// 初始化数据库连接
+	db, err := database.NewPostgresDB(c.Database)
 	if err != nil {
 		return nil, err
 	}
+	svcCtx.db = db
+
+	querier := query.Use(db)
+	svcCtx.Querier = querier
 
 	// 创建Redis客户端
 	client, err := redisstore.NewRedisClient(c.Redis)
@@ -101,10 +112,8 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
+
 	svcCtx.StructureParser = parser
-	svcCtx.CodebaseModel = model.NewCodebaseModel(sqlConn)
-	svcCtx.IndexHistoryModel = model.NewIndexHistoryModel(sqlConn)
-	svcCtx.SyncHistoryModel = model.NewSyncHistoryModel(sqlConn)
 	svcCtx.CodebaseStore = codebaseStore
 	svcCtx.MessageQueue = messageQueue
 	svcCtx.VectorStore = vectorStore
@@ -112,5 +121,6 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	svcCtx.CodeSplitter = splitter
 	svcCtx.DistLock = lock
 	svcCtx.Cache = cacheStore
+
 	return svcCtx, err
 }

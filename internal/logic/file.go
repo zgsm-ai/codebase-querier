@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"gorm.io/gorm"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -33,8 +33,8 @@ func (l *GetFileContentLogic) GetFileContent(req *types.FileContentRequest) ([]b
 	relativePath := req.FilePath
 	clientCodebasePath := req.CodebasePath
 	clientId := req.ClientId
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
-	if errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 	if err != nil {

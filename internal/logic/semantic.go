@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"gorm.io/gorm"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -46,13 +46,13 @@ func (l *SemanticLogic) SemanticSearch(req *types.SemanticSearchRequest) (resp *
 	clientId := req.ClientId
 	clientCodebasePath := req.CodebasePath
 
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
-	if errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 	// TODO  向量库隔离
 	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK,
-		vector.Options{CodebaseId: codebase.Id,
+		vector.Options{CodebaseId: codebase.ID,
 			CodebasePath: codebase.Path, CodebaseName: codebase.Name})
 	if err != nil {
 		return nil, err

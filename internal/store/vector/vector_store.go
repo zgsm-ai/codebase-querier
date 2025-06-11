@@ -18,7 +18,7 @@ type Store interface {
 const vectorWeaviate = "weaviate"
 
 type Options struct {
-	CodebaseId   int64
+	CodebaseId   int32
 	CodebasePath string
 	CodebaseName string
 }
