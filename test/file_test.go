@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/response"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -198,19 +199,18 @@ func TestFileDownload(t *testing.T) {
 	// Read and verify response
 	content, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
-	t.Logf("content:%s", string(content))
 	assert.Contains(t, string(content), "package main")
 }
 
 func TestCodebaseCompare(t *testing.T) {
 	// Prepare test data
-	req := types.CodebaseComparisonRequest{
+	req := types.CodebaseHashRequest{
 		ClientId:     "test-client-123",
 		CodebasePath: "/tmp/test/test-project",
 	}
 
 	// Send request to local service
-	url := fmt.Sprintf("%s/codebase-indexer/api/v1/comparison?clientId=%s&codebasePath=%s",
+	url := fmt.Sprintf("%s/codebase-indexer/api/v1/codebases/hash?clientId=%s&codebasePath=%s",
 		baseURL, req.ClientId, req.CodebasePath)
 
 	client := &http.Client{
@@ -222,17 +222,16 @@ func TestCodebaseCompare(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result types.ComparisonResponseData
+	var result response.Response[types.CodebaseHashResponseData]
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	assert.NoError(t, err)
-
 	// Verify response contains expected files
 	foundFiles := make(map[string]bool)
-	for _, item := range result.CodebaseTree {
+	for _, item := range result.Data.CodebaseHash {
 		foundFiles[filepath.Base(item.Path)] = true
 	}
 
-	expectedFiles := []string{"test.go", "go.mod"}
+	expectedFiles := []string{"main.go", "go.mod"}
 	for _, file := range expectedFiles {
 		assert.True(t, foundFiles[file], "Expected file %s in response", file)
 	}

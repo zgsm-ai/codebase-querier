@@ -16,7 +16,6 @@ import (
 	"encoding/hex"
 	"github.com/zeromicro/go-zero/core/logx"
 	"io"
-	"strings"
 )
 
 type CompareCodebasesLogic struct {
@@ -33,7 +32,7 @@ func NewCompareCodebaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 	}
 }
 
-func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonRequest) (resp *types.ComparisonResponseData, err error) {
+func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseHashRequest) (resp *types.CodebaseHashResponseData, err error) {
 	clientCodebasePath := req.CodebasePath
 	clientId := req.ClientId
 	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
@@ -49,8 +48,8 @@ func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonReq
 	}
 
 	// 构建响应数据
-	resp = &types.ComparisonResponseData{
-		CodebaseTree: make([]types.CodebaseTreeItem, 0),
+	resp = &types.CodebaseHashResponseData{
+		CodebaseHash: make([]*types.CodebaseFileHashItem, 0),
 	}
 
 	// 使用 Walk 方法递归遍历目录树
@@ -59,7 +58,7 @@ func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonReq
 			return nil
 		}
 		// 跳过目录和隐藏文件
-		if walkCtx.Info.IsDir || strings.HasPrefix(walkCtx.Info.Name, ".") || walkCtx.Info.Name == types.SyncMedataDir {
+		if walkCtx.Info.IsDir {
 			if walkCtx.Info.IsDir {
 				return codebasestore.SkipDir
 			}
@@ -78,13 +77,13 @@ func (l *CompareCodebasesLogic) CompareCodebase(req *types.CodebaseComparisonReq
 		hashStr := hex.EncodeToString(hash[:])
 
 		// 添加到响应数据中
-		resp.CodebaseTree = append(resp.CodebaseTree, types.CodebaseTreeItem{
+		resp.CodebaseHash = append(resp.CodebaseHash, &types.CodebaseFileHashItem{
 			Path: walkCtx.RelativePath,
 			Hash: hashStr,
 		})
 
 		return nil
-	}, codebasestore.WalkOptions{IgnoreError: true})
+	}, codebasestore.WalkOptions{IgnoreError: true, ExcludePrefixes: []string{"."}})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk directory: %w", err)

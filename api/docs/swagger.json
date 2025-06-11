@@ -14,7 +14,7 @@
   },
   "basePath": "/",
   "paths": {
-    "/codebase-indexer/api/v1/comparison": {
+    "/codebase-indexer/api/v1/codebases/hash": {
       "get": {
         "produces": [
           "application/json"
@@ -46,7 +46,7 @@
             "schema": {
               "type": "object",
               "properties": {
-                "codebaseTree": {
+                "list": {
                   "description": "项目文件树",
                   "type": "array",
                   "items": {
@@ -270,7 +270,7 @@
             "description": "额外元数据（JSON字符串）",
             "name": "extraMetadata",
             "in": "formData",
-            "required": true
+            "allowEmptyValue": true
           }
         ],
         "responses": {
@@ -530,10 +530,11 @@
           },
           {
             "type": "integer",
+            "default": 10,
             "description": "结果返回数量（默认10）",
             "name": "topK",
             "in": "query",
-            "required": true
+            "allowEmptyValue": true
           }
         ],
         "responses": {
@@ -575,7 +576,7 @@
       }
     }
   },
-  "x-date": "2025-06-10 10:49:44",
+  "x-date": "2025-06-11 22:03:22",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

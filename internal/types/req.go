@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-type ComparisonResponseData struct {
-	CodebaseTree []CodebaseTreeItem `json:"codebaseTree"` // 项目文件树
+type CodebaseHashResponseData struct {
+	CodebaseHash []*CodebaseFileHashItem `json:"list"` // 项目文件树
 }
 
 type FileContentRequest struct {
@@ -29,14 +29,13 @@ type FileUploadRequest struct {
 }
 
 
-
-type CodebaseComparisonRequest struct {
+type CodebaseHashRequest struct {
 	ClientId    string `form:"clientId"`    // 客户ID
 	CodebasePath string `form:"codebasePath"` // 项目路径
 }
 
-type CodebaseTreeItem struct {
-	Path string `json:"FullPath"` // 文件路径
+type CodebaseFileHashItem struct {
+	Path string `json:"path"` // 文件路径
 	Hash string `json:"hash"` // 文件哈希值
 }
 

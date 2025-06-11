@@ -12,7 +12,7 @@ import (
 
 func compareCodebaseHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.CodebaseComparisonRequest
+		var req types.CodebaseHashRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return

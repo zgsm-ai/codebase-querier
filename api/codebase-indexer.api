@@ -78,7 +78,7 @@ type FileContentRequest {
 	codebasePath string `form:"codebasePath"` // 项目绝对路径
 	filePath     string `form:"filePath"` // 文件相对路径
 	startLine    int    `form:"startLine,optional,default=1"` // 开始行（默认1）
-	endLine      int    `form:"endLine",optional,default=100"` // 结束行（默认100，-1=全部）
+	endLine      int    `form:"endLine,optional,default=100"` // 结束行（默认100，-1=全部）
 }
 
 // 文件上传请求
@@ -91,18 +91,18 @@ type FileUploadRequest {
 }
 
 // 项目对比请求
-type CodebaseComparisonRequest {
+type CodebaseHashRequest {
 	clientId     string `form:"clientId"` // 客户ID
 	codebasePath string `form:"codebasePath"` // 项目路径
 }
 
-type CodebaseTreeItem {
+type CodebaseHash {
 	path string `json:"path"` // 文件路径
 	hash string `json:"hash"` // 文件哈希值
 }
 
-type ComparisonResponseData {
-	codebaseTree []CodebaseTreeItem `json:"codebaseTree"` // 项目文件树
+type CodebaseHashResponseData {
+	codebaseTree []CodebaseHash `json:"list"` // 项目文件树
 }
 
 @server (
@@ -120,7 +120,7 @@ service codebaseindexer {
 	// 项目上传
 	// 项目对比
 	@handler compareCodebases
-	get /api/v1/comparison (CodebaseComparisonRequest) returns (ComparisonResponseData)
+	get /api/v1/codebases/hash (CodebaseHashRequest) returns (CodebaseHashResponseData)
 }
 
 type SemanticRequest {
