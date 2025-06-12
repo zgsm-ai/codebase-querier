@@ -1,4 +1,4 @@
-package scip
+package config
 
 import (
 	"os"
@@ -60,13 +60,10 @@ languages:
 				assert.NoError(t, err)
 			}
 
-			config, err := LoadConfig(configPath)
+			config := MustLoadCodegraphConfig(configPath)
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errContains)
 				assert.Nil(t, config)
 			} else {
-				assert.NoError(t, err)
 				assert.NotNil(t, config)
 				assert.NotEmpty(t, config.Languages)
 			}
@@ -77,13 +74,13 @@ languages:
 func TestConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *Config
+		config      *CodegraphConfig
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &Config{
+			config: &CodegraphConfig{
 				Languages: []*LanguageConfig{
 					{
 						Name:           "go",
@@ -104,13 +101,13 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name:        "empty languages",
-			config:      &Config{Languages: []*LanguageConfig{}},
+			config:      &CodegraphConfig{Languages: []*LanguageConfig{}},
 			wantErr:     true,
 			errContains: "no languages configured",
 		},
 		{
 			name: "missing language name",
-			config: &Config{
+			config: &CodegraphConfig{
 				Languages: []*LanguageConfig{
 					{
 						DetectionFiles: []string{"go.mod"},
@@ -125,7 +122,7 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing detection files",
-			config: &Config{
+			config: &CodegraphConfig{
 				Languages: []*LanguageConfig{
 					{
 						Name: "go",
@@ -140,7 +137,7 @@ func TestConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "missing index tool",
-			config: &Config{
+			config: &CodegraphConfig{
 				Languages: []*LanguageConfig{
 					{
 						Name:           "go",
@@ -164,4 +161,4 @@ func TestConfig_Validate(t *testing.T) {
 			}
 		})
 	}
-} 
+}

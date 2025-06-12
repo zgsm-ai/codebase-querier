@@ -1,4 +1,4 @@
-package scip
+package config
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"os"
 )
 
-// Config represents the SCIP configuration
-type Config struct {
+// CodegraphConfig represents the SCIP configuration
+type CodegraphConfig struct {
 	LogDir    string            `yaml:"log_dir"`
 	Languages []*LanguageConfig `yaml:"languages"`
 }
@@ -41,23 +41,23 @@ type Command struct {
 	Env  []string `yaml:"env"`
 }
 
-// LoadConfig loads the SCIP configuration from a file
-func LoadConfig(path string) (*Config, error) {
+// MustLoadCodegraphConfig loads the SCIP configuration from a file
+func MustLoadCodegraphConfig(path string) *CodegraphConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("CONFIG_ERROR: failed to read config file: %v", err)
+		panic(fmt.Sprintf("CONFIG_ERROR: failed to read config file: %v", err))
 	}
 
-	var config Config
+	var config CodegraphConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("CONFIG_ERROR: failed to parse config file: %v", err)
+		panic(fmt.Sprintf("CONFIG_ERROR: failed to parse config file: %v", err))
 	}
 
-	return &config, nil
+	return &config
 }
 
 // Validate validates the configuration
-func (c *Config) Validate() error {
+func (c *CodegraphConfig) Validate() error {
 	if len(c.Languages) == 0 {
 		return fmt.Errorf("CONFIG_ERROR: no languages configured")
 	}

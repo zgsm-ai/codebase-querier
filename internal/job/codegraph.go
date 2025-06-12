@@ -43,16 +43,13 @@ func NewCodegraphProcessor(ctx context.Context,
 	svcCtx *svc.ServiceContext,
 	msg *types.CodebaseSyncMessage,
 	syncFileModeMap map[string]string) (Processor, error) {
-	config, err := scip.LoadConfig(svcCtx.Config.IndexTask.GraphTask.ConfFile)
-	if err != nil {
-		return nil, err
-	}
+
 	graphStore, err := graphstore.NewBadgerDBGraph(ctx, graphstore.WithPath(filepath.Join(msg.CodebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
 	}
 
-	graphBuilder := scip.NewIndexGenerator(config, svcCtx.CodebaseStore)
+	graphBuilder := scip.NewIndexGenerator(svcCtx.CodegraphConf, svcCtx.CodebaseStore)
 	graphParser := scip.NewIndexParser(ctx, svcCtx.CodebaseStore, graphStore)
 
 	return &codegraphProcessor{
@@ -80,22 +77,11 @@ func (t *codegraphProcessor) Process() error {
 			return err
 		}
 
-		// 初始化 SCIP 索引生成器
-		config, err := scip.LoadConfig(t.svcCtx.Config.IndexTask.GraphTask.ConfFile)
-		if err != nil {
-			return fmt.Errorf("failed to load SCIP config: %w", err)
-		}
-		indexGenerator := scip.NewIndexGenerator(config, t.svcCtx.CodebaseStore)
-
-		// 生成 SCIP 索引
-		if err := indexGenerator.Generate(t.ctx, t.msg.CodebasePath); err != nil {
-			return fmt.Errorf("failed to generate SCIP index: %w", err)
-		}
-		defer indexGenerator.Cleanup()
+		defer t.indexGenerator.Cleanup()
 
 		// TODO scip是整个项目一起解析，后面看能否换成tree-sitter统一做
 		// 构建代码图
-		err = t.indexGenerator.Generate(t.ctx, t.msg.CodebasePath)
+		err := t.indexGenerator.Generate(t.ctx, t.msg.CodebasePath)
 		if err != nil {
 			return fmt.Errorf("failed to generate %s  index file: %w", t.msg.CodebasePath, err)
 		}

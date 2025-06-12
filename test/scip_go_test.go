@@ -35,8 +35,8 @@ func Test_GenerateGoScipIndex(t *testing.T) {
 				BasePath: testProjectsBaseDir,
 			},
 		}
-		scipConf, err := scipindex.LoadConfig("../etc/codegraph.yaml")
-		assert.NoError(t, err)
+		scipConf := config.MustLoadCodegraphConfig("../etc/codegraph.yaml")
+
 		localCodebase, err := codebase.NewLocalCodebase(context.Background(), storeConf)
 		assert.NoError(t, err)
 		generator := scipindex.NewIndexGenerator(scipConf, localCodebase)

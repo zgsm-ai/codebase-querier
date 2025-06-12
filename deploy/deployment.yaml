@@ -1,0 +1,483 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: codebase-indexer-pvc
+  namespace: shenma
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: nfs-client
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: codebase-indexer-config
+  namespace: shenma
+data:
+  conf.yaml: |
+    Name: codebase-indexer
+    Host: 0.0.0.0
+    Port: 8888
+    Timeout: 30000 #ms
+    Verbose: false
+    Mode: test # dev,test,rt,pre, pro
+    Auth:
+      UserInfoHeader: "x-userinfo"
+    Database:
+      Driver: postgres
+      DataSource: postgres://shenma:${DB_PASSWORD}@localhost:5432/codebase_indexer?sslmode=disable
+      AutoMigrate:
+        enable: true    
+    IndexTask:
+      Topic: "codebase_indexer_sync"
+      EmbeddingTask:
+        PoolSize: 10
+        MaxConcurrency: 10
+        Timeout: 120s
+        OverlapTokens: 100
+        MaxTokensPerChunk: 1000
+      GraphTask:
+        PoolSize: 10
+        MaxConcurrency: 10
+        Timeout: 180s
+        ConfFile: "/app/conf/codegraph.yaml"
+    
+    Cleaner:
+      Cron: "0 0 * * *"
+      CodebaseExpireDays: 3
+    
+    Redis:
+      Addr: redis:6379
+    
+    MessageQueue:
+      Type: redis
+    
+    CodeBaseStore:
+      local:
+        BasePath: /mnt/codebase-store
+    
+    VectorStore:
+      Type: weaviate
+      Timeout: 60s
+      MaxRetries: 5
+      Weaviate:
+        MaxDocuments: 20
+        Endpoint: "weaviate.shenma:8080"
+        BatchSize: 100
+        ClassName: "CodebaseIndex"
+      Embedder:
+        Timeout: 30s
+        MaxRetries: 3
+        BatchSize: 10
+        StripNewLines: true
+        Model: gte-modernbert-base
+        ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
+        ApiBase: https://zgsm.sangfor.com
+      Reranker:
+        Timeout: 10s
+        MaxRetries: 3
+        Model: gte-reranker-modernbert-base
+        ApiKey: "123"
+        ApiBase: https://zgsm.sangfor.com/v1/rerank
+    
+    Log:
+      Mode: volume # console,file,volume
+      ServiceName: "codebase-indexer"
+      Encoding: plain # json,plain
+      Path: "/app/logs"
+      Level: info # debug,info,error,severe
+      KeepDays: 7
+      MaxSize: 100 # MB per file, take affect when Rotation is size.
+      Rotation: daily # split by day or size
+
+  codegraph.yaml: |
+    log_dir: "/app/logs"
+    languages:
+      - name: typescript
+        detection_files: ["tsconfig.json"]
+        index:
+          name: scip-typescript
+          commands:
+            - base: "scip-typescript"
+              args:
+                - "index"
+                - "--cwd"
+                - "__sourcePath__"
+                - "--output"
+                - "__outputPath__/index.scip"
+                - "--infer-tsconfig"
+              env:
+                - "key=value"
+    
+      - name: javascript
+        detection_files: ["package.json"]
+        index:
+          name: scip-typescript
+          commands:
+            - base: "scip-typescript"
+              args:
+                - "index"
+                - "--cwd"
+                - "__sourcePath__"
+                - "--output"
+                - "__outputPath__/index.scip"
+                - "--infer-tsconfig"
+    
+      - name: go
+        detection_files: ["go.mod", "go.work"]
+        index:
+          name: scip-go
+          commands:
+            - base: "scip-go"
+              args:
+                - "--output"
+                - "__outputPath__/index.scip"
+    
+      - name: java
+        detection_files: ["pom.xml", "build.gradle"]
+        build_tools:
+          - name: maven
+            detection_files: ["pom.xml"]
+            priority: 10 # Maven priority (lower number is higher priority)
+            build_commands:
+              - base: "mvn"
+                args: ["verify", "--batch-mode", "--fail-never", "-DskipTests", "--offline", "-T", "8"]
+          - name: gradle
+            detection_files: ["build.gradle"]
+            priority: 20 # Gradle priority
+            build_commands:
+              - base: "gradle"
+                args: ["--offline", "--continue", "--no-tests", "--parallel", "--max-workers", "8", "--no-interactive"]
+        index:
+          name: scip-java
+          commands:
+            - base: "scip-java"
+              args:
+                - "index"
+                - "--cwd"
+                - "__sourcePath__"
+                - "--targetroot"
+                - "__outputPath__/build"
+                - "--output"
+                - "__outputPath__/index.scip"
+                - "--"
+                - "__buildArgs__"
+    
+      - name: python
+        detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
+        build_tools:
+          - name: poetry
+            detection_files: ["poetry.lock", "pyproject.toml"]
+            priority: 10
+            build_commands: []
+          - name: pipenv
+            detection_files: ["Pipfile"]
+            priority: 20
+            build_commands: []
+          - name: pip
+            detection_files: ["requirements.txt"]
+            priority: 30
+            build_commands: []
+        index:
+          name: scip-python
+          commands:
+            - base: "scip-python"
+              args:
+                - "index"
+                - "--output"
+                - "__outputPath__/index.scip"
+                - "--cwd"
+                - "__sourcePath__"
+                - "--project-version"
+                - "1"
+    
+      - name: ruby
+        detection_files: ["Gemfile"]
+        index:
+          name: scip-ruby
+          commands:
+            - base: "scip-ruby"
+              args:
+                - "--dir"
+                - "__sourcePath__"
+                - "--max-threads"
+                - "32"
+                - "--index-file"
+                - "__outputPath__/index.scip"
+                - "--gem-metadata"
+                - "ruby@v0.0.1"
+    
+      - name: dotnet
+        detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+        index:
+          name: scip-dotnet
+          commands:
+            - base: "scip-dotnet"
+              args:
+                - "index"
+                - "--output"
+                - "__outputPath__/index.scip"
+                - "--working-directory"
+                - "__sourcePath__"
+                - "--skip-dotnet-restore"
+                - "True"
+    
+      - name: c
+        detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+        build_tools:
+          - name: cmake
+            detection_files: ["CMakeLists.txt"]
+            priority: 10
+            build_commands:
+              - base: "cmake"
+                args:
+                  - "-B"
+                  - "build"
+                  - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+                  - "-S"
+                  - "__sourcePath__"
+                  - "-B"
+                  - "__outputPath__/build/"
+          - name: make
+            detection_files: ["Makefile"]
+            priority: 20
+            build_commands:
+              - base: "bare"
+                args:
+                  - "--output"
+                  - "__outputPath__/build/compile_commands.json"
+                  - "--"
+                  - "make"
+                  - "-C"
+                  - "__sourcePath__"
+                  - "-j"
+                  - "$(nproc)"
+          - name: autoconf
+            detection_files: ["configure", "Configure"]
+            priority: 30
+            build_commands:
+              - base: "bash"
+                args:
+                  - "-c"
+                  - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+        index:
+          name: scip-clang
+          commands:
+            - base: "scip-clang"
+              args:
+                - "--compdb-path"
+                - "__outputPath__/build/compile_commands.json"
+                - "--index-output-path"
+                - "__outputPath__/index.scip"
+                - "-j"
+                - "$(nproc)"
+    
+      - name: cpp
+        detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
+        build_tools:
+          - name: cmake
+            detection_files: ["CMakeLists.txt"]
+            priority: 10 # CMake preferred for C/C++
+            build_commands:
+              - base: "cmake"
+                args:
+                  - "-B"
+                  - "build"
+                  - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+                  - "-S"
+                  - "__sourcePath__"
+                  - "-B"
+                  - "__outputPath__/build/"
+          - name: make
+            detection_files: ["Makefile"]
+            priority: 20 # Make second priority
+            build_commands:
+              - base: "bare"
+                args:
+                  - "--output"
+                  - "__outputPath__/build/compile_commands.json"
+                  - "--"
+                  - "make"
+                  - "-C"
+                  - "__sourcePath__"
+                  - "-j"
+                  - "$(nproc)"
+          - name: autoconf
+            detection_files: ["configure", "Configure"]
+            priority: 30
+            build_commands:
+              - base: "bash"
+                args:
+                  - "-c"
+                  - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+        index:
+          name: scip-clang
+          commands:
+            - base: "scip-clang"
+              args:
+                - "--compdb-path"
+                - "__outputPath__/build/compile_commands.json"
+                - "--index-output-path"
+                - "__outputPath__/index.scip"
+                - "-j"
+                - "$(nproc)"
+    
+      - name: rust
+        detection_files: ["Cargo.toml"]
+        index:
+          name: scip-rust
+          commands:
+            - base: "rust-analyzer"
+              args:
+                - "scip"
+                - "__sourcePath__"
+                - "--output"
+                - "__outputPath__/index.scip"
+              env:
+                - "CARGO_NET_OFFLINE=true"
+                - "NUM_JOBS=32"
+                - "CARGO_BUILD_JOBS=32"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codebase-indexer
+  namespace: shenma
+  labels:
+    app: codebase-indexer
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: codebase-indexer
+  template:
+    metadata:
+      labels:
+        app: codebase-indexer
+    spec:
+      containers:
+      - name: codebase-indexer
+        image: zgsm/codebase-indexer:latest
+        command:
+          - /app/server
+          - -f
+          - /app/conf/conf.yaml
+        ports:
+        - containerPort: 8888
+        env:
+          - name: TZ
+            value: Asia/Shanghai
+          - name: INDEX_NODE
+            value: "1"
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-auth
+                key: password
+        livenessProbe:
+          tcpSocket:
+            port: 8888
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            cpu: "8"
+            memory: 16Gi
+        volumeMounts:
+        - name: timezone
+          mountPath: /etc/localtime
+        - name: logs
+          mountPath: /app/logs
+        - name: store
+          mountPath: /mnt/codebase-store/
+        - name: app-conf
+          mountPath: /app/conf
+          subPath: conf.yaml
+        - name: codegraph-conf
+          mountPath: /app/conf/codegraph.yaml
+          subPath: codegraph.yaml
+      volumes:
+        - name: logs
+          emptyDir:
+            sizeLimit: 5Gi
+        - name: store
+          persistentVolumeClaim:
+            claimName: codebase-indexer-pvc
+        - name: app-conf
+          configMap:
+            name: codebase-indexer-config
+            items:
+              - key: "conf.yaml"
+                path: "conf.yaml"
+        - name: codegraph-conf
+          configMap:
+            name: codebase-indexer-config
+            items:
+              - key: "codegraph.yaml"
+                path: "codegraph.yaml"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: codebase-indexer-svc
+  namespace: shenma
+spec:
+  ports:
+  - port: 8888
+    targetPort: 8888
+  selector:
+    app: codebase-indexer
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: codebase-indexer-hpa-c
+  namespace: shenma
+  labels:
+    app: codebase-indexer-hpa-c
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: codebase-indexer
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: codebase-indexer-hpa-m
+  namespace: shenma
+  labels:
+    app: codebase-indexer-hpa-m
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: codebase-indexer
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

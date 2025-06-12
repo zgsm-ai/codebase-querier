@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
 	"os"
@@ -26,8 +27,8 @@ type commandExecutor struct {
 // newCommandExecutor creates a new commandExecutor
 func newCommandExecutor(ctx context.Context,
 	workDir string,
-	indexTool *IndexTool,
-	buildTool *BuildTool,
+	indexTool *config.IndexTool,
+	buildTool *config.BuildTool,
 	logDir string,
 	placeHolders map[string]string) (*commandExecutor, error) {
 	if workDir == "" {
@@ -56,7 +57,7 @@ func logFileNamePrefix(workDir string) string {
 	return strings.ReplaceAll(workDir, "/", "_")
 }
 
-func buildBuildCmds(buildTool *BuildTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
+func buildBuildCmds(buildTool *config.BuildTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
 	if logFileWriter == nil {
 		logFileWriter = os.Stdout
 	}
@@ -75,7 +76,7 @@ func buildBuildCmds(buildTool *BuildTool, workDir string, logFileWriter io.Write
 	return buildCmds
 }
 
-func buildIndexCmds(indexTool *IndexTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
+func buildIndexCmds(indexTool *config.IndexTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
 	if logFileWriter == nil {
 		logFileWriter = os.Stdout
 	}
@@ -92,7 +93,7 @@ func buildIndexCmds(indexTool *IndexTool, workDir string, logFileWriter io.Write
 	return indexCmds
 }
 
-func renderCommand(v *Command, placeHolders map[string]string) *Command {
+func renderCommand(v *config.Command, placeHolders map[string]string) *config.Command {
 	v.Base = replacePlaceHolder(v.Base, placeHolders)
 	for i, arg := range v.Args {
 		v.Args[i] = replacePlaceHolder(arg, placeHolders)

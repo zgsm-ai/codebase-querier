@@ -26,6 +26,7 @@ IndexTask:
     PoolSize: 10
     MaxConcurrency: 10
     Timeout: 180s
+    ConfFile: "etc/codegraph.yaml"
 
 Cleaner:
   Cron: "0 0 * * *"
@@ -38,7 +39,6 @@ MessageQueue:
   Type: redis
 
 CodeBaseStore:
-  type: local
   local:
     BasePath: /codebase-store
 
@@ -60,13 +60,10 @@ VectorStore:
     ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
     ApiBase: https://zgsm.sangfor.com
   Reranker:
-    Namespace: "your-namespace"
-    ScoreThreshold: 0.5
     Timeout: 10s
     MaxRetries: 3
-    BatchSize: 10
     Model: gte-reranker-modernbert-base
-    ApiKey: "123"
+    ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
     ApiBase: https://zgsm.sangfor.com/v1/rerank
 
 Log:

@@ -17,7 +17,7 @@ import (
 )
 
 const indexNodeEnableVal = "1"
-const isIndexNodeEnv = "IS_INDEX_NODE"
+const indexNodeEnv = "INDEX_NODE"
 
 type indexJob struct {
 	logx.Logger
@@ -42,7 +42,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 		ctx:           serverCtx,
 		Logger:        logx.WithContext(serverCtx),
 		svcCtx:        svcCtx,
-		enableFlag:    os.Getenv(isIndexNodeEnv) == indexNodeEnableVal,
+		enableFlag:    os.Getenv(indexNodeEnv) == indexNodeEnableVal,
 		messageQueue:  svcCtx.MessageQueue,
 		consumerGroup: svcCtx.Config.MessageQueue.ConsumerGroup,
 	}

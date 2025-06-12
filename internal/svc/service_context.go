@@ -18,6 +18,7 @@ import (
 
 type ServiceContext struct {
 	Config          config.Config
+	CodegraphConf   *config.CodegraphConfig
 	db              *gorm.DB
 	Querier         *query.Query
 	CodebaseStore   codebase.Store
@@ -55,6 +56,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	svcCtx := &ServiceContext{
 		Config: c,
 	}
+	svcCtx.CodegraphConf = config.MustLoadCodegraphConfig(c.IndexTask.GraphTask.ConfFile)
 
 	// 初始化数据库连接
 	db, err := database.NewPostgresDB(c.Database)

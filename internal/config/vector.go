@@ -36,12 +36,9 @@ type EmbedderConf struct {
 }
 
 type RerankerConf struct {
-	Namespace      string
-	ScoreThreshold float32
-	Timeout        time.Duration
-	MaxRetries     int
-	BatchSize      int
-	Model          string // 模型名称（如text-embedding-ada-002）
-	APIKey         string // API密钥
-	APIBase        string // API基础URL
+	Timeout    time.Duration
+	MaxRetries int
+	Model      string // 模型名称（如text-embedding-ada-002）
+	APIKey     string // API密钥
+	APIBase    string // API基础URL
 }
