@@ -48,7 +48,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 	}
 
 	if !s.enableFlag {
-		s.Logger.Infof("IS_INDEX_NODE flag is %t, not subscribe message queue", s.enableFlag)
+		s.Logger.Infof("INDEX_NODE flag is %t, not subscribe message queue", s.enableFlag)
 		return s, nil
 	}
 
@@ -79,7 +79,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 
 func (i *indexJob) Start() {
 	if !i.enableFlag {
-		i.Logger.Infof("index job is disabled, IS_INDEX_NODE flag is %t", i.enableFlag)
+		i.Logger.Infof("INDEX_NODE flag is %t, disable index job.", i.enableFlag)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (i *indexJob) Start() {
 		for {
 			select {
 			case <-i.ctx.Done():
-				i.Logger.Info("Context cancelled, exiting meta data clean Job.")
+				i.Logger.Info("context cancelled, exiting meta data clean Job.")
 				return
 			default:
 				i.syncMetaFileCountDown.Range(func(key, value any) bool {
@@ -149,7 +149,7 @@ func (i *indexJob) processMessage(msg *types.Message) {
 	}
 	if syncMsg == nil {
 
-		i.Logger.Error("sync msg is nil after parsing with no error for message %s. Nacking message.", msg.ID)
+		i.Logger.Error("sync msg is nil after parsing with no error for message %s. nack message.", msg.ID)
 		err := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 		if err != nil {
 			i.Logger.Errorf("failed to Nack nil syncMsg message %s: %v", msg.ID, err)
@@ -270,12 +270,11 @@ func parseSyncMessage(m *types.Message) (*types.CodebaseSyncMessage, error) {
 }
 
 func (i *indexJob) Close() {
-	i.graphTaskPool.Release()
-	i.embeddingTaskPool.Release()
-	// 关闭消息队列连接
-	err := i.messageQueue.Close()
-	if err != nil {
-		i.Logger.Errorf("close message queue failed: %v", err)
+	if i.graphTaskPool != nil {
+		i.graphTaskPool.Release()
+	}
+	if i.embeddingTaskPool != nil {
+		i.embeddingTaskPool.Release()
 	}
 
 	i.Logger.Info("indexJob closed successfully.")

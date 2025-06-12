@@ -70,16 +70,7 @@ services:
     restart: always
     environment:
       TZ: "Asia/Shanghai"
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      ENABLE_API_BASED_MODULES: 'true'
-      CLUSTER_HOSTNAME: 'node1'
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
-      QUERY_DEFAULTS_LIMIT: 20
-      AUTOSCHEMA_ENABLED: "false"
-      ASYNC_INDEXING: "true"
-      DISABLE_TELEMETRY: "true"
-      LOG_FORMAT: text
-      PROMETHEUS_MONITORING_ENABLED: "true"
+      INDEX_NODE: '1 '
     networks:
       - shenma
 

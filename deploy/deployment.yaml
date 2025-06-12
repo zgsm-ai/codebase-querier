@@ -5,7 +5,7 @@ metadata:
   namespace: shenma
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 500Gi
@@ -24,6 +24,8 @@ data:
     Timeout: 30000 #ms
     Verbose: false
     Mode: test # dev,test,rt,pre, pro
+    Middlewares:
+      
     Auth:
       UserInfoHeader: "x-userinfo"
     Database:
@@ -361,6 +363,7 @@ spec:
       containers:
       - name: codebase-indexer
         image: zgsm/codebase-indexer:latest
+        imagePullPolicy: IfNotPresent
         command:
           - /app/server
           - -f
@@ -390,18 +393,12 @@ spec:
             cpu: "8"
             memory: 16Gi
         volumeMounts:
-        - name: timezone
-          mountPath: /etc/localtime
         - name: logs
           mountPath: /app/logs
         - name: store
           mountPath: /mnt/codebase-store/
         - name: app-conf
           mountPath: /app/conf
-          subPath: conf.yaml
-        - name: codegraph-conf
-          mountPath: /app/conf/codegraph.yaml
-          subPath: codegraph.yaml
       volumes:
         - name: logs
           emptyDir:
@@ -412,15 +409,7 @@ spec:
         - name: app-conf
           configMap:
             name: codebase-indexer-config
-            items:
-              - key: "conf.yaml"
-                path: "conf.yaml"
-        - name: codegraph-conf
-          configMap:
-            name: codebase-indexer-config
-            items:
-              - key: "codegraph.yaml"
-                path: "codegraph.yaml"
+
 ---
 apiVersion: v1
 kind: Service

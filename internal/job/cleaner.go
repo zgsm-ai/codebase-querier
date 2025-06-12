@@ -29,7 +29,6 @@ func (c *cleaner) Close() {
 }
 
 func (c *cleaner) Start() {
-	//TODO implement me
 	c.cron.Start() // 启动 Cron
 	logx.Infof("cleaner job started")
 }

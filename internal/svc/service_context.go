@@ -3,6 +3,7 @@ package svc
 import (
 	"context"
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/query"
@@ -33,7 +34,7 @@ type ServiceContext struct {
 }
 
 // Close closes the shared Redis client and database connection
-func (s *ServiceContext) Close() error {
+func (s *ServiceContext) Close() {
 	var errs []error
 	if s.redisClient != nil {
 		if err := s.redisClient.Close(); err != nil {
@@ -46,9 +47,8 @@ func (s *ServiceContext) Close() error {
 		}
 	}
 	if len(errs) > 0 {
-		return errs[0] // 返回第一个错误
+		logx.Errorf("service_context close err:%v", errs)
 	}
-	return nil
 }
 
 func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {
