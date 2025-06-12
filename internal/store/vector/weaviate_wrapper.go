@@ -230,10 +230,10 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 	if err != nil {
 		return err
 	}
-
-	objs := make([]*models.Object, 0, len(chunks))
-	for _, c := range chunks {
-		objs = append(objs, &models.Object{
+	logx.Infof("embedded %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
+	objs := make([]*models.Object, len(chunks), len(chunks))
+	for i, c := range chunks {
+		objs[i] = &models.Object{
 			ID:     strfmt.UUID(uuid.New().String()),
 			Class:  r.className,
 			Tenant: tenantName,
@@ -243,15 +243,16 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 				types.MetadataLanguage:     c.Language,
 				types.MetadataCodebaseId:   c.CodebaseId,
 				types.MetadataCodebasePath: c.CodebasePath,
+				types.MetadataSyncId:       options.SyncId,
 				types.MetadataCodebaseName: c.CodebaseName,
 			},
-		})
+		}
 	}
-	resp, err := r.client.Batch().ObjectsBatcher().WithObjects(objs...).Do(ctx)
-	if err != nil {
+	logx.Infof("start to save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
+	if _, err = r.client.Batch().ObjectsBatcher().WithObjects(objs...).Do(ctx); err != nil {
 		return err
 	}
-	logx.Debugf("add documents returns %v", resp)
+	logx.Infof("save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
 	return nil
 }
 
@@ -307,7 +308,7 @@ func (r *weaviateWrapper) createClassWithAutoTenantEnabled(ctx context.Context, 
 // generateTenantName 使用 MD5 哈希生成合规租户名（32字符，纯十六进制）
 func (r *weaviateWrapper) generateTenantName(codebasePath string) (string, error) {
 	if codebasePath == types.EmptyString {
-		return "", ErrInvalidCodebaseId
+		return "", ErrInvalidCodebasePath
 	}
 	hash := md5.Sum([]byte(codebasePath))   // 计算 MD5 哈希
 	return hex.EncodeToString(hash[:]), nil // 转为32位十六进制字符串

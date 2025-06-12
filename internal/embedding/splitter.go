@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,8 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
+
+var ErrUnSupportedFileExt error = errors.New("unsupported file ext")
 
 type CodeSplitter struct {
 	tokenizer    tokenizer.Codec
@@ -44,7 +47,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 
 	language := parser.GetLanguageConfigByExt(ext)
 	if language == nil {
-		return nil, fmt.Errorf("unsupported language for extension %s", ext)
+		return nil, ErrUnSupportedFileExt
 	}
 	sitterParser := sitter.NewParser()
 
@@ -88,14 +91,17 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 
 			// 处理代码切块
 			if tokenCount > p.splitOptions.MaxTokensPerChunk {
-				subChunks := p.splitFuncWithSlidingWindow(string(content), codeFile.Path, int(startPos.Row))
+				subChunks := p.splitFuncWithSlidingWindow(string(content), codeFile, int(startPos.Row))
 				allChunks = append(allChunks, subChunks...)
 			} else {
 				allChunks = append(allChunks, &types.CodeChunk{
-					Content:    content,
-					FilePath:   codeFile.Path,
-					Range:      []int{int(startPos.Row), int(startPos.Column), int(endPos.Row), int(endPos.Column)},
-					TokenCount: tokenCount,
+					CodebaseId:   codeFile.CodebaseId,
+					CodebasePath: codeFile.CodebasePath,
+					CodebaseName: codeFile.CodebaseName,
+					Content:      content,
+					FilePath:     codeFile.Path,
+					Range:        []int{int(startPos.Row), int(startPos.Column), int(endPos.Row), int(endPos.Column)},
+					TokenCount:   tokenCount,
 				})
 			}
 
@@ -146,7 +152,8 @@ func (p *CodeSplitter) countToken(content []byte) int {
 }
 
 // splitFuncWithSlidingWindow 使用滑动窗口将大函数分割成多个小块
-func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath string, funcStartLine int) []*types.CodeChunk {
+func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, codeFile *types.CodeFile, funcStartLine int) []*types.CodeChunk {
+	filePath := codeFile.Path
 	maxTokens := p.splitOptions.MaxTokensPerChunk
 	overlapTokens := p.splitOptions.SlidingWindowOverlapTokens
 
@@ -205,10 +212,13 @@ func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, filePath strin
 		endColumn := calculateColumn(content[startByte:endByte+1], endByte-startByte)
 
 		chunks = append(chunks, &types.CodeChunk{
-			Content:    []byte(chunkContent),
-			FilePath:   filePath,
-			Range:      []int{startLine, startColumn, endLine, endColumn},
-			TokenCount: endTokenIdx - startTokenIdx,
+			CodebaseId:   codeFile.CodebaseId,
+			CodebasePath: codeFile.CodebasePath,
+			CodebaseName: codeFile.CodebaseName,
+			Content:      []byte(chunkContent),
+			FilePath:     filePath,
+			Range:        []int{startLine, startColumn, endLine, endColumn},
+			TokenCount:   endTokenIdx - startTokenIdx,
 		})
 
 		if endTokenIdx >= totalTokens {

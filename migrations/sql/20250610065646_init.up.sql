@@ -12,7 +12,7 @@ CREATE TABLE codebase
     path           TEXT         NOT NULL, -- Codebase path
     file_count     INT          NOT NULL,
     total_size     BIGINT       NOT NULL,
-    extra_metadata JSON,
+    extra_metadata TEXT,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -62,7 +62,7 @@ CREATE TABLE sync_history
 (
     id             integer     NOT NULL,
     codebase_id    INT         NOT NULL,                   -- codebase.id
-    message        JSON,
+    message        TEXT,
     publish_status VARCHAR(50) NOT NULL DEFAULT 'pending', -- pending, success, failed
     publish_time   TIMESTAMP,
     created_at     TIMESTAMP            DEFAULT CURRENT_TIMESTAMP,

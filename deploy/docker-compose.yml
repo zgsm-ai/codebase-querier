@@ -61,7 +61,7 @@ services:
     command:
       - /app/server
       - -f
-      - /app/conf/config.yaml
+      - etc/config.yaml
     ports:
       - "8888:8888"
     volumes:

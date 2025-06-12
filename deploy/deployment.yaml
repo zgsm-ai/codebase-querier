@@ -77,7 +77,7 @@ data:
         StripNewLines: true
         Model: gte-modernbert-base
         ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
-        ApiBase: https://zgsm.sangfor.com
+        ApiBase: https://zgsm.sangfor.com/v1/
       Reranker:
         Timeout: 10s
         MaxRetries: 3
@@ -370,6 +370,9 @@ spec:
           - /app/conf/conf.yaml
         ports:
         - containerPort: 8888
+          name: http
+        - containerPort: 6060
+          name: metrics
         env:
           - name: TZ
             value: Asia/Shanghai
@@ -420,53 +423,57 @@ spec:
   ports:
   - port: 8888
     targetPort: 8888
+    name: http
+  - port: 6470
+    targetPort: 6060
+    name: metrics
   selector:
     app: codebase-indexer
 
----
-
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: codebase-indexer-hpa-c
-  namespace: shenma
-  labels:
-    app: codebase-indexer-hpa-c
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: codebase-indexer
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 80
-
----
-
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: codebase-indexer-hpa-m
-  namespace: shenma
-  labels:
-    app: codebase-indexer-hpa-m
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: codebase-indexer
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+#---
+#
+#apiVersion: autoscaling/v2
+#kind: HorizontalPodAutoscaler
+#metadata:
+#  name: codebase-indexer-hpa-c
+#  namespace: shenma
+#  labels:
+#    app: codebase-indexer-hpa-c
+#spec:
+#  scaleTargetRef:
+#    apiVersion: apps/v1
+#    kind: Deployment
+#    name: codebase-indexer
+#  minReplicas: 3
+#  maxReplicas: 10
+#  metrics:
+#  - type: Resource
+#    resource:
+#      name: cpu
+#      target:
+#        type: Utilization
+#        averageUtilization: 80
+#
+#---
+#
+#apiVersion: autoscaling/v2
+#kind: HorizontalPodAutoscaler
+#metadata:
+#  name: codebase-indexer-hpa-m
+#  namespace: shenma
+#  labels:
+#    app: codebase-indexer-hpa-m
+#spec:
+#  scaleTargetRef:
+#    apiVersion: apps/v1
+#    kind: Deployment
+#    name: codebase-indexer
+#  minReplicas: 3
+#  maxReplicas: 10
+#  metrics:
+#  - type: Resource
+#    resource:
+#      name: memory
+#      target:
+#        type: Utilization
+#        averageUtilization: 80

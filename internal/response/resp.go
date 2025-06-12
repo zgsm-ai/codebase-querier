@@ -2,6 +2,7 @@ package response
 
 import (
 	"context"
+	"errors"
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"net/http"
 )
@@ -25,7 +26,12 @@ func Ok(w http.ResponseWriter) {
 }
 
 func Error(w http.ResponseWriter, e error) {
-	httpx.WriteJson(w, http.StatusBadRequest, wrapResponse(e))
+	statusCode := http.StatusInternalServerError
+	var codeMsg *codeMsg
+	if errors.As(e, &codeMsg) {
+		statusCode = http.StatusBadRequest
+	}
+	httpx.WriteJson(w, statusCode, wrapResponse(e))
 }
 
 func Bytes(w http.ResponseWriter, v []byte) {

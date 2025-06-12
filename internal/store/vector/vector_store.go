@@ -19,6 +19,7 @@ const vectorWeaviate = "weaviate"
 
 type Options struct {
 	CodebaseId   int32
+	SyncId       int32
 	CodebasePath string
 	CodebaseName string
 }

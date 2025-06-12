@@ -2,6 +2,6 @@ package vector
 
 import "errors"
 
-var ErrInvalidCodebaseId = errors.New("invalid codebaseId")
+var ErrInvalidCodebasePath = errors.New("invalid codebasePath")
 var ErrEmptyResponse = errors.New("response is empty")
 var ErrInvalidResponse = errors.New("response is invalid")

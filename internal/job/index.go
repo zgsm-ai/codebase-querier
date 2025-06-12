@@ -194,7 +194,6 @@ func (i *indexJob) processMessage(msg *types.Message) {
 					i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
 				}
 			} else {
-				// TODO 让计数-1
 				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
 				if !ok {
 					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
