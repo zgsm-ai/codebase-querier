@@ -22,9 +22,12 @@ data:
     Host: 0.0.0.0
     Port: 8888
     Timeout: 30000 #ms
+    MaxConns: 100
+    MaxBytes: 52428800 # 50MB
+    DevServer:
+      Enabled: true
     Verbose: false
     Mode: test # dev,test,rt,pre, pro
-    Middlewares:
       
     Auth:
       UserInfoHeader: "x-userinfo"

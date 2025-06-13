@@ -75,7 +75,7 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo clean vector store
-			_, err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.ID}}, vector.Options{})
+			err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.ID}}, vector.Options{})
 			if err != nil {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue

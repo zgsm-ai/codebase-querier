@@ -127,7 +127,7 @@ func (t *embeddingProcessor) Process() error {
 					FilePath:     k,
 				})
 			}
-			resp, err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, deleteChunks, vector.Options{})
+			err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, deleteChunks, vector.Options{})
 			if err != nil {
 				logx.Errorf("embeddingProcessor delete code chunks err:%v", err)
 				t.failedFileCnt += int32(len(deleteFilePaths))
@@ -135,7 +135,7 @@ func (t *embeddingProcessor) Process() error {
 			} else {
 				t.successFileCnt += int32(len(deleteFilePaths))
 			}
-			t.logger.Debugf("embeddingProcessor process delete file resp:%v, err:%v", resp, err)
+			t.logger.Debugf("embeddingProcessor process delete file err:%v", err)
 		}
 		t.logger.Debugf("embeddingProcessor process delete files end, chunk count:%d", len(deleteChunks))
 

@@ -1,6 +1,10 @@
 package utils
 
-import "strings"
+import (
+	"encoding/base64"
+	"fmt"
+	"strings"
+)
 
 func IsBlank(s string) bool {
 	return len(strings.TrimSpace(s)) == 0
@@ -43,4 +47,13 @@ func SplitLines(s string) []string {
 // JoinLines joins lines into a single string with \n
 func JoinLines(lines []string) string {
 	return strings.Join(lines, "\n")
+}
+
+// DecodeBase64 decode Base64
+func DecodeBase64(encoded string) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return encoded, fmt.Errorf("decode Base64 error: %w", err)
+	}
+	return string(decoded), nil
 }

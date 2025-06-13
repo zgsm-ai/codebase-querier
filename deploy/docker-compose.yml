@@ -1,6 +1,6 @@
 services:
   redis:
-    image: docker.io/redis:7.2.4
+    image: redis:7.2.4
     restart: always
     environment:
       TZ: "Asia/Shanghai"
@@ -27,7 +27,7 @@ services:
       - shenma
 
   weaviate:
-    image: cr.weaviate.io/semitechnologies/weaviate:1.31.0
+    image: semitechnologies/weaviate:1.31.0
     command:
       - --host
       - 0.0.0.0
@@ -39,7 +39,7 @@ services:
       - "8080:8080"
       - "50051:50051"
     volumes:
-      - ${HOME}/redis/data:/var/lib/weaviate
+      - ${HOME}/weaviate/data:/var/lib/weaviate
     restart: always
     environment:
       TZ: "Asia/Shanghai"

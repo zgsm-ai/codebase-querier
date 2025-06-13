@@ -3,7 +3,8 @@ Host: 0.0.0.0
 Port: 8888
 #Timeout: 30000 #ms
 Timeout: 3000000 #ms，debug使用，300s
-MaxBytes: 104857600
+MaxBytes: 52428800 # 50MB
+MaxConns: 100
 Verbose: false
 Mode: dev # dev,test,rt,pre, pro
 DevServer:
