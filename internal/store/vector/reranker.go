@@ -115,6 +115,7 @@ func (r *customReranker) Rerank(ctx context.Context, query string, docs []*types
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+r.config.APIKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)

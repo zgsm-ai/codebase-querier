@@ -5,12 +5,11 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"path/filepath"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"time"
 )
 
@@ -80,14 +79,20 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue
 			}
-			// todo clean graph store
-			graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
-
-			err = graphStore.DeleteAll(ctx)
-			if err != nil {
-				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
+			// todo clean graph store ， clean codebase alerady delete all files， now graph store is in codebase store.
+			//graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
+			//
+			//err = graphStore.DeleteAll(ctx)
+			//if err != nil {
+			//	logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
+			//	continue
+			//}
+			// 清理redis cache
+			if err = svcCtx.Cache.CleanExpiredVersions(ctx, utils.FormatInt(int64(cb.ID))); err != nil {
+				logx.Errorf("clean codebase store %s error: %v", cb.Path, err)
 				continue
 			}
+
 			// todo update db status
 			cb.Status = string(model.CodebaseStatusExpired)
 			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).

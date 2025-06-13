@@ -14,6 +14,159 @@
   },
   "basePath": "/",
   "paths": {
+    "/codebase-indexer/api/v1/codebases/directory": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "codebaseTree",
+        "operationId": "codebaseTree",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "用户机器ID",
+            "name": "clientId",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "项目绝对路径",
+            "name": "codebasePath",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "文件相对路径",
+            "name": "subDir",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "name": "depth",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "name": "includeFiles",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "codebaseId": {
+                  "type": "integer"
+                },
+                "directoryTree": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "isDir",
+                    "path",
+                    "size",
+                    "Language",
+                    "modTime",
+                    "children"
+                  ],
+                  "properties": {
+                    "Language": {
+                      "description": "节点名称",
+                      "type": "string"
+                    },
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "isDir",
+                          "path",
+                          "size",
+                          "Language",
+                          "modTime",
+                          "children"
+                        ],
+                        "properties": {
+                          "Language": {
+                            "description": "节点名称",
+                            "type": "string"
+                          },
+                          "children": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "isDir": {
+                            "description": "是否为目录",
+                            "type": "boolean"
+                          },
+                          "modTime": {
+                            "description": "修改时间（可选）",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "description": "仅文件有大小",
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "isDir": {
+                      "description": "是否为目录",
+                      "type": "boolean"
+                    },
+                    "modTime": {
+                      "description": "修改时间（可选）",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "description": "仅文件有大小",
+                      "type": "integer"
+                    }
+                  }
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rootPath": {
+                  "type": "string"
+                },
+                "totalFiles": {
+                  "type": "integer"
+                },
+                "totalSize": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/codebase-indexer/api/v1/codebases/hash": {
       "get": {
         "produces": [
@@ -281,7 +434,7 @@
         }
       }
     },
-    "/codebase-indexer/api/v1/relations": {
+    "/codebase-indexer/api/v1/search/relation": {
       "get": {
         "produces": [
           "application/json"
@@ -496,7 +649,7 @@
         }
       }
     },
-    "/codebase-indexer/api/v1/semantics": {
+    "/codebase-indexer/api/v1/search/semantic": {
       "get": {
         "produces": [
           "application/json"
@@ -576,7 +729,7 @@
       }
     }
   },
-  "x-date": "2025-06-11 22:03:22",
+  "x-date": "2025-06-13 19:22:59",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",
