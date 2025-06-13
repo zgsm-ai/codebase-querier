@@ -17,8 +17,13 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
-				Path:    "/api/v1/comparison",
-				Handler: compareCodebaseHandler(serverCtx),
+				Path:    "/api/v1/codebases/directory",
+				Handler: codebaseTreeHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/codebases/hash",
+				Handler: getCodebaseHashHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,

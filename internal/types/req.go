@@ -4,13 +4,11 @@
 package types
 
 import (
-	"io/fs"
 	"regexp"
-	"time"
 )
 
-type ComparisonResponseData struct {
-	CodebaseTree []CodebaseTreeItem `json:"codebaseTree"` // 项目文件树
+type CodebaseHashResponseData struct {
+	CodebaseHash []*CodebaseFileHashItem `json:"list"` // 项目文件树
 }
 
 type FileContentRequest struct {
@@ -29,14 +27,13 @@ type FileUploadRequest struct {
 }
 
 
-
-type CodebaseComparisonRequest struct {
+type CodebaseHashRequest struct {
 	ClientId    string `form:"clientId"`    // 客户ID
 	CodebasePath string `form:"codebasePath"` // 项目路径
 }
 
-type CodebaseTreeItem struct {
-	Path string `json:"FullPath"` // 文件路径
+type CodebaseFileHashItem struct {
+	Path string `json:"path"` // 文件路径
 	Hash string `json:"hash"` // 文件哈希值
 }
 
@@ -61,7 +58,7 @@ type RelationResponseData struct {
 type SemanticFileItem struct {
 	Content  string  `json:"Content"`  // 代码片段
 	FilePath string  `json:"filePath"` // 文件相对路径
-	Score    float64 `json:"score"`    // 匹配得分
+	Score    float32 `json:"score"`    // 匹配得分
 }
 
 type SemanticSearchRequest struct {
@@ -72,23 +69,27 @@ type SemanticSearchRequest struct {
 }
 
 type SemanticSearchResponseData struct {
-	List []SemanticFileItem `json:"list"` // 检索结果列表
+	List []*SemanticFileItem `json:"list"` // 检索结果列表
 }
 
-// TreeNode 表示目录树中的一个节点，可以是目录或文件
-type TreeNode struct {
-	FileInfo
-	Children []TreeNode `json:"children,omitempty"` // 子节点（仅目录有）
+
+type CodebaseTreeRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+	SubDir       string `form:"subDir,optional"`       // 文件相对路径
+	Depth        int    `form:"depth,optional,default=5"`
+	IncludeFiles int    `form:"IncludeFiles,optional,default=1"`
 }
 
-type FileInfo struct {
-	Name    string    `json:"Language"`              // 节点名称
-	Path    string    `json:"FullPath"`              // 节点路径
-	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
-	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
-	IsDir   bool      `json:"IsDir"`             // 是否是目录
-	Mode    fs.FileMode
+type CodebaseTreeResponseData struct {
+	CodebaseId    int32        `json:"codebaseId"`
+	Name          string        `json:"name"`
+	RootPath      string        `json:"rootPath"`
+	TotalFiles    int          `json:"totalFiles"`
+	TotalSize     int64        `json:"totalSize"`
+	DirectoryTree []*TreeNode    `json:"directoryTree"`
 }
+
 
 // ListOption 定义List方法的可选参数
 type ListOption func(*ListOptions)

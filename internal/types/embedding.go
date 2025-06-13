@@ -1,7 +1,7 @@
 package types
 
 type CodeFile struct {
-	CodebaseId   int64
+	CodebaseId   int32
 	CodebasePath string
 	CodebaseName string
 	Name         string
@@ -12,7 +12,7 @@ type CodeFile struct {
 
 // CodeChunk represents a chunk of code with associated metadata.
 type CodeChunk struct {
-	CodebaseId   int64
+	CodebaseId   int32
 	CodebasePath string
 	CodebaseName string
 	Language     string

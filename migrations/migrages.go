@@ -30,6 +30,7 @@ func AutoMigrate(c config.Database) error {
 	if err != nil {
 		return err
 	}
+
 	d, err := iofs.New(migrateFS, "sql")
 	if err != nil {
 		return err

@@ -9,8 +9,6 @@ import (
 
 // MessageQueue 消息队列接口
 type MessageQueue interface {
-	// Close 关闭连接
-	Close() error
 	// Produce Publish 发布消息到指定主题
 	Produce(ctx context.Context, topic string, message []byte, opts types.ProduceOptions) error
 	// Consume 订阅主题，返回消息通道和错误

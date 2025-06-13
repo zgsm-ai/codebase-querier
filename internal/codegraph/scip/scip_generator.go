@@ -3,6 +3,7 @@ package scip
 import (
 	"context"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -19,11 +20,11 @@ const (
 // IndexGenerator represents the SCIP index generator
 type IndexGenerator struct {
 	codebaseStore codebase.Store
-	config        *Config
+	config        *config.CodegraphConfig
 }
 
 // NewIndexGenerator creates a new SCIP index generator
-func NewIndexGenerator(config *Config, codebaseStore codebase.Store) *IndexGenerator {
+func NewIndexGenerator(config *config.CodegraphConfig, codebaseStore codebase.Store) *IndexGenerator {
 	return &IndexGenerator{
 		config:        config,
 		codebaseStore: codebaseStore,
@@ -65,7 +66,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 }
 
 // detectLanguageAndTool detects the language and tool for a repository
-func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath string) (*IndexTool, *BuildTool, error) {
+func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
 	// Find language config
 	for _, lang := range c.config.Languages {
 		for _, file := range lang.DetectionFiles {

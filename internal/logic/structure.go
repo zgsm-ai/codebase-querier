@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
+	"gorm.io/gorm"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -35,8 +35,8 @@ func (l *StructureLogic) Structure(req *types.StructureRequest) (resp *types.Str
 	clientCodebasePath := req.CodebasePath
 	filePath := req.FilePath
 
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
-	if errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
 

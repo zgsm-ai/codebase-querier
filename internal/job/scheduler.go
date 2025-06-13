@@ -35,6 +35,9 @@ func (s *Scheduler) Schedule() {
 
 func (s *Scheduler) Close() {
 	for _, job := range s.jobs {
+		if job == nil {
+			continue
+		}
 		job.Close()
 	}
 }

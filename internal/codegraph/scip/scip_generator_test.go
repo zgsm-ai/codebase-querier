@@ -2,6 +2,7 @@ package scip
 
 import (
 	"context"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,7 +20,7 @@ func TestNewIndexGenerator(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := mocks.NewMockStore(ctrl)
-	config := &Config{}
+	config := &config.CodegraphConfig{}
 
 	generator := NewIndexGenerator(config, store)
 	assert.NotNil(t, generator)
@@ -52,7 +53,7 @@ func TestIndexGenerator_Generate(t *testing.T) {
 		name         string
 		codebasePath string
 		setupMock    func(*mocks.MockStore)
-		config       *Config
+		config       *config.CodegraphConfig
 		wantErr      bool
 		errContains  string
 	}{
@@ -67,14 +68,14 @@ func TestIndexGenerator_Generate(t *testing.T) {
 					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{
 					{
 						Name:           "go",
 						DetectionFiles: []string{"go.mod"},
-						Index: &IndexTool{
+						Index: &config.IndexTool{
 							Name: "scip-go",
-							Commands: []*Command{
+							Commands: []*config.Command{
 								{
 									Base: echoCmd,
 									Args: echoArgs,
@@ -94,8 +95,8 @@ func TestIndexGenerator_Generate(t *testing.T) {
 					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
 					Return(assert.AnError)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{},
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{},
 			},
 			wantErr:     true,
 			errContains: "failed to create codebase index directory",
@@ -111,8 +112,8 @@ func TestIndexGenerator_Generate(t *testing.T) {
 					Stat(gomock.Any(), testDir, "go.mod").
 					Return(nil, assert.AnError)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{
 					{
 						Name:           "go",
 						DetectionFiles: []string{"go.mod"},
@@ -156,9 +157,9 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 		name         string
 		codebasePath string
 		setupMock    func(*mocks.MockStore)
-		config       *Config
-		wantIndex    *IndexTool
-		wantBuild    *BuildTool
+		config       *config.CodegraphConfig
+		wantIndex    *config.IndexTool
+		wantBuild    *config.BuildTool
 		wantErr      bool
 		errContains  string
 	}{
@@ -170,18 +171,18 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{
 					{
 						Name:           "go",
 						DetectionFiles: []string{"go.mod"},
-						Index: &IndexTool{
+						Index: &config.IndexTool{
 							Name: "scip-go",
 						},
 					},
 				},
 			},
-			wantIndex: &IndexTool{Name: "scip-go"},
+			wantIndex: &config.IndexTool{Name: "scip-go"},
 			wantBuild: nil,
 			wantErr:   false,
 		},
@@ -193,25 +194,25 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 					Stat(gomock.Any(), testDir, "go.mod").
 					Return(&types.FileInfo{IsDir: false}, nil)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{
 					{
 						Name:           "go",
 						DetectionFiles: []string{"go.mod"},
-						BuildTools: []*BuildTool{
+						BuildTools: []*config.BuildTool{
 							{
 								Name:           "go-build",
 								DetectionFiles: []string{"go.mod"},
 							},
 						},
-						Index: &IndexTool{
+						Index: &config.IndexTool{
 							Name: "scip-go",
 						},
 					},
 				},
 			},
-			wantIndex: &IndexTool{Name: "scip-go"},
-			wantBuild: &BuildTool{
+			wantIndex: &config.IndexTool{Name: "scip-go"},
+			wantBuild: &config.BuildTool{
 				Name:           "go-build",
 				DetectionFiles: []string{"go.mod"},
 			},
@@ -225,8 +226,8 @@ func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
 					Stat(gomock.Any(), testDir, "go.mod").
 					Return(nil, assert.AnError)
 			},
-			config: &Config{
-				Languages: []*LanguageConfig{
+			config: &config.CodegraphConfig{
+				Languages: []*config.LanguageConfig{
 					{
 						Name:           "go",
 						DetectionFiles: []string{"go.mod"},

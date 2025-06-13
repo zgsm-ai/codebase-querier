@@ -229,17 +229,17 @@ func (mr *MockStoreMockRecorder) Tree(ctx, codebasePath, dir, option interface{}
 }
 
 // Unzip mocks base method.
-func (m *MockStore) Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error {
+func (m *MockStore) Unzip(ctx context.Context, codebasePath string, source io.Reader) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Unzip", ctx, codebasePath, source, target)
+	ret := m.ctrl.Call(m, "Unzip", ctx, codebasePath, source)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Unzip indicates an expected call of Unzip.
-func (mr *MockStoreMockRecorder) Unzip(ctx, codebasePath, source, target interface{}) *gomock.Call {
+func (mr *MockStoreMockRecorder) Unzip(ctx, codebasePath, source interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unzip", reflect.TypeOf((*MockStore)(nil).Unzip), ctx, codebasePath, source, target)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unzip", reflect.TypeOf((*MockStore)(nil).Unzip), ctx, codebasePath, source)
 }
 
 // Walk mocks base method.

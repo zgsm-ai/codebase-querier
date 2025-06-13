@@ -181,7 +181,7 @@ func (m *minioCodebase) Add(ctx context.Context, codebasePath string, source io.
 	return nil
 }
 
-func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader, target string) error {
+func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source io.Reader) error {
 	// Create a temporary file to store the zip content
 	tmpFile, err := io.ReadAll(source)
 	if err != nil {
@@ -193,18 +193,16 @@ func (m *minioCodebase) Unzip(ctx context.Context, codebasePath string, source i
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
 
-	basePath := filepath.Join(codebasePath, target)
-
 	// Extract each file
 	for _, file := range zipReader.File {
 		if file.FileInfo().IsDir() {
 			continue
 		}
 
-		objectName := filepath.Join(basePath, file.Name)
+		objectName := filepath.Join(codebasePath, file.Name)
 
 		// Check for zip slip vulnerability
-		if !strings.HasPrefix(objectName, basePath) {
+		if !strings.HasPrefix(objectName, codebasePath) {
 			return fmt.Errorf("illegal file path: %s", file.Name)
 		}
 
@@ -332,13 +330,13 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 	}
 
 	prefix := filepath.Join(codebasePath, dir)
-	if !strings.HasSuffix(prefix, "/") {
+	// 只有当不是根目录时才添加斜杠
+	if dir != "" && !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
 
-	// Build path to node mapping
+	// 使用 map 来构建目录树
 	nodeMap := make(map[string]*types.TreeNode)
-	var rootNodes []*types.TreeNode
 
 	objectCh := m.client.ListObjects(ctx, m.cfg.Minio.Bucket, minio.ListObjectsOptions{
 		Prefix:    prefix,
@@ -350,8 +348,8 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			return nil, fmt.Errorf("failed to list objects: %w", object.Err)
 		}
 
-		// Skip the directory marker itself
-		if object.Key == prefix {
+		// Skip empty objects
+		if object.Key == "" {
 			continue
 		}
 
@@ -361,7 +359,12 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			continue
 		}
 
-		// Apply filters
+		// Skip hidden files
+		if strings.HasPrefix(filepath.Base(relPath), ".") {
+			continue
+		}
+
+		// 应用过滤规则
 		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
 			continue
 		}
@@ -369,48 +372,80 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			continue
 		}
 
-		// Process each level of the path
-		parts := strings.Split(relPath, "/")
-		currentPath := ""
+		// 检查深度限制
+		if option.MaxDepth > 0 {
+			depth := len(strings.Split(relPath, "/"))
+			if depth > option.MaxDepth {
+				continue
+			}
+		}
 
+		var currentPath string
+		var parts []string
+
+		// 如果是根目录下的文件或目录
+		if !strings.Contains(relPath, "/") {
+			currentPath = relPath
+			parts = []string{relPath}
+		} else {
+			// 处理子目录中的文件和目录
+			parts = strings.Split(relPath, "/")
+			currentPath = parts[0]
+		}
+
+		// 处理路径中的每一级
 		for i, part := range parts {
-			if i == 0 {
-				currentPath = part
-			} else {
+			if part == "" {
+				continue
+			}
+
+			if i > 0 {
 				currentPath = filepath.Join(currentPath, part)
 			}
 
-			// Skip if node already exists
+			// 如果节点已存在，跳过
 			if _, exists := nodeMap[currentPath]; exists {
 				continue
 			}
 
-			// Create new node
+			// 创建新节点
+			isLast := i == len(parts)-1
+			isDir := !isLast || strings.HasSuffix(object.Key, "/")
+			var size int64
+			if isLast && !isDir {
+				size = object.Size
+			}
+
 			node := &types.TreeNode{
 				FileInfo: types.FileInfo{
 					Name:    part,
 					Path:    currentPath,
-					IsDir:   i < len(parts)-1 || strings.HasSuffix(object.Key, "/"),
-					Size:    object.Size,
+					IsDir:   isDir,
+					Size:    size,
 					ModTime: object.LastModified,
 					Mode:    defaultFileMode,
 				},
-				Children: make([]types.TreeNode, 0),
+				Children: make([]*types.TreeNode, 0),
 			}
 
-			// Add node to map
+			// 将节点添加到 map
 			nodeMap[currentPath] = node
 
-			// Add to root nodes if it's a root level node
-			if i == 0 {
-				rootNodes = append(rootNodes, node)
-			} else {
-				// Add to parent's children
+			// 如果不是根级节点，添加到父节点的子节点列表
+			if i > 0 {
 				parentPath := filepath.Dir(currentPath)
 				if parent, exists := nodeMap[parentPath]; exists {
-					parent.Children = append(parent.Children, *node)
+					parent.Children = append(parent.Children, node)
 				}
 			}
+		}
+	}
+
+	// 构建根节点列表
+	var rootNodes []*types.TreeNode
+	for path, node := range nodeMap {
+		if !strings.Contains(path, "/") {
+			rootNodes = append(rootNodes, node)
 		}
 	}
 

@@ -2,13 +2,16 @@ package logic
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
+	"gorm.io/gorm"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -35,90 +38,121 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	clientPath := req.CodebasePath
 	codebaseName := req.CodebaseName
 	metadata := req.ExtraMetadata
-	l.Logger.Debugf("uploadFiles successfully: %s, %s, %s", clientId, clientPath, codebaseName)
+	l.Logger.Debugf("uploadFiles request: %s, %s, %s", clientId, clientPath, codebaseName)
 
 	// 判断是否存在
-	codebase, err := l.svcCtx.CodebaseModel.FindByClientIdAndPath(l.ctx, clientId, clientPath)
-	if err != nil && !errors.Is(err, model.ErrNotFound) {
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 
 	userUid := utils.ParseJWTUserInfo(r, l.svcCtx.Config.Auth.UserInfoHeader)
 	// 存在 则 直接插入， 不存在则需要先init
 	// 数据库唯一索引
-	if errors.Is(err, model.ErrNotFound) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		codebase, err = l.initCodebase(clientId, clientPath, userUid, codebaseName, metadata)
 		if err != nil {
 			return err
 		}
 	}
-	body, err := r.GetBody()
-	defer body.Close()
+
+	// Parse multipart form
+	err = r.ParseMultipartForm(32 << 20) // 32MB max memory
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse multipart form: %w", err)
 	}
-	err = l.svcCtx.CodebaseStore.Unzip(l.ctx, codebase.Path, body, codebase.Path)
+	defer r.MultipartForm.RemoveAll()
+
+	// Get the ZIP file from form
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return fmt.Errorf("failed to get file from form: %w", err)
+	}
+	defer file.Close()
+
+	// Verify file is a ZIP
+	if !strings.HasSuffix(header.Filename, ".zip") {
+		return fmt.Errorf("uploaded file must be a ZIP file, got: %s", header.Filename)
+	}
+
+	// Unzip the file
+	err = l.svcCtx.CodebaseStore.Unzip(l.ctx, codebase.Path, file)
+	if err != nil {
+		return fmt.Errorf("failed to unzip file: %w", err)
+	}
+
 	// 查找待删除的文件，进行处理
 	fileModeMap, _, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(l.ctx, codebase.Path)
+	if err != nil {
+		l.Logger.Errorf("get sync file list error: %v", err)
+		return err
+	}
+
 	var deleteList []string
 	for f, m := range fileModeMap {
 		if m == types.FileOpDelete {
 			deleteList = append(deleteList, f)
 		}
 	}
-	err = l.svcCtx.CodebaseStore.BatchDelete(l.ctx, codebase.Path, deleteList)
-	if err != nil {
-		l.Logger.Errorf("delete files error", err)
-		return err
+
+	if len(deleteList) > 0 {
+		err = l.svcCtx.CodebaseStore.BatchDelete(l.ctx, codebase.Path, deleteList)
+		if err != nil {
+			l.Logger.Errorf("delete files error: %v", err)
+			return err
+		}
 	}
 
-	if err != nil {
-		return err
-	}
+	// Create sync history
 	var publishStatus = model.PublishStatusPending
+
 	syncHistory := model.SyncHistory{
-		CodebaseId:    codebase.Id,
+		CodebaseID:    codebase.ID,
 		PublishStatus: string(publishStatus),
-		PublishTime:   sql.NullTime{Time: time.Now()},
+		PublishTime:   utils.CurrentTime(),
 	}
-	if _, err = l.svcCtx.SyncHistoryModel.Insert(l.ctx, &syncHistory); err != nil {
-		logx.Errorf("insert sync history %v error:%v", syncHistory, err)
-		return nil
+	if err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Save(&syncHistory); err != nil {
+		l.Logger.Errorf("insert sync history %v error: %v", syncHistory, err)
+		return err
 	}
 
 	l.Logger.Debugf("uploadFiles successfully: %s, %s, %s", clientId, clientPath, codebaseName)
-	syncId := syncHistory.Id
-	if syncHistory.Id == 0 {
-		syncId = time.Now().Unix()
+	syncId := syncHistory.ID
+	if syncId == 0 {
+		syncId = int32(time.Now().Unix())
 	}
+
 	// 发送文件消息
 	msg := &types.CodebaseSyncMessage{
 		SyncID:       syncId,
-		CodebaseID:   codebase.Id,
+		CodebaseID:   codebase.ID,
 		CodebasePath: codebase.Path,
 		CodebaseName: codebase.Name,
 	}
 	bytes, err := json.Marshal(msg)
 	if err != nil {
-		logx.Errorf("marshal message error:%v", err)
+		l.Logger.Errorf("marshal message error: %v", err)
 		publishStatus = model.PublishStatusFailed
 	} else {
-		//TODO 发送失败，本地记录，重发。
 		err = l.svcCtx.MessageQueue.Produce(l.ctx, l.svcCtx.Config.IndexTask.Topic, bytes, types.ProduceOptions{})
 		if err != nil {
-			logx.Errorf("produce message error:%v", err)
+			l.Logger.Errorf("produce message error: %v", err)
 			publishStatus = model.PublishStatusFailed
+		} else {
+			publishStatus = model.PublishStatusSuccess
 		}
-		publishStatus = model.PublishStatusSuccess
 	}
 
-	// 更新
+	// Update sync history
 	syncHistory.PublishStatus = string(publishStatus)
-	syncHistory.PublishTime = sql.NullTime{Time: time.Now()}
-	syncHistory.Message = string(bytes)
-	if _, err = l.svcCtx.SyncHistoryModel.Insert(l.ctx, &syncHistory); err != nil {
-		logx.Errorf("update sync history %v error:%v", syncHistory, err)
-		return nil
+	syncHistory.PublishTime = utils.CurrentTime()
+	messageStr := string(bytes)
+	syncHistory.Message = &messageStr
+	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).
+		Where(l.svcCtx.Querier.SyncHistory.ID.Eq(syncHistory.ID)).
+		Updates(&syncHistory); err != nil {
+		l.Logger.Errorf("update sync history %v error: %v", syncHistory, err)
+		return err
 	}
 
 	return nil
@@ -145,18 +179,17 @@ func (l *UploadFilesLogic) initCodebase(clientId string, clientPath string, user
 		return nil, err
 	}
 	codebaseModel := &model.Codebase{
-		ClientId:   clientId,
-		UserId:     userUId,
-		Name:       codebaseName,
-		ClientPath: clientPath,
-		Path:       codebaseStore.FullPath,
-		ExtraMetadata: sql.NullString{
-			String: metadata,
-		},
+		ClientID:      clientId,
+		UserID:        userUId,
+		Name:          codebaseName,
+		ClientPath:    clientPath,
+		Status:        string(model.CodebaseStatusActive),
+		Path:          codebaseStore.FullPath,
+		ExtraMetadata: &metadata,
 	}
-	_, err = l.svcCtx.CodebaseModel.Insert(l.ctx, codebaseModel)
-	// 不是 唯一索引冲突 TODO define this error
-	if err != nil && !errors.Is(err, model.UniqueIndexConflictErr) {
+	err = l.svcCtx.Querier.Codebase.WithContext(l.ctx).Save(codebaseModel)
+	if err != nil && !errors.Is(err, gorm.ErrDuplicatedKey) {
+		// 不是 唯一索引冲突
 		return nil, err
 	}
 	return codebaseModel, nil

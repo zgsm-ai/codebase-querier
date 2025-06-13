@@ -2,8 +2,6 @@ package config
 
 // CodeBaseStoreConf 代码库存储配置
 type CodeBaseStoreConf struct {
-	// 存储类型，可选值: local, minio
-	Type string
 	// 具体存储类型的配置，使用内嵌结构实现
 	Local LocalStoreConf `json:",optional"`
 	Minio MinioStoreConf `json:",optional"`

@@ -2,6 +2,7 @@ package scip
 
 import (
 	"context"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 func TestNewCommandExecutor(t *testing.T) {
@@ -19,8 +19,8 @@ func TestNewCommandExecutor(t *testing.T) {
 	tests := []struct {
 		name         string
 		workDir      string
-		indexTool    *IndexTool
-		buildTool    *BuildTool
+		indexTool    *config.IndexTool
+		buildTool    *config.BuildTool
 		placeHolders map[string]string
 		wantErr      bool
 		errContains  string
@@ -40,9 +40,9 @@ func TestNewCommandExecutor(t *testing.T) {
 		{
 			name:    "empty index commands",
 			workDir: "/tmp",
-			indexTool: &IndexTool{
+			indexTool: &config.IndexTool{
 				Name:     "test",
-				Commands: []*Command{},
+				Commands: []*config.Command{},
 			},
 			wantErr:     true,
 			errContains: "index commands are required",
@@ -50,9 +50,9 @@ func TestNewCommandExecutor(t *testing.T) {
 		{
 			name:    "valid config",
 			workDir: "/tmp",
-			indexTool: &IndexTool{
+			indexTool: &config.IndexTool{
 				Name: "test",
-				Commands: []*Command{
+				Commands: []*config.Command{
 					{
 						Base: "test-cmd",
 						Args: []string{"arg1", "arg2"},
@@ -130,13 +130,13 @@ func TestReplacePlaceHolder(t *testing.T) {
 func TestRenderCommand(t *testing.T) {
 	tests := []struct {
 		name         string
-		command      *Command
+		command      *config.Command
 		placeHolders map[string]string
-		expected     *Command
+		expected     *config.Command
 	}{
 		{
 			name: "render all fields",
-			command: &Command{
+			command: &config.Command{
 				Base: "${BASE}",
 				Args: []string{"${ARG1}", "${ARG2}"},
 				Env:  []string{"${ENV1}=value1", "${ENV2}=value2"},
@@ -148,7 +148,7 @@ func TestRenderCommand(t *testing.T) {
 				"${ENV1}": "ENV1",
 				"${ENV2}": "ENV2",
 			},
-			expected: &Command{
+			expected: &config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1", "ENV2=value2"},
@@ -156,13 +156,13 @@ func TestRenderCommand(t *testing.T) {
 		},
 		{
 			name: "no placeholders",
-			command: &Command{
+			command: &config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1"},
 			},
 			placeHolders: map[string]string{},
-			expected: &Command{
+			expected: &config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1"},
@@ -206,19 +206,19 @@ func TestCommandExecutor_Execute(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		buildCmds []*Command
-		indexCmds []*Command
+		buildCmds []*config.Command
+		indexCmds []*config.Command
 		wantErr   bool
 	}{
 		{
 			name: "all commands succeed",
-			buildCmds: []*Command{
+			buildCmds: []*config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*Command{
+			indexCmds: []*config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
@@ -228,13 +228,13 @@ func TestCommandExecutor_Execute(t *testing.T) {
 		},
 		{
 			name: "build command fails",
-			buildCmds: []*Command{
+			buildCmds: []*config.Command{
 				{
 					Base: failScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*Command{
+			indexCmds: []*config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
@@ -244,13 +244,13 @@ func TestCommandExecutor_Execute(t *testing.T) {
 		},
 		{
 			name: "index command fails",
-			buildCmds: []*Command{
+			buildCmds: []*config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*Command{
+			indexCmds: []*config.Command{
 				{
 					Base: failScript,
 					Args: []string{},
@@ -262,12 +262,10 @@ func TestCommandExecutor_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			executor := &commandExecutor{
 				workDir:   tmpDir,
-				buildCmds: buildBuildCmds(&BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
-				indexCmds: buildIndexCmds(&IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
-				logger:    logx.WithContext(ctx),
+				buildCmds: buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
+				indexCmds: buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
 			}
 
 			err := executor.Execute()

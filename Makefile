@@ -1,3 +1,9 @@
+TAG ?= latest
+
+.PHONY: init
+init:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install github.com/golang/mock/mockgen@latest
 
 .PHONY:mock
 mock:
@@ -10,4 +16,9 @@ test:
 
 .PHONY:build
 build:
-	go build -o ./bin/main ./cmd/main.go
+	go mod tidy
+	go build -ldflags="-s -w" -o ./bin/main ./cmd/main.go
+
+.PHONY:docker
+docker:
+	docker build -t zgsm/codebase-indexer:$(TAG) .

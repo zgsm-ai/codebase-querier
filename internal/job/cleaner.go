@@ -4,9 +4,10 @@ import (
 	"context"
 	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zgsm-ai/codebase-indexer/internal/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 const cleanLockKey = "codebase-indexer:cleaner:lock"
-const lockTimteoutSeconds = time.Second * 120
+const lockTimeout = time.Second * 120
 
 type cleaner struct {
 	svcCtx *svc.ServiceContext
@@ -28,7 +29,6 @@ func (c *cleaner) Close() {
 }
 
 func (c *cleaner) Start() {
-	//TODO implement me
 	c.cron.Start() // 启动 Cron
 	logx.Infof("cleaner job started")
 }
@@ -39,7 +39,7 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	// 添加任务（参数：Cron 表达式, 要执行的函数）
 	_, err := cr.AddFunc(svcCtx.Config.Cleaner.Cron, func() {
 		// aquice lock
-		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimteoutSeconds)
+		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimeout)
 		if err != nil {
 			logx.Errorf("cleaner try lock error: %v", err)
 			return
@@ -58,7 +58,10 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 
 		logx.Infof("cleaner get lock %s successfully, start.", cleanLockKey)
 
-		codebases, err := svcCtx.CodebaseModel.FindExpiredCodebase(ctx, svcCtx.Config.Cleaner.CodebaseExpireDays)
+		expireDays := time.Duration(24*svcCtx.Config.Cleaner.CodebaseExpireDays) * time.Hour
+		expiredDate := time.Now().Add(-expireDays)
+
+		codebases, err := findExpiredCodebases(ctx, svcCtx, expiredDate)
 		if err != nil {
 			logx.Errorf("find expired codebase error: %v", err)
 			return
@@ -72,7 +75,7 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo clean vector store
-			_, err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.Id}})
+			err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.ID}}, vector.Options{})
 			if err != nil {
 				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
 				continue
@@ -86,8 +89,10 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				continue
 			}
 			// todo update db status
-			cb.Status = model.CodebaseStatusExpired
-			if err = svcCtx.CodebaseModel.Update(ctx, cb); err != nil {
+			cb.Status = string(model.CodebaseStatusExpired)
+			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).
+				Where(svcCtx.Querier.Codebase.ID.Eq(cb.ID)).
+				Updates(cb); err != nil {
 				logx.Errorf("update codebase %s status expired error: %v", cb.Path, err)
 				return
 			}
@@ -103,4 +108,12 @@ func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 		ctx:    ctx,
 		cron:   cr,
 	}, nil
+}
+
+func findExpiredCodebases(ctx context.Context, svcCtx *svc.ServiceContext, expiredDate time.Time) ([]*model.Codebase, error) {
+	codebases, err := svcCtx.Querier.Codebase.WithContext(ctx).
+		Where(svcCtx.Querier.Codebase.CreatedAt.Lt(expiredDate)).
+		Where(svcCtx.Querier.Codebase.Status.Eq(string(model.CodebaseStatusActive))).
+		Find()
+	return codebases, err
 }

@@ -34,11 +34,6 @@ func NewRedisMQ(ctx context.Context, client *redis.Client, consumerGroup string)
 		consumerGroup: consumerGroup,
 	}, nil
 }
-
-func (r *redisMQ) Close() error {
-	return nil // 对于go-redis客户端，通常由上层管理连接生命周期
-}
-
 func (r *redisMQ) CreateTopic(ctx context.Context, topic string, opts types.TopicOptions) error {
 	// Redis Streams 在第一次XAdd时自动创建，无需显式创建
 	// 可以在这里选择预先创建消费者组，以便在Consume时少一步检查

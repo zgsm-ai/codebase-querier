@@ -11,8 +11,6 @@
 # Test binary, built with `go test -c`
 *.test
 
-test/testdata
-
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
@@ -27,7 +25,6 @@ test/testdata
 main
 main.exe
 .codebase_index/
-/test/testdata/
 *.iml
 *.scip
 bin/*

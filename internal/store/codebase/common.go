@@ -21,6 +21,6 @@ func generateUniquePath(clientId, codebasePath string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func generateCodebasePath(basePath, clientId, codebasePath string) (string, error) {
-	return filepath.Join(basePath, generateUniquePath(clientId, codebasePath), codebasePath, filepathSlash), nil
+func generateCodebasePath(basePath, clientId, clientCodebasePath string) (string, error) {
+	return filepath.Join(basePath, generateUniquePath(clientId, clientCodebasePath), filepathSlash), nil
 }

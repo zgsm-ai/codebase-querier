@@ -17,12 +17,10 @@ type VectorStoreConf struct {
 // WeaviateConf Weaviate向量数据库配置
 type WeaviateConf struct {
 	Endpoint     string // HTTP端点
-	APIKey       string // API密钥
-	IndexName    string // 索引名称
-	BatchSize    int    // 批处理大小
-	Namespace    string //
+	APIKey       string `json:",optional"`   // API密钥
+	BatchSize    int    `json:",default=10"` // 批处理大小
 	ClassName    string
-	MaxDocuments int
+	MaxDocuments int `json:",default=10"`
 }
 
 // EmbedderConf 嵌入模型配置
@@ -38,12 +36,9 @@ type EmbedderConf struct {
 }
 
 type RerankerConf struct {
-	Namespace      string
-	ScoreThreshold float32
-	Timeout        time.Duration
-	MaxRetries     int
-	BatchSize      int
-	Model          string // 模型名称（如text-embedding-ada-002）
-	APIKey         string // API密钥
-	APIBase        string // API基础URL
+	Timeout    time.Duration
+	MaxRetries int
+	Model      string // 模型名称（如text-embedding-ada-002）
+	APIKey     string // API密钥
+	APIBase    string // API基础URL
 }

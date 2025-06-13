@@ -4,7 +4,7 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
-A powerful code indexing and context retrieval service for AI programming assistants.
+A powerful code indexing context retrieval service for AI programming assistants.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/zgsm-ai/codebase-indexer)](https://goreportcard.com/report/github.com/zgsm-ai/codebase-indexer)
 [![Go Reference](https://pkg.go.dev/badge/github.com/zgsm-ai/codebase-indexer.svg)](https://pkg.go.dev/github.com/zgsm-ai/codebase-indexer)
@@ -14,7 +14,7 @@ A powerful code indexing and context retrieval service for AI programming assist
 
 ## Overview
 
-codebase-indexer is the context module of [ZGSM (ZhuGe Smart Mind) AI Programming Assistant](https://github.com/zgsm-ai/zgsm). It provides powerful codebase indexing capabilities to support semantic search and code call graph relationship retrieval for RAG (Retrieval-Augmented Generation) systems.
+codebase-indexer is the context module of [ZGSM (ZhuGe Smart Mind) AI Programming Assistant](https://github.com/zgsm-ai/zgsm) which running on backend. It provides powerful codebase indexing capabilities to support semantic search and code call graph relationship retrieval for RAG (Retrieval-Augmented Generation) systems.
 
 ### Key Features
 

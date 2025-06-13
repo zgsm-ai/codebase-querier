@@ -4,20 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
 type Store interface {
-	vectorstores.VectorStore
-	UpsertCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options ...vectorstores.Option) error
-	DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options ...vectorstores.Option) (any, error)
-	Query(ctx context.Context, query string, topK int, options ...vectorstores.Option) ([]types.SemanticFileItem, error)
+	UpsertCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) error
+	DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) error
+	Query(ctx context.Context, query string, topK int, options Options) ([]*types.SemanticFileItem, error)
 	Close()
 }
 
 const vectorWeaviate = "weaviate"
+
+type Options struct {
+	CodebaseId   int32
+	SyncId       int32
+	CodebasePath string
+	CodebaseName string
+}
 
 func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
 	var vectorStoreImpl Store

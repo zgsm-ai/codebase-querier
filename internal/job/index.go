@@ -17,7 +17,7 @@ import (
 )
 
 const indexNodeEnableVal = "1"
-const isIndexNodeEnv = "IS_INDEX_NODE"
+const indexNodeEnv = "INDEX_NODE"
 
 type indexJob struct {
 	logx.Logger
@@ -42,13 +42,13 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 		ctx:           serverCtx,
 		Logger:        logx.WithContext(serverCtx),
 		svcCtx:        svcCtx,
-		enableFlag:    os.Getenv(isIndexNodeEnv) == indexNodeEnableVal,
+		enableFlag:    os.Getenv(indexNodeEnv) == indexNodeEnableVal,
 		messageQueue:  svcCtx.MessageQueue,
 		consumerGroup: svcCtx.Config.MessageQueue.ConsumerGroup,
 	}
 
 	if !s.enableFlag {
-		s.Logger.Infof("IS_INDEX_NODE flag is %t, not subscribe message queue", s.enableFlag)
+		s.Logger.Infof("INDEX_NODE flag is %t, not subscribe message queue", s.enableFlag)
 		return s, nil
 	}
 
@@ -79,7 +79,7 @@ func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 
 func (i *indexJob) Start() {
 	if !i.enableFlag {
-		i.Logger.Infof("index job is disabled, IS_INDEX_NODE flag is %d", i.enableFlag)
+		i.Logger.Infof("INDEX_NODE flag is %t, disable index job.", i.enableFlag)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (i *indexJob) Start() {
 		for {
 			select {
 			case <-i.ctx.Done():
-				i.Logger.Info("Context cancelled, exiting meta data clean Job.")
+				i.Logger.Info("context cancelled, exiting meta data clean Job.")
 				return
 			default:
 				i.syncMetaFileCountDown.Range(func(key, value any) bool {
@@ -149,7 +149,7 @@ func (i *indexJob) processMessage(msg *types.Message) {
 	}
 	if syncMsg == nil {
 
-		i.Logger.Error("sync msg is nil after parsing with no error for message %s. Nacking message.", msg.ID)
+		i.Logger.Error("sync msg is nil after parsing with no error for message %s. nack message.", msg.ID)
 		err := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 		if err != nil {
 			i.Logger.Errorf("failed to Nack nil syncMsg message %s: %v", msg.ID, err)
@@ -194,7 +194,6 @@ func (i *indexJob) processMessage(msg *types.Message) {
 					i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
 				}
 			} else {
-				// TODO 让计数-1
 				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
 				if !ok {
 					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
@@ -270,12 +269,11 @@ func parseSyncMessage(m *types.Message) (*types.CodebaseSyncMessage, error) {
 }
 
 func (i *indexJob) Close() {
-	i.graphTaskPool.Release()
-	i.embeddingTaskPool.Release()
-	// 关闭消息队列连接
-	err := i.messageQueue.Close()
-	if err != nil {
-		i.Logger.Errorf("close message queue failed: %v", err)
+	if i.graphTaskPool != nil {
+		i.graphTaskPool.Release()
+	}
+	if i.embeddingTaskPool != nil {
+		i.embeddingTaskPool.Release()
 	}
 
 	i.Logger.Info("indexJob closed successfully.")
