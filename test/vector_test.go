@@ -4,7 +4,16 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	goweaviate "github.com/weaviate/weaviate-go-client/v5/weaviate"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/auth"
@@ -13,12 +22,10 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/job"
+	"github.com/zgsm-ai/codebase-indexer/internal/response"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 const basePath = "/projects/codebase-indexer"
@@ -27,6 +34,9 @@ var c config.Config
 var svcCtx *svc.ServiceContext
 var metadataFileList []string
 var syncFileModeMap map[string]string
+
+var clientId = "test-client-123"
+var clientPath = "/tmp/test/test-project"
 
 const codebasePath = "\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f52249a98afbe95b824f815917" // your local repo path
 const codebaseID = 2
@@ -197,8 +207,55 @@ func TestDeleteEmbeddings(t *testing.T) {
 }
 
 func TestSemanticQuery(t *testing.T) {
-	// 先启动服务
 
+	// init data
+	syncId := int32(time.Now().Unix())
+	err := setup(syncId)
+	if err != nil {
+		panic(err)
+	}
+	// Prepare test data
+	req := types.SemanticSearchRequest{
+		ClientId:     clientId,
+		CodebasePath: clientPath,
+		Query:        "codebase目录树",
+		TopK:         5,
+	}
+
+	// Send request to local service
+	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/search/semantic?clientId=%s&codebasePath=%s&query=%s&topK=%d",
+		baseURL, req.ClientId, url.QueryEscape(req.CodebasePath), url.QueryEscape(req.Query), req.TopK)
+
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	resp, err := client.Get(reqUrl)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	// Parse response
+	var result response.Response[types.SemanticSearchResponseData]
+	err = json.Unmarshal(body, &result)
+	assert.NoError(t, err)
+
+	t.Logf("resp:%+v", string(body))
+
+	// Verify response structure
+	assert.Equal(t, 0, result.Code) // 0 indicates success
+	assert.NotNil(t, result.Data)
+	assert.NotNil(t, result.Data.List)
+
+	// Verify that we got some results
+	if len(result.Data.List) > 0 {
+		// Verify the structure of the first result
+		firstResult := result.Data.List[0]
+		assert.NotEmpty(t, firstResult.Content)
+		assert.NotEmpty(t, firstResult.FilePath)
+		assert.Greater(t, firstResult.Score, float32(0))
+	}
 }
 
 // generateTenantName 使用 MD5 哈希生成合规租户名（32字符，纯十六进制）

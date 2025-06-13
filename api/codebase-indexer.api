@@ -1,5 +1,5 @@
 	//  goctl api go --api api/codebase-indexer.api --style go_zero  --dir .
-		// goctl api swagger --api api/codebase-indexer.api --dir docs --filename swagger
+		// goctl api swagger --api codebase-indexer.api --dir docs --filename swagger
 		//go get -u github.com/swaggo/files
 		//go get -u github.com/swaggo/gin-swagger
 		//package api
@@ -66,7 +66,7 @@
 	)
 	service codebaseindexer {
 		@handler relation
-		get /api/v1/relations (RelationRequest) returns (RelationResponseData)
+		get /api/v1/search/relation (RelationRequest) returns (RelationResponseData)
 
 		@handler structure
 		get /api/v1/file/structure (StructureRequest) returns (StructureResponseData)
@@ -107,7 +107,7 @@
 			path string `json:"path"`
 			size int64 `json:"size,omitempty"`           // 仅文件有大小
 			Name string `json:"Language"`                // 节点名称
-			ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）
+			ModTime string `json:"modTime,omitempty"` // 修改时间（可选）
 			children []*TreeNode `json:"children,omitempty"`
 		}
 	)
@@ -179,6 +179,6 @@
 	)
 	service codebaseindexer {
 		@handler semanticSearch
-		get /api/v1/semantics (SemanticRequest) returns (SemanticResponseData)
+		get /api/v1/search/semantic (SemanticRequest) returns (SemanticResponseData)
 	}
 

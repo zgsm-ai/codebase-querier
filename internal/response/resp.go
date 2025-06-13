@@ -27,7 +27,7 @@ func Ok(w http.ResponseWriter) {
 }
 
 func Error(w http.ResponseWriter, e error) {
-	logx.WithCallerSkip(2).Errorf("response error: %2", e)
+	logx.WithCallerSkip(2).Errorf("response error: %v", e)
 	statusCode := http.StatusInternalServerError
 	var codeMsg *codeMsg
 	if errors.As(e, &codeMsg) {

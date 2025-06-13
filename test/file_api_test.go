@@ -28,31 +28,29 @@ func TestFileUpload(t *testing.T) {
 	// Prepare test data
 	testData := struct {
 		ClientId      string
-		CodebasePath  string
+		ClientPath    string
 		CodebaseName  string
 		ExtraMetadata string
 	}{
 		ClientId:      "test-client-123",
-		CodebasePath:  "/tmp/test/test-project",
+		ClientPath:    "/tmp/test/test-project",
 		CodebaseName:  "test-project",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 	}
 
-	// Create test directory structure
-	err := os.MkdirAll(filepath.Join(testData.CodebasePath, "src", "api"), 0755)
-	assert.NoError(t, err)
-	defer os.RemoveAll(testData.CodebasePath)
-
 	// Create test files with nested structure
 	testFiles := map[string]string{
-		"src/api/handler.go": "package api\n\nfunc Handler() {}\n",
-		"src/main.go":        "package main\n\nfunc main() {}\n",
-		"go.mod":             "module test-project\n",
+		"src/api/handler.go":         "package logic  \n  \nimport (  \n\t\"context\"  \n\t\"errors\"  \n\t\"fmt\"  \n  \n\t\"github.com/zgsm-ai/codebase-indexer/internal/errs\"  \n\t\"github.com/zgsm-ai/codebase-indexer/internal/svc\"  \n\t\"github.com/zgsm-ai/codebase-indexer/internal/types\"  \n\t\"github.com/zgsm-ai/codebase-indexer/pkg/utils\"  \n  \n\t\"github.com/zeromicro/go-zero/core/logx\"  \n\t\"gorm.io/gorm\"  \n)  \n  \ntype CodebaseTreeLogic struct {  \n\tlogx.Logger  \n\tctx    context.Context  \n\tsvcCtx *svc.ServiceContext  \n}  \n  \nfunc NewCodebaseTreeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CodebaseTreeLogic {  \n\treturn &CodebaseTreeLogic{  \n\t\tLogger: logx.WithContext(ctx),  \n\t\tctx:    ctx,  \n\t\tsvcCtx: svcCtx,  \n\t}  \n}  \n  \nfunc (l *CodebaseTreeLogic) CodebaseTree(req *types.CodebaseTreeRequest) (resp *types.CodebaseTreeResponseData, err error) {  \n\t// 1. 从数据库查询 codebase 信息  \n\tclientCodebasePath := req.ClientPath  \n\tclientId := req.ClientId  \n\tcodebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)  \n\tif errors.Is(err, gorm.ErrRecordNotFound) {  \n\t\treturn nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf(\"client_id: %s, clientCodebasePath: %s\", clientId, clientCodebasePath))  \n\t}  \n\tif err != nil {  \n\t\treturn nil, err  \n\t}  \n  \n\tcodebasePath := codebase.Path  \n\tif utils.IsBlank(codebasePath) {  \n\t\treturn nil, errors.New(\"codebase path is empty\")  \n\t}  \n  \n\t// 2. 获取目录树  \n\tstore := l.svcCtx.CodebaseStore  \n\ttreeOpts := types.TreeOptions{  \n\t\tMaxDepth: req.Depth,  \n\t}  \n  \n\tnodes, err := store.Tree(l.ctx, codebasePath, req.SubDir, treeOpts)  \n\tif err != nil {  \n\t\tl.Logger.Errorf(\"failed to get directory tree: %v\", err)  \n\t\treturn nil, err  \n\t}  \n  \n\t// 3. 计算文件统计信息  \n\tvar totalFiles int  \n\tvar totalSize int64  \n\tif len(nodes) > 0 {  \n\t\tcountFilesAndSize(nodes, &totalFiles, &totalSize, req.IncludeFiles == 1)  \n\t}  \n  \n\tresp = &types.CodebaseTreeResponseData{  \n\t\tCodebaseId:    codebase.ID,  \n\t\tName:          codebase.Name,  \n\t\tRootPath:      codebasePath,  \n\t\tTotalFiles:    totalFiles,  \n\t\tTotalSize:     totalSize,  \n\t\tDirectoryTree: nodes,  \n\t}  \n  \n\treturn resp, nil  \n}  \n  \n// countFilesAndSize 统计文件数量和总大小  \nfunc countFilesAndSize(nodes []*types.TreeNode, totalFiles *int, totalSize *int64, includeFiles bool) {  \n\tif len(nodes) == 0 {  \n\t\treturn  \n\t}  \n  \n\tfor _, node := range nodes {  \n\t\tif node == nil {  \n\t\t\tcontinue  \n\t\t}  \n  \n\t\tif !node.IsDir {  \n\t\t\tif includeFiles {  \n\t\t\t\t*totalFiles++  \n\t\t\t\t*totalSize += node.Size  \n\t\t\t}  \n\t\t\tcontinue  \n\t\t}  \n  \n\t\t// 递归处理子节点  \n\t\tcountFilesAndSize(node.Children, totalFiles, totalSize, includeFiles)  \n\t}  \n}  \n",
+		"src/main.go":                "package main\n\nimport (\n\t\"context\"\n\t\"flag\"\n\t\"fmt\"\n\t\"github.com/zeromicro/go-zero/core/conf\"\n\t\"github.com/zeromicro/go-zero/core/logx\"\n\t\"github.com/zeromicro/go-zero/rest\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/config\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/handler\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/job\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/svc\"\n\t\"github.com/zgsm-ai/codebase-indexer/migrations\"\n\t\"net/http\"\n)\n\nvar configFile = flag.String(\"f\", \"etc/conf.yaml\", \"the config file\")\n\nfunc main() {\n\tflag.Parse()\n\n\tvar c config.Config\n\tconf.MustLoad(*configFile, &c, conf.UseEnv())\n\n\tlogx.MustSetup(c.Log)\n\n\tif err := migrations.AutoMigrate(c.Database); err != nil {\n\t\tpanic(err)\n\t}\n\n\tserver := rest.MustNewServer(c.RestConf, rest.WithFileServer(\"/swagger/\", http.Dir(\"api/docs/\")))\n\tdefer server.Stop()\n\n\tserverCtx, cancelFunc := context.WithCancel(context.Background())\n\tdefer cancelFunc()\n\tsvcCtx, err := svc.NewServiceContext(serverCtx, c)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer svcCtx.Close()\n\n\tjobScheduler, err := job.NewScheduler(serverCtx, svcCtx)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tjobScheduler.Schedule()\n\tdefer jobScheduler.Close()\n\n\thandler.RegisterHandlers(server, svcCtx)\n\n\tfmt.Printf(\"Started server at %s:%d\n\", c.Host, c.Port)\n\tserver.Start()\n}\n",
+		"src/svc/service_context.go": "package svc\n\nimport (\n\t\"context\"\n\t\"github.com/redis/go-redis/v9\"\n\t\"github.com/zeromicro/go-zero/core/logx\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/config\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/dao/query\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/embedding\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/store/cache\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/store/codebase\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/store/database\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/store/mq\"\n\tredisstore \"github.com/zgsm-ai/codebase-indexer/internal/store/redis\"\n\t\"github.com/zgsm-ai/codebase-indexer/internal/store/vector\"\n\t\"gorm.io/gorm\"\n)\n\ntype ServiceContext struct {\n\tConfig          config.Config\n\tCodegraphConf   *config.CodegraphConfig\n\tdb              *gorm.DB\n\tQuerier         *query.Query\n\tCodebaseStore   codebase.Store\n\tMessageQueue    mq.MessageQueue\n\tDistLock        redisstore.DistributedLock\n\tEmbedder        vector.Embedder\n\tVectorStore     vector.Store\n\tCodeSplitter    *embedding.CodeSplitter\n\tCache           cache.Store[any]\n\tredisClient     *redis.Client // 保存Redis客户端引用以便关闭\n\tStructureParser *structure.Parser\n}\n\n// Close closes the shared Redis client and database connection\nfunc (s *ServiceContext) Close() {\n\tvar errs []error\n\tif s.redisClient != nil {\n\t\tif err := s.redisClient.Close(); err != nil {\n\t\t\terrs = append(errs, err)\n\t\t}\n\t}\n\tif s.db != nil {\n\t\tif err := database.CloseDB(s.db); err != nil {\n\t\t\terrs = append(errs, err)\n\t\t}\n\t}\n\tif len(errs) > 0 {\n\t\tlogx.Errorf(\"service_context close err:%v\", errs)\n\t}\n}\n\nfunc NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {\n\tvar err error\n\tsvcCtx := &ServiceContext{\n\t\tConfig: c,\n\t}\n\tsvcCtx.CodegraphConf = config.MustLoadCodegraphConfig(c.IndexTask.GraphTask.ConfFile)\n\n\t// 初始化数据库连接\n\tdb, err := database.NewPostgresDB(c.Database)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tsvcCtx.db = db\n\n\tquerier := query.Use(db)\n\tsvcCtx.Querier = querier\n\n\t// 创建Redis客户端\n\tclient, err := redisstore.NewRedisClient(c.Redis)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tsvcCtx.redisClient = client\n\n\t// 创建各个组件，共用Redis客户端\n\tmessageQueue, err := mq.NewRedisMQ(ctx, client, c.MessageQueue.ConsumerGroup)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tlock, err := redisstore.NewRedisDistributedLock(client)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tcacheStore := cache.NewRedisStore[any](client)\n\n\tcodebaseStore, err := codebase.NewLocalCodebase(ctx, c.CodeBaseStore)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tembedder, err := vector.NewEmbedder(c.VectorStore.Embedder)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treranker := vector.NewReranker(c.VectorStore.Reranker)\n\n\tvectorStore, err := vector.NewVectorStore(ctx, c.VectorStore, embedder, reranker)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tsplitter, err := embedding.NewCodeSplitter(embedding.SplitOptions{\n\t\tMaxTokensPerChunk:          c.IndexTask.EmbeddingTask.MaxTokensPerChunk,\n\t\tSlidingWindowOverlapTokens: c.IndexTask.EmbeddingTask.OverlapTokens})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tparser, err := structure.NewStructureParser()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tsvcCtx.StructureParser = parser\n\tsvcCtx.CodebaseStore = codebaseStore\n\tsvcCtx.MessageQueue = messageQueue\n\tsvcCtx.VectorStore = vectorStore\n\tsvcCtx.Embedder = embedder\n\tsvcCtx.CodeSplitter = splitter\n\tsvcCtx.DistLock = lock\n\tsvcCtx.Cache = cacheStore\n\n\treturn svcCtx, err\n}\n",
+		"go.mod":                     "module test-project\n",
 	}
 
 	// Write test files
 	for relPath, content := range testFiles {
-		fullPath := filepath.Join(testData.CodebasePath, relPath)
+		fullPath := filepath.Join(testData.ClientPath, relPath)
+		err := os.MkdirAll(filepath.Join(testData.ClientPath, filepath.Dir(relPath)), 0755)
+		assert.NoError(t, err)
 		err = os.WriteFile(fullPath, []byte(content), 0644)
 		assert.NoError(t, err)
 	}
@@ -91,7 +89,7 @@ func TestFileUpload(t *testing.T) {
 	// Create sync metadata
 	syncMetadata := types.SyncMetadataFile{
 		ClientID:      testData.ClientId,
-		CodebasePath:  testData.CodebasePath,
+		CodebasePath:  testData.ClientPath,
 		ExtraMetadata: json.RawMessage(testData.ExtraMetadata),
 		FileList:      make(map[string]string),
 		Timestamp:     timestamp,
@@ -128,7 +126,7 @@ func TestFileUpload(t *testing.T) {
 	// Add form fields
 	formFields := map[string]string{
 		"clientId":      testData.ClientId,
-		"codebasePath":  testData.CodebasePath,
+		"codebasePath":  testData.ClientPath,
 		"codebaseName":  testData.CodebaseName,
 		"extraMetadata": testData.ExtraMetadata,
 	}
