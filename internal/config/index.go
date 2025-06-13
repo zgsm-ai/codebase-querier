@@ -10,6 +10,7 @@ type IndexTaskConf struct {
 
 type EmbeddingTaskConf struct {
 	MaxConcurrency int
+	Enabled        bool `json:"default=true"`
 	Timeout        time.Duration
 	// 滑动窗口重叠token数
 	OverlapTokens     int
@@ -19,6 +20,7 @@ type EmbeddingTaskConf struct {
 
 type GraphTaskConf struct {
 	MaxConcurrency int
+	Enabled        bool `json:"default=true"`
 	Timeout        time.Duration
 	PoolSize       int
 	ConfFile       string `json:",default=etc/codegraph.yaml"`

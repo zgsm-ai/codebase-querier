@@ -11,13 +11,16 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const indexNodeEnableVal = "1"
 const indexNodeEnv = "INDEX_NODE"
+const lockKeyPrefixFmt = "codebase_indexer:index:%d"
 
 type indexJob struct {
 	logx.Logger
@@ -86,32 +89,7 @@ func (i *indexJob) Start() {
 	i.Logger.Info("index job started.")
 
 	// 启动一个协程，去清理同步元数据文件
-	go func() {
-		for {
-			select {
-			case <-i.ctx.Done():
-				i.Logger.Info("context cancelled, exiting meta data clean Job.")
-				return
-			default:
-				i.syncMetaFileCountDown.Range(func(key, value any) bool {
-					// 如果value 为0 ，批量删除文件
-					meta := value.(*cleanSyncMetaFile)
-					if meta.counter.Load() == 0 {
-						i.Logger.Infof("clean sync meta file, codebasePath:%s, paths:%v", meta.CodebasePath, meta.Paths)
-						// TODO 当调用链和嵌入任务都成功时，清理元数据文件。
-						if err := i.svcCtx.CodebaseStore.BatchDelete(i.ctx, meta.CodebasePath, meta.Paths); err != nil {
-							i.Logger.Errorf("failed to delete codebase %s metadata : %v, err: %v", meta.CodebasePath, meta.Paths, err)
-						}
-						// 删除计数器
-						i.syncMetaFileCountDown.Delete(key)
-					}
-					return true
-				})
-			}
-		}
-	}()
-
-	// TODO 多消息合并，避免重复处理，尤其是代码图构建，间隔一定时间再触发下次构建。
+	go i.cleanProcessedMetadataFile()
 
 	// 轮询消息
 	for {
@@ -136,8 +114,45 @@ func (i *indexJob) Start() {
 	}
 }
 
+func (i *indexJob) cleanProcessedMetadataFile() {
+	func() {
+		for {
+			select {
+			case <-i.ctx.Done():
+				i.Logger.Info("context cancelled, exiting meta data clean Job.")
+				return
+			default:
+				i.syncMetaFileCountDown.Range(func(key, value any) bool {
+					// 如果value 为0 ，批量删除文件
+					meta := value.(*cleanSyncMetaFile)
+					if meta.counter.Load() <= 0 {
+						i.Logger.Infof("clean sync meta file, codebasePath:%s, paths:%v", meta.CodebasePath, meta.Paths)
+						// TODO 当调用链和嵌入任务都成功时，清理元数据文件。
+						if err := i.svcCtx.CodebaseStore.BatchDelete(i.ctx, meta.CodebasePath, meta.Paths); err != nil {
+							i.Logger.Errorf("failed to delete codebase %s metadata : %v, err: %v", meta.CodebasePath, meta.Paths, err)
+						}
+						// 删除计数器
+						i.syncMetaFileCountDown.Delete(key)
+					}
+					return true
+				})
+			}
+		}
+	}()
+}
+
 // processMessage 处理单条消息的全部流程
 func (i *indexJob) processMessage(msg *types.Message) {
+	// ack
+	defer func() {
+		i.Logger.Debugf("start ack message %+v", msg)
+		if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
+			i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
+			// TODO: Handle ACK failure - this is rare, but might require logging or alerting
+		}
+		i.Logger.Debugf("ack message %+v successfully.", msg)
+	}()
+
 	syncMsg, err := parseSyncMessage(msg)
 	if err != nil {
 		i.Logger.Errorf("parse sync message failed for message %s: %v. nack message.", msg.ID, err)
@@ -167,55 +182,54 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		i.Logger.Errorf("sync file list is nil, not process %v", syncMsg)
 		return
 	}
+
+	// 获取分布式锁， 5分钟超时
+	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, indexJobKey(syncMsg.CodebaseID), time.Minute*5)
+	if err != nil {
+		i.Logger.Errorf("failed to acquire locked for message %v: , err:%v", syncMsg, err)
+		return
+	}
+	if !locked {
+		i.Logger.Errorf("failed to acquire locked for message %v: %v", syncMsg)
+	}
+
+	defer i.svcCtx.DistLock.Unlock(i.ctx, indexJobKey(syncMsg.CodebaseID))
+
+	// 判断消息是否是最新消息，如果不是最新消息，跳过
+	if !i.IsCurrentLatestVersion(err, syncMsg) {
+		return
+	}
+
 	meta := &cleanSyncMetaFile{
 		CodebasePath: syncMsg.CodebasePath,
 		Paths:        medataFileList,
 	}
-	meta.counter.Store(2) // 两个任务
-
 	// index job ; graph job
 	i.syncMetaFileCountDown.Store(syncMsg.SyncID, meta)
 
-	embeddingCtx, embeddingTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
-	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
-	embeddingProcessor, err := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg, syncFileModeMap)
-	if err != nil {
-		i.Logger.Errorf("failed to create embedding processor for message %s: %v", syncMsg, err)
-		embeddingTimeoutCancel()
-	} else {
-		errEmbeddingSubmit := i.embeddingTaskPool.Submit(func() {
-			defer embeddingTimeoutCancel() // Cancel context when the goroutine finishes
-			processErr := embeddingProcessor.Process()
-			if processErr != nil {
-				// Embedding task failed, log and re-queue the original message body
-				i.Logger.Errorf("embedding processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
-				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-				if produceErr != nil {
-					i.Logger.Errorf("failed to re-queue message %s after embedding failure: %v", msg.ID, produceErr)
-				}
-			} else {
-				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
-				if !ok {
-					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
-					return
-				}
-				value.(*cleanSyncMetaFile).counter.Add(-1)
-			}
-		})
+	// 嵌入任务
+	i.submitEmbeddingTask(msg, syncMsg, syncFileModeMap)
 
-		if errEmbeddingSubmit != nil {
-			// Submission failed (pool full or closed), log and re-queue the original message body
-			i.Logger.Errorf("failed to submit embedding processor task for message %s: %v. Re-queueing message.", msg.ID, errEmbeddingSubmit)
-			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %s after embedding submission failure: %v", msg.ID, produceErr)
-			}
-		}
+	// 关系图任务
+	i.submitGraphTask(msg, syncMsg, syncFileModeMap)
+
+}
+
+func (i *indexJob) submitGraphTask(msg *types.Message, syncMsg *types.CodebaseSyncMessage, syncFileModeMap map[string]string) {
+	if !i.svcCtx.Config.IndexTask.GraphTask.Enabled {
+		i.Logger.Infof("graph task is disabled, not process msg:%+v", syncMsg)
+		return
 	}
 
+	// task 计数 + 1
+	i.taskCounterIncr(syncMsg.SyncID)
+
+	var err error
+	// codegraph job
+	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
 	codegraphProcessor, err := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg, syncFileModeMap)
 	if err != nil {
-		i.Logger.Errorf("failed to create codegraph processor for message %s: %v", msg.ID, err)
+		i.Logger.Errorf("failed to create codegraph processor for message %d: %v", syncMsg.SyncID, err)
 		graphTimeoutCancel()
 	} else {
 		errGraphSubmit := i.graphTaskPool.Submit(func() {
@@ -223,16 +237,16 @@ func (i *indexJob) processMessage(msg *types.Message) {
 			processErr := codegraphProcessor.Process()
 			if processErr != nil {
 				// Graph task failed, log and re-queue the original message body
-				i.Logger.Errorf("codegraph processor failed for message %s: %v. Re-queueing message.", msg.ID, processErr)
+				i.Logger.Errorf("codegraph processor failed for message %d: %v. Re-queueing message.", syncMsg.SyncID, processErr)
 				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
 				if produceErr != nil {
-					i.Logger.Errorf("failed to re-queue message %s after graph failure: %v", msg.ID, produceErr)
+					i.Logger.Errorf("failed to re-queue message %d after graph failure: %v", syncMsg.SyncID, produceErr)
 				}
 			} else {
 				// TODO 让计数-1
 				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
 				if !ok {
-					i.Logger.Errorf("sync meta file count down not found, syncID:%s", syncMsg.SyncID)
+					i.Logger.Errorf("sync meta file count down not found, syncID:%d", syncMsg.SyncID)
 					return
 				}
 				value.(*cleanSyncMetaFile).counter.Add(-1)
@@ -241,19 +255,83 @@ func (i *indexJob) processMessage(msg *types.Message) {
 
 		if errGraphSubmit != nil {
 			// Submission failed (pool full or closed), log and re-queue the original message body
-			i.Logger.Errorf("failed to submit codegraph processor task for message %s: %v. Re-queueing message.", msg.ID, errGraphSubmit)
+			i.Logger.Errorf("failed to submit codegraph processor task for message %d: %v. Re-queueing message.", syncMsg.SyncID, errGraphSubmit)
 			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
 			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %s after graph submission failure: %v", msg.ID, produceErr)
+				i.Logger.Errorf("failed to re-queue message %d after graph submission failure: %v", syncMsg.SyncID, produceErr)
 			}
 		}
 	}
+}
 
-	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
-		i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
-		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
+func (i *indexJob) submitEmbeddingTask(msg *types.Message, syncMsg *types.CodebaseSyncMessage, syncFileModeMap map[string]string) {
+	if !i.svcCtx.Config.IndexTask.EmbeddingTask.Enabled {
+		i.Logger.Infof("embedding task is disabled, not process msg: %+v", syncMsg)
+		return
 	}
+	// task 计数 + 1
+	i.taskCounterIncr(syncMsg.SyncID)
 
+	var err error
+	// embedding job
+	embeddingCtx, embeddingTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
+	embeddingProcessor, err := NewEmbeddingProcessor(embeddingCtx, i.svcCtx, syncMsg, syncFileModeMap)
+	if err != nil {
+		i.Logger.Errorf("failed to create embedding processor for message %d: %v", syncMsg, err)
+		embeddingTimeoutCancel()
+	} else {
+		errEmbeddingSubmit := i.embeddingTaskPool.Submit(func() {
+			defer embeddingTimeoutCancel() // Cancel context when the goroutine finishes
+			processErr := embeddingProcessor.Process()
+			if processErr != nil {
+				// Embedding task failed, log and re-queue the original message body
+				i.Logger.Errorf("embedding processor failed for message %d: %v. Re-queueing message.", syncMsg.SyncID, processErr)
+				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+				if produceErr != nil {
+					i.Logger.Errorf("failed to re-queue message %d after embedding failure: %v", syncMsg.SyncID, produceErr)
+				}
+			} else {
+				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
+				if !ok {
+					i.Logger.Errorf("sync meta file count down not found, syncID:%d", syncMsg.SyncID)
+					return
+				}
+				value.(*cleanSyncMetaFile).counter.Add(-1)
+			}
+		})
+
+		if errEmbeddingSubmit != nil {
+			// Submission failed (pool full or closed), log and re-queue the original message body
+			i.Logger.Errorf("failed to submit embedding processor task for message %d: %v. Re-queueing message.", syncMsg.SyncID, errEmbeddingSubmit)
+			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+			if produceErr != nil {
+				i.Logger.Errorf("failed to re-queue message %d after embedding submission failure: %v", syncMsg.SyncID, produceErr)
+			}
+		}
+	}
+}
+
+func (i *indexJob) taskCounterIncr(syncId int32) {
+	// 计数 +1
+	value, ok := i.syncMetaFileCountDown.Load(syncId)
+	if !ok {
+		i.Logger.Errorf("sync meta file count down not found, syncID:%d", syncId)
+	} else {
+		value.(*cleanSyncMetaFile).counter.Add(1)
+	}
+}
+
+// IsCurrentLatestVersion 判断消息是否是最新消息
+func (i *indexJob) IsCurrentLatestVersion(err error, syncMsg *types.CodebaseSyncMessage) bool {
+	latestVersion, err := i.svcCtx.Cache.GetLatestVersion(i.ctx, utils.FormatInt(int64(syncMsg.CodebaseID)))
+	if err != nil {
+		i.Logger.Errorf("index job GetLatestVersion err:%w", err)
+	}
+	if latestVersion > 0 && latestVersion > int64(syncMsg.SyncID) {
+		logx.Infof("message %+v version less than the latest version %d, ack and skip it.", syncMsg, latestVersion)
+		return false
+	}
+	return true
 }
 
 // parseSyncMessage
@@ -277,4 +355,8 @@ func (i *indexJob) Close() {
 	}
 
 	i.Logger.Info("indexJob closed successfully.")
+}
+
+func indexJobKey(codebaseId int32) string {
+	return fmt.Sprintf(lockKeyPrefixFmt, codebaseId)
 }

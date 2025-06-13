@@ -19,6 +19,8 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+const syncVersionKeyPrefixFmt = "codebase_indexer:sync:%d"
+
 type UploadFilesLogic struct {
 	logx.Logger
 	ctx    context.Context
@@ -106,12 +108,12 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	// Create sync history
 	var publishStatus = model.PublishStatusPending
 
-	syncHistory := model.SyncHistory{
+	syncHistory := &model.SyncHistory{
 		CodebaseID:    codebase.ID,
 		PublishStatus: string(publishStatus),
 		PublishTime:   utils.CurrentTime(),
 	}
-	if err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Save(&syncHistory); err != nil {
+	if err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Save(syncHistory); err != nil {
 		l.Logger.Errorf("insert sync history %v error: %v", syncHistory, err)
 		return err
 	}
@@ -134,6 +136,12 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 		l.Logger.Errorf("marshal message error: %v", err)
 		publishStatus = model.PublishStatusFailed
 	} else {
+		// 更新最新版本
+		err := l.svcCtx.Cache.AddVersion(l.ctx, syncVersionKey(codebase.ID), int64(syncHistory.ID), time.Hour*24)
+		if err != nil {
+			l.Logger.Errorf("set sync version error: %v", err)
+		}
+		// 发送消息
 		err = l.svcCtx.MessageQueue.Produce(l.ctx, l.svcCtx.Config.IndexTask.Topic, bytes, types.ProduceOptions{})
 		if err != nil {
 			l.Logger.Errorf("produce message error: %v", err)
@@ -193,4 +201,9 @@ func (l *UploadFilesLogic) initCodebase(clientId string, clientPath string, user
 		return nil, err
 	}
 	return codebaseModel, nil
+}
+
+// syncVersionKey returns the Redis key for storing versions
+func syncVersionKey(syncId int32) string {
+	return fmt.Sprintf(syncVersionKeyPrefixFmt, syncId)
 }
