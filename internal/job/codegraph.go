@@ -2,21 +2,20 @@ package job
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
-	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
-	"path/filepath"
-
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"time"
 )
 
 const (
@@ -24,19 +23,10 @@ const (
 )
 
 type codegraphProcessor struct {
-	ctx             context.Context
-	svcCtx          *svc.ServiceContext
-	msg             *types.CodebaseSyncMessage
-	indexGenerator  *scip.IndexGenerator
-	indexParser     *scip.IndexParser
-	graphStore      graphstore.GraphStore
-	logger          logx.Logger
-	syncFileModeMap map[string]string
-	taskHistoryId   int32
-	totalFileCnt    int32
-	successFileCnt  int32
-	failedFileCnt   int32
-	ignoreFileCnt   int32
+	baseProcessor
+	indexGenerator *scip.IndexGenerator
+	indexParser    *scip.IndexParser
+	graphStore     graphstore.GraphStore
 }
 
 func NewCodegraphProcessor(ctx context.Context,
@@ -53,27 +43,29 @@ func NewCodegraphProcessor(ctx context.Context,
 	graphParser := scip.NewIndexParser(ctx, svcCtx.CodebaseStore, graphStore)
 
 	return &codegraphProcessor{
-		ctx:             ctx,
-		svcCtx:          svcCtx,
-		msg:             msg,
-		indexGenerator:  graphBuilder,
-		indexParser:     graphParser,
-		graphStore:      graphStore,
-		logger:          logx.WithContext(ctx),
-		syncFileModeMap: syncFileModeMap,
+		baseProcessor: baseProcessor{
+			ctx:             ctx,
+			svcCtx:          svcCtx,
+			msg:             msg,
+			syncFileModeMap: syncFileModeMap,
+			logger:          logx.WithContext(ctx),
+		},
+		indexGenerator: graphBuilder,
+		indexParser:    graphParser,
+		graphStore:     graphStore,
 	}, nil
 }
 
 func (t *codegraphProcessor) Process() error {
 	t.logger.Infof("start to execute codegraph processor %v", t.msg)
 
-	// 启动一个协程去将所有文件的结构提取处理 TODO ,循环启协程并发处理， + ignorePatterns ignoreExts 去跳过部分文件/目录
+	// 启动一个协程去将所有文件的结构提取处理
 	go t.parseCodeStructure()
 
 	start := time.Now()
 
 	err := func(t *codegraphProcessor) error {
-		if err := t.initTaskHistory(); err != nil {
+		if err := t.initTaskHistory(taskTypeCodegraph); err != nil {
 			return err
 		}
 
@@ -105,135 +97,100 @@ func (t *codegraphProcessor) Process() error {
 	return nil
 }
 
+type fileStructureResult struct {
+	data *codegraphpb.CodeStructure
+	err  error
+	path string
+	op   types.FileOp
+}
+
 func (t *codegraphProcessor) parseCodeStructure() {
 	t.logger.Infof("start to parse code structure %v", t.msg)
 	start := time.Now()
-	var data []*codegraphpb.CodeStructure
 
 	t.totalFileCnt = int32(len(t.syncFileModeMap))
+	var (
+		structureData = make([]*codegraphpb.CodeStructure, 0, t.totalFileCnt)
+		deleteFiles   = make([]string, 0, t.totalFileCnt)
+		mu            sync.Mutex // 保护 structureData 和 deleteFiles
+	)
 
-	// 新增、修改的，重新解析； 删除的，直接删除
-	var deleteFiles []string
-	for path, mode := range t.syncFileModeMap {
-		// 1. 每次回调开始时检查 context 是否已取消
-		if mode == types.FileOpDelete {
-			deleteFiles = append(deleteFiles, path)
-			continue
-		}
+	// 处理单个文件的函数
+	processFile := func(path string, op types.FileOp) error {
 		select {
-		// timeout
 		case <-t.ctx.Done():
-			t.logger.Errorf("embedding embeddingProcessor %d timeout", t.taskHistoryId)
-			return
+			return errs.RunTimeout
 		default:
-			content, err := t.svcCtx.CodebaseStore.Read(t.ctx, t.msg.CodebasePath, path, types.ReadOptions{})
-			if err != nil {
-				continue
+			switch op {
+			case types.FileOpAdd, types.FileOpModify:
+				content, err := t.svcCtx.CodebaseStore.Read(t.ctx, t.msg.CodebasePath, path, types.ReadOptions{})
+				if err != nil {
+					atomic.AddInt32(&t.failedFileCnt, 1)
+					return fmt.Errorf("read file failed: %w", err)
+				}
+
+				structureParser, err := structure.NewStructureParser()
+				if err != nil {
+					atomic.AddInt32(&t.failedFileCnt, 1)
+					return fmt.Errorf("init parser failed: %w", err)
+				}
+
+				parsedData, err := structureParser.Parse(&types.CodeFile{
+					Path:         path,
+					CodebasePath: t.msg.CodebasePath,
+					Name:         filepath.Base(path),
+					Content:      content,
+				}, structure.ParseOptions{IncludeContent: false})
+				if err != nil {
+					atomic.AddInt32(&t.failedFileCnt, 1)
+					return fmt.Errorf("parse file failed: %w", err)
+				}
+
+				mu.Lock()
+				structureData = append(structureData, parsedData)
+				mu.Unlock()
+				atomic.AddInt32(&t.successFileCnt, 1)
+
+			case types.FileOpDelete:
+				mu.Lock()
+				deleteFiles = append(deleteFiles, path)
+				mu.Unlock()
+				atomic.AddInt32(&t.successFileCnt, 1)
+
+			default:
+				return fmt.Errorf("unknown file op %s", op)
 			}
-			structureParser, err := structure.NewStructureParser()
-			if err != nil {
-				t.logger.Errorf("init code structure parser err:%w", err)
-				// 继续处理
-				continue
-			}
-			parsedData, err := structureParser.Parse(&types.CodeFile{
-				Path:         path,
-				CodebasePath: t.msg.CodebasePath,
-				Name:         filepath.Base(path),
-				Content:      content,
-			}, structure.ParseOptions{IncludeContent: false})
-			if err != nil {
-				t.logger.Errorf("code structure parse err:%w", err)
-				// 继续处理
-				continue
-			}
-			data = append(data, parsedData)
 		}
+		return nil
 	}
 
-	t.logger.Infof("code structure parsed successfully, cost: %d s, msg: %v", time.Since(start), t.msg)
+	// 使用基础结构的并发处理方法
+	if err := t.processFilesConcurrently(processFile, t.svcCtx.Config.IndexTask.GraphTask.MaxConcurrency); err != nil {
+		t.logger.Errorf("process files failed: %v", err)
+		return
+	}
 
-	dataSize := int32(len(data))
-	if len(data) > 0 {
-		if err := t.graphStore.BatchWriteCodeStructures(t.ctx, data); err != nil {
-			t.logger.Errorf("code structure parsed data write err:%w", err)
-			//
+	// 批量处理结果
+	dataSize := int32(len(structureData))
+	if len(structureData) > 0 {
+		if err := t.graphStore.BatchWriteCodeStructures(t.ctx, structureData); err != nil {
+			t.logger.Errorf("write code structures failed: %v", err)
 			t.failedFileCnt += dataSize
 		} else {
 			t.successFileCnt += dataSize
 		}
 	}
+
 	deleteSize := int32(len(deleteFiles))
 	if len(deleteFiles) > 0 {
 		if err := t.graphStore.Delete(t.ctx, deleteFiles); err != nil {
-			t.logger.Errorf("code structure parse delete docs error:%w", err)
+			t.logger.Errorf("delete code structures failed: %v", err)
 			t.failedFileCnt += deleteSize
 		} else {
 			t.successFileCnt += deleteSize
 		}
 	}
-	t.logger.Infof("code structure saved successfully, cost: %d s, msg: %v, total:%d, success:%d, failed:%d", time.Since(start),
-		t.msg, t.totalFileCnt, t.successFileCnt, t.failedFileCnt)
-}
 
-func (t *codegraphProcessor) updateTaskSuccess() {
-	progress := float64(1)
-	m := &model.IndexHistory{
-		ID:                t.taskHistoryId,
-		Status:            types.TaskStatusSuccess,
-		Progress:          &progress,
-		EndTime:           utils.CurrentTime(),
-		TotalFileCount:    &t.totalFileCnt,
-		TotalSuccessCount: &t.successFileCnt,
-		TotalFailCount:    &t.failedFileCnt,
-		TotalIgnoreCount:  &t.ignoreFileCnt,
-	}
-
-	// 更新任务
-	if _, err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).
-		Where(t.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
-		Updates(m); err != nil {
-		// 任务已经成功
-		t.logger.Errorf("update embedding embeddingProcessor history %d failed: %v, model:%v", t.msg.CodebaseID, err, m)
-	}
-}
-
-func (t *codegraphProcessor) handleIfTaskFailed(err error) bool {
-	if err != nil {
-		t.logger.Errorf("failed to process file, err: %v, file:%v ", err, t.msg)
-		if errors.Is(err, errs.InsertDatabaseFailed) {
-			return true
-		}
-		status := types.TaskStatusFailed
-		if errors.Is(err, errs.RunTimeout) {
-			status = types.TaskStatusTimeout
-		}
-		_, err = t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).
-			Where(t.svcCtx.Querier.IndexHistory.ID.Eq(int32(t.taskHistoryId))).
-			UpdateColumnSimple(t.svcCtx.Querier.IndexHistory.Status.Value(status),
-				t.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
-		if err != nil {
-			t.logger.Errorf("update embedding embeddingProcessor history failed: %v", t.msg.CodebaseID, err)
-		}
-		return true
-	}
-	return false
-}
-
-func (t *codegraphProcessor) initTaskHistory() error {
-	// 插入一条任务记录
-	embedTaskHistory := &model.IndexHistory{
-		SyncID:       t.msg.SyncID,
-		CodebaseID:   t.msg.CodebaseID,
-		CodebasePath: t.msg.CodebasePath,
-		TaskType:     taskTypeCodegraph,
-		Status:       types.TaskStatusPending,
-		StartTime:    utils.CurrentTime(),
-	}
-	if err := t.svcCtx.Querier.IndexHistory.WithContext(t.ctx).Save(embedTaskHistory); err != nil {
-		t.logger.Errorf("insert embeddingProcessor history %v failed: %v", embedTaskHistory, err)
-		return errs.InsertDatabaseFailed
-	}
-	t.taskHistoryId = embedTaskHistory.ID
-	return nil
+	t.logger.Infof("code structure saved successfully, cost: %d s, msg: %v, total:%d, success:%d, failed:%d",
+		time.Since(start).Seconds(), t.msg, t.totalFileCnt, t.successFileCnt, t.failedFileCnt)
 }

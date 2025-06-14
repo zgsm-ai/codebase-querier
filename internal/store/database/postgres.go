@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// NewPostgresDB 创建一个新的 GORM PostgreSQL 数据库连接
-func NewPostgresDB(c config.Database) (*gorm.DB, error) {
+// New 创建一个新的 GORM PostgreSQL 数据库连接
+func New(c config.Database) (*gorm.DB, error) {
 	// 设置日志级别
 	var logLevel logger.LogLevel
 	switch strings.ToLower(c.LogLevel) {

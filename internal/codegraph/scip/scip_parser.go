@@ -41,11 +41,7 @@ func NewIndexParser(ctx context.Context, codebaseStore codebase.Store, graphStor
 }
 
 // visitDocument handles a single SCIP document during streaming parse.
-func (i *IndexParser) visitDocument(
-	ctx context.Context,
-	metadata *scipMetadata,
-	duplicateDocs map[string][]*scip.Document,
-	pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
+func (i *IndexParser) visitDocument(metadata *scipMetadata, duplicateDocs map[string][]*scip.Document, pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
 	return func(document *scip.Document) {
 		path := document.RelativePath
 		if count := metadata.DocCountByPath[path]; count > 1 {
@@ -115,7 +111,7 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	processedDocs := make([]*codegraphpb.Document, 0, writeBatchSize)
 
 	visitor := scip.IndexVisitor{
-		VisitDocument: i.visitDocument(ctx, metadata, duplicateDocs, &processedDocs),
+		VisitDocument: i.visitDocument(metadata, duplicateDocs, &processedDocs),
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {

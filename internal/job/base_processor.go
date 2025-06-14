@@ -1,0 +1,179 @@
+package job
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/panjf2000/ants/v2"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/svc"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+)
+
+// baseProcessor 包含所有处理器共有的字段和方法
+type baseProcessor struct {
+	ctx             context.Context
+	svcCtx          *svc.ServiceContext
+	msg             *types.CodebaseSyncMessage
+	logger          logx.Logger
+	syncFileModeMap map[string]string
+	taskHistoryId   int32
+	totalFileCnt    int32
+	successFileCnt  int32
+	failedFileCnt   int32
+	ignoreFileCnt   int32
+}
+
+// initTaskHistory 初始化任务历史记录
+func (p *baseProcessor) initTaskHistory(taskType string) error {
+	taskHistory := &model.IndexHistory{
+		SyncID:       p.msg.SyncID,
+		CodebaseID:   p.msg.CodebaseID,
+		CodebasePath: p.msg.CodebasePath,
+		TaskType:     taskType,
+		Status:       types.TaskStatusPending,
+		StartTime:    utils.CurrentTime(),
+	}
+	if err := p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).Save(taskHistory); err != nil {
+		p.logger.Errorf("insert task history %v failed: %v", taskHistory, err)
+		return errs.InsertDatabaseFailed
+	}
+	p.taskHistoryId = taskHistory.ID
+	return nil
+}
+
+// updateTaskSuccess 更新任务状态为成功
+func (p *baseProcessor) updateTaskSuccess() error {
+	progress := float64(1)
+	m := &model.IndexHistory{
+		ID:                p.taskHistoryId,
+		Status:            types.TaskStatusSuccess,
+		Progress:          &progress,
+		EndTime:           utils.CurrentTime(),
+		TotalFileCount:    &p.totalFileCnt,
+		TotalSuccessCount: &p.successFileCnt,
+		TotalFailCount:    &p.failedFileCnt,
+		TotalIgnoreCount:  &p.ignoreFileCnt,
+	}
+
+	res, err := p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).
+		Where(p.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
+		Updates(m)
+	if err != nil {
+		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		return fmt.Errorf("upate task success failed: %w", err)
+	}
+	if res.RowsAffected == 0 {
+		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		return fmt.Errorf("upate task success failed, codebaseId %d not found in database", p.msg.CodebaseID)
+	}
+	if res.Error != nil {
+		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		return fmt.Errorf("upate task success failed: %w", res.Error)
+	}
+	return nil
+}
+
+// handleIfTaskFailed 处理任务失败情况
+func (p *baseProcessor) handleIfTaskFailed(err error) bool {
+	if err != nil {
+		p.logger.Errorf("failed to process file, err: %v, file:%v ", err, p.msg)
+		if errors.Is(err, errs.InsertDatabaseFailed) {
+			return true
+		}
+		status := types.TaskStatusFailed
+		if errors.Is(err, errs.RunTimeout) {
+			status = types.TaskStatusTimeout
+		}
+		_, err = p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).
+			Where(p.svcCtx.Querier.IndexHistory.ID.Eq(p.taskHistoryId)).
+			UpdateColumnSimple(p.svcCtx.Querier.IndexHistory.Status.Value(status),
+				p.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
+		if err != nil {
+			p.logger.Errorf("update task history failed: %v", p.msg.CodebaseID, err)
+		}
+		return true
+	}
+	return false
+}
+
+// processFilesConcurrently 并发处理文件
+func (p *baseProcessor) processFilesConcurrently(
+	processFunc func(path string, op types.FileOp) error,
+	maxConcurrency int,
+) error {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 10 // 默认值
+	}
+
+	pool, err := ants.NewPool(maxConcurrency)
+	if err != nil {
+		return fmt.Errorf("create ants pool failed: %w", err)
+	}
+	defer pool.Release()
+
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		runErrs []error
+		done    = make(chan struct{})
+		start   = time.Now()
+	)
+
+	totalFiles := len(p.syncFileModeMap)
+
+	// 提交任务到工作池
+	for path, opStr := range p.syncFileModeMap {
+		select {
+		case <-p.ctx.Done():
+			duration := time.Since(start)
+			p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+			return errs.RunTimeout
+		default:
+			wg.Add(1)
+			if err := pool.Submit(func() {
+				defer wg.Done()
+				if err := processFunc(path, types.FileOp(opStr)); err != nil {
+					mu.Lock()
+					runErrs = append(runErrs, err)
+					mu.Unlock()
+				}
+			}); err != nil {
+				wg.Done()
+				mu.Lock()
+				runErrs = append(runErrs, fmt.Errorf("submit task failed: %w", err))
+				mu.Unlock()
+			}
+		}
+	}
+
+	// 等待所有任务完成
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// 等待任务完成或上下文取消
+	select {
+	case <-p.ctx.Done():
+		duration := time.Since(start)
+		p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		return errs.RunTimeout
+	case <-done:
+		duration := time.Since(start)
+		p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		if len(runErrs) > 0 {
+			if len(runErrs) > 10 {
+				return fmt.Errorf("process files failed (showing last 10 errors): %w", errors.Join(runErrs[len(runErrs)-10:]...))
+			}
+			return fmt.Errorf("process files failed: %w", errors.Join(runErrs...))
+		}
+		return nil
+	}
+}

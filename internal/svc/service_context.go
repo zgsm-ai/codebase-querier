@@ -59,7 +59,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	svcCtx.CodegraphConf = config.MustLoadCodegraphConfig(c.IndexTask.GraphTask.ConfFile)
 
 	// 初始化数据库连接
-	db, err := database.NewPostgresDB(c.Database)
+	db, err := database.New(c.Database)
 	if err != nil {
 		return nil, err
 	}

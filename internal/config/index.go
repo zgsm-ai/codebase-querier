@@ -9,7 +9,7 @@ type IndexTaskConf struct {
 }
 
 type EmbeddingTaskConf struct {
-	MaxConcurrency int
+	MaxConcurrency int  `json:"default=5"`
 	Enabled        bool `json:"default=true"`
 	Timeout        time.Duration
 	// 滑动窗口重叠token数
@@ -19,7 +19,7 @@ type EmbeddingTaskConf struct {
 }
 
 type GraphTaskConf struct {
-	MaxConcurrency int
+	MaxConcurrency int  `json:"default=5"`
 	Enabled        bool `json:"default=true"`
 	Timeout        time.Duration
 	PoolSize       int
