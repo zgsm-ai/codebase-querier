@@ -1,40 +1,21 @@
-package codebase
+package api
 
 import (
 	"archive/zip"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-const logicAnd = "&"
-const storeTypeLocal = "local"
-const storeTypeMinio = "minio"
-
-var ErrStoreTypeNotSupported = errors.New("store type not supported")
-
-// generateUniquePath 使用 SHA-256 生成唯一的路径
-// clientId 和 codebasePath 使用 & 作为分隔符，确保不同组合生成不同的 hash
-func generateUniquePath(clientId, codebasePath string) string {
-	input := clientId + logicAnd + codebasePath
-	hash := sha256.Sum256([]byte(input))
-	return hex.EncodeToString(hash[:])
-}
-
-func generateCodebasePath(basePath, clientId, clientCodebasePath string) (string, error) {
-	return filepath.Join(basePath, generateUniquePath(clientId, clientCodebasePath), filepathSlash), nil
-}
-
-type ZipOptions struct {
+type zipOptions struct {
 	// 本地项目路径
 	ProjectPath string
 	// 客户端ID
@@ -50,12 +31,16 @@ type ZipOptions struct {
 	// 仅包含的文件后缀，可选。为空则包含所有文件
 	IncludeExts []string
 	// 输出zip文件的目录，如果为空则使用系统临时目录
-	OutputDir string
+	OutputDir     string
+	SkipErrorFile bool
+	// 文件列表及其操作类型（add/delete/modify）
+	DeleteFileList []string
 }
 
-// CreateTestZip 创建用于测试的zip文件
+// createTestZip 创建用于测试的zip文件
 // 返回生成的zip文件路径和可能的错误
-func CreateTestZip(opts ZipOptions) (string, error) {
+func createTestZip(opts zipOptions) (string, error) {
+	start := time.Now()
 	if opts.ProjectPath == "" {
 		return "", errors.New("project path cannot be empty")
 	}
@@ -76,7 +61,9 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 	if outputDir == "" {
 		outputDir = os.TempDir()
 	}
-
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create output directory: %w", err)
+	}
 	// 生成zip文件路径
 	timestamp := time.Now().UnixMilli()
 	zipFileName := fmt.Sprintf("%s_%d.zip", opts.CodebaseName, timestamp)
@@ -103,6 +90,9 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 
 		// 获取相对路径
 		relPath, err := filepath.Rel(opts.ProjectPath, path)
+		if err != nil && opts.SkipErrorFile {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -133,26 +123,22 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 			return nil
 		}
 
-		// 检查是否是需要包含的文件类型
+		// 统一使用斜杠作为路径分隔符
+		relPath = filepath.ToSlash(relPath)
+
+		// 根据ext 跳过文件
 		if len(opts.IncludeExts) > 0 {
-			ext := strings.ToLower(filepath.Ext(relPath))
-			included := false
-			for _, includeExt := range opts.IncludeExts {
-				if strings.EqualFold(ext, includeExt) {
-					included = true
-					break
-				}
-			}
-			if !included {
+			ext := filepath.Ext(relPath)
+			if !slices.Contains(opts.IncludeExts, ext) {
 				return nil
 			}
 		}
 
-		// 统一使用斜杠作为路径分隔符
-		relPath = filepath.ToSlash(relPath)
-
 		// 创建文件头
 		header, err := zip.FileInfoHeader(info)
+		if err != nil && opts.SkipErrorFile {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -161,26 +147,40 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 
 		// 写入文件内容
 		writer, err := zipWriter.CreateHeader(header)
+		if err != nil && opts.SkipErrorFile {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
 
 		content, err := os.ReadFile(path)
+		if err != nil && opts.SkipErrorFile {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
 
 		if _, err := writer.Write(content); err != nil {
+			if err != nil && opts.SkipErrorFile {
+				return nil
+			}
 			return err
 		}
 
 		// 添加到文件列表
-		fileList[relPath] = "add"
+
+		fileList[relPath] = types.FileOpAdd
 		return nil
 	})
 
 	if err != nil {
 		return "", fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	for _, v := range opts.DeleteFileList {
+		fileList[v] = types.FileOpDelete
 	}
 
 	// 创建并写入元数据文件
@@ -193,7 +193,7 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 		Timestamp:     timestamp,
 	}
 
-	metadataContent, err := json.MarshalIndent(syncMetadata, "", "  ")
+	metadataContent, err := json.MarshalIndent(&syncMetadata, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal metadata: %w", err)
 	}
@@ -212,6 +212,6 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 	if _, err := metadataWriter.Write(metadataContent); err != nil {
 		return "", fmt.Errorf("failed to write metadata: %w", err)
 	}
-
+	fmt.Printf("zip file created: %s, cost: %dms\n", zipPath, time.Now().UnixMilli()-start.UnixMilli())
 	return zipPath, nil
 }
