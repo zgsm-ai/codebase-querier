@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"context"
@@ -21,7 +21,7 @@ var clientPath = "/tmp/test/test-project"
 const codebasePath = "\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f52249a98afbe95b824f815917" // your local repo path
 const codebaseID = 2
 
-func initSvcCtx() *svc.ServiceContext {
+func InitSvcCtx() *svc.ServiceContext {
 	ctx := context.Background()
 	var c config.Config
 	conf.MustLoad(filepath.Join(basePath, "etc/conf.yaml"), &c, conf.UseEnv())

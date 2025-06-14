@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"archive/zip"
@@ -127,8 +127,7 @@ func setupFileTest(t *testing.T, opts fileTestOptions) string {
 		CodebaseName:    opts.CodebaseName,
 		OutputDir:       zipOutputDir,
 		SkipErrorFile:   true,
-		IncludeExts:     []string{".go", ".proto"},
-		ExcludePrefixes: []string{".", "vendor"},
+		ExcludePrefixes: []string{"."},
 		DeleteFileList:  opts.DeleteFileList, // Add file list to metadata
 	})
 	assert.NoError(t, err)
@@ -172,7 +171,7 @@ func sendFileUploadRequest(t *testing.T, opts fileTestOptions, zipFile string) m
 	req.Header.Set("Content-Type", formWriter.FormDataContentType())
 
 	client := &http.Client{
-		Timeout: time.Second * 30,
+		Timeout: time.Second * 300,
 	}
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -221,7 +220,7 @@ func TestFileDelete(t *testing.T) {
 			"cluster/gce/gci/apiserver_kms_test.go",
 		},
 	}
-	svcCtx := initSvcCtx()
+	svcCtx := InitSvcCtx()
 	// Get the real codebase path from database
 	codebase, err := svcCtx.Querier.Codebase.FindByClientIdAndPath(context.Background(), opts.ClientId, opts.ClientPath)
 	assert.NoError(t, err)

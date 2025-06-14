@@ -1,4 +1,4 @@
-package e2e
+package e2e_test
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func setup(syncId int32) error {
 	var err error
 	conf.MustLoad(filepath.Join(basePath, "etc/conf.yaml"), &c, conf.UseEnv())
 	c.IndexTask.GraphTask.ConfFile = filepath.Join(basePath, "etc/codegraph.yaml")
-	svcCtx, err = svc.NewServiceContext(ctx, c)
+	svcCtx, err := svc.NewServiceContext(ctx, c)
 	if err != nil {
 		return err
 	}

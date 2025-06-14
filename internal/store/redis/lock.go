@@ -60,7 +60,7 @@ func (m *redisDistLock) TryLock(ctx context.Context, key string, expiration time
 		return false, nil
 	} else {
 		// 发生其他错误
-		return false, fmt.Errorf("尝试获取锁失败，键: %s, 错误: %w", key, err)
+		return false, fmt.Errorf("acquire lock failed, key: %s, err: %w", key, err)
 	}
 }
 
@@ -73,7 +73,7 @@ func (m *redisDistLock) Lock(ctx context.Context, key string, expiration time.Du
 	err := mutex.LockContext(ctx)
 	if err != nil {
 		// 获取锁失败
-		return fmt.Errorf("获取锁失败，键: %s, 错误: %w", key, err)
+		return fmt.Errorf("acquire lock failed, key: %s, err: %w", key, err)
 	}
 	return nil // 成功获取锁
 }
@@ -102,7 +102,7 @@ func (m *redisDistLock) IsLocked(ctx context.Context, key string) (bool, error) 
 		return true, nil // 已锁定
 	} else {
 		// 发生其他错误
-		return false, fmt.Errorf("检查锁状态失败，键: %s, 错误: %w", key, err)
+		return false, fmt.Errorf("check lock failed, key: %s, err: %w", key, err)
 	}
 }
 
@@ -121,12 +121,12 @@ func (m *redisDistLock) Unlock(ctx context.Context, key string) error {
 		// 注意：这里不直接检查 errors.Is(err, redsync.ErrTaken)，以避免 linter 错误。
 		// 假定非 nil 且非 ErrFailed 的错误都表示解锁问题。
 		// 生产环境中，建议根据 Redsync 文档更精确地处理错误类型。
-		return fmt.Errorf("释放锁失败或锁不被当前实例持有，键: %s, 错误: %w", key, err)
+		return fmt.Errorf("release lock failed or current node not own the lock, key: %s, err: %w", key, err)
 	}
 
 	// 如果 unlocked 为 false，同样表示锁不被当前实例持有或已释放
 	if !unlocked {
-		return fmt.Errorf("锁未被当前实例持有或已释放，键: %s", key)
+		return fmt.Errorf("current node not own the lock or lock has been unlocked, key: %s", key)
 	}
 
 	return nil // 成功释放锁

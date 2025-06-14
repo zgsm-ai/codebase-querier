@@ -20,7 +20,8 @@ import (
 
 const indexNodeEnableVal = "1"
 const indexNodeEnv = "INDEX_NODE"
-const lockKeyPrefixFmt = "codebase_indexer:index:%d"
+const lockKeyPrefixFmt = "codebase_indexer:lock:%d"
+const distLockTimeout = time.Minute * 5
 
 type indexJob struct {
 	logx.Logger
@@ -40,7 +41,7 @@ type cleanSyncMetaFile struct {
 	counter      atomic.Int32 // 原子计数器
 }
 
-func newIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
+func NewIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	s := &indexJob{
 		ctx:           serverCtx,
 		Logger:        logx.WithContext(serverCtx),
@@ -86,7 +87,7 @@ func (i *indexJob) Start() {
 		return
 	}
 
-	i.Logger.Info("index job started.")
+	i.Logger.Infof("index job started, topic: %s", i.svcCtx.Config.IndexTask.Topic)
 
 	// 启动一个协程，去清理同步元数据文件
 	go i.cleanProcessedMetadataFile()
@@ -143,34 +144,48 @@ func (i *indexJob) cleanProcessedMetadataFile() {
 
 // processMessage 处理单条消息的全部流程
 func (i *indexJob) processMessage(msg *types.Message) {
-	// ack
-	defer func() {
-		i.Logger.Debugf("start ack message %+v", msg)
-		if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
-			i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
-			// TODO: Handle ACK failure - this is rare, but might require logging or alerting
-		}
-		i.Logger.Debugf("ack message %+v successfully.", msg)
-	}()
 
 	syncMsg, err := parseSyncMessage(msg)
 	if err != nil {
-		i.Logger.Errorf("parse sync message failed for message %s: %v. nack message.", msg.ID, err)
-		err := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
+		i.Logger.Errorf("parse sync message failed for message %s: %v. ack message.", msg.ID, err)
+		err := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 		if err != nil {
 			i.Logger.Errorf("failed to Nack invalid message %s: %v", msg.ID, err)
 		}
 		return
 	}
 	if syncMsg == nil {
-
-		i.Logger.Error("sync msg is nil after parsing with no error for message %s. nack message.", msg.ID)
-		err := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
+		i.Logger.Error("sync msg is nil after parsing with no error for message %s. ack message.", msg.ID)
+		err := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 		if err != nil {
 			i.Logger.Errorf("failed to Nack nil syncMsg message %s: %v", msg.ID, err)
 		}
 		return
 	}
+	// 获取分布式锁， 5分钟超时
+	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, indexJobKey(syncMsg.CodebaseID), distLockTimeout)
+	if err != nil || !locked {
+		i.Logger.Errorf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
+		i.Logger.Debugf("start to nack message %s", msg.ID)
+		if ackErr := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
+			i.Logger.Errorf("failed to nack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
+			// TODO: Handle ACK failure - this is rare, but might require logging or alerting
+		}
+		i.Logger.Debugf("nack message %s successfully.", msg.ID)
+		return
+	}
+
+	defer i.svcCtx.DistLock.Unlock(i.ctx, indexJobKey(syncMsg.CodebaseID))
+
+	// ack
+	defer func() {
+		i.Logger.Debugf("start ack message %s", msg.ID)
+		if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
+			i.Logger.Errorf("failed to Ack message %s from stream %s, group %s after processing attempt: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
+			// TODO: Handle ACK failure - this is rare, but might require logging or alerting
+		}
+		i.Logger.Debugf("ack message %s successfully.", msg.ID)
+	}()
 
 	// 本次同步的元数据列表
 	syncFileModeMap, medataFileList, err := i.svcCtx.CodebaseStore.GetSyncFileListCollapse(i.ctx, syncMsg.CodebasePath)
@@ -182,18 +197,6 @@ func (i *indexJob) processMessage(msg *types.Message) {
 		i.Logger.Errorf("sync file list is nil, not process %v", syncMsg)
 		return
 	}
-
-	// 获取分布式锁， 5分钟超时
-	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, indexJobKey(syncMsg.CodebaseID), time.Minute*5)
-	if err != nil {
-		i.Logger.Errorf("failed to acquire locked for message %v: , err:%v", syncMsg, err)
-		return
-	}
-	if !locked {
-		i.Logger.Errorf("failed to acquire locked for message %v: %v", syncMsg)
-	}
-
-	defer i.svcCtx.DistLock.Unlock(i.ctx, indexJobKey(syncMsg.CodebaseID))
 
 	// 判断消息是否是最新消息，如果不是最新消息，跳过
 	if !i.IsCurrentLatestVersion(err, syncMsg) {
@@ -221,27 +224,22 @@ func (i *indexJob) submitGraphTask(msg *types.Message, syncMsg *types.CodebaseSy
 		return
 	}
 
-	// task 计数 + 1
-	i.taskCounterIncr(syncMsg.SyncID)
+	// task 计数 + 1 graph task TODO, graph task now is relied on scip, which failed easily.
+	// i.taskCounterIncr(syncMsg.SyncID)
 
 	var err error
 	// codegraph job
 	codegraphCtx, graphTimeoutCancel := context.WithTimeout(i.ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
 	codegraphProcessor, err := NewCodegraphProcessor(codegraphCtx, i.svcCtx, syncMsg, syncFileModeMap)
 	if err != nil {
-		i.Logger.Errorf("failed to create codegraph processor for message %d: %v", syncMsg.SyncID, err)
+		i.Logger.Errorf("failed to create codegraph processor for message %s, err: %v", msg.ID, err)
 		graphTimeoutCancel()
 	} else {
 		errGraphSubmit := i.graphTaskPool.Submit(func() {
 			defer graphTimeoutCancel() // Cancel context when the goroutine finishes
 			processErr := codegraphProcessor.Process()
 			if processErr != nil {
-				// Graph task failed, log and re-queue the original message body
-				i.Logger.Errorf("codegraph processor failed for message %d: %v. Re-queueing message.", syncMsg.SyncID, processErr)
-				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-				if produceErr != nil {
-					i.Logger.Errorf("failed to re-queue message %d after graph failure: %v", syncMsg.SyncID, produceErr)
-				}
+				i.Logger.Errorf("codegraph processor failed for message %s: err: %v", msg.ID, processErr)
 			} else {
 				// TODO 让计数-1
 				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
@@ -255,10 +253,10 @@ func (i *indexJob) submitGraphTask(msg *types.Message, syncMsg *types.CodebaseSy
 
 		if errGraphSubmit != nil {
 			// Submission failed (pool full or closed), log and re-queue the original message body
-			i.Logger.Errorf("failed to submit codegraph processor task for message %d: %v. Re-queueing message.", syncMsg.SyncID, errGraphSubmit)
-			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+			i.Logger.Errorf("failed to submit codegraph processor task for message %s, nack message, err: %v.", msg.ID, errGraphSubmit)
+			produceErr := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %d after graph submission failure: %v", syncMsg.SyncID, produceErr)
+				i.Logger.Errorf("failed to nack message %s after graph submit failure: %v", msg.ID, produceErr)
 			}
 		}
 	}
@@ -285,11 +283,7 @@ func (i *indexJob) submitEmbeddingTask(msg *types.Message, syncMsg *types.Codeba
 			processErr := embeddingProcessor.Process()
 			if processErr != nil {
 				// Embedding task failed, log and re-queue the original message body
-				i.Logger.Errorf("embedding processor failed for message %d: %v. Re-queueing message.", syncMsg.SyncID, processErr)
-				produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
-				if produceErr != nil {
-					i.Logger.Errorf("failed to re-queue message %d after embedding failure: %v", syncMsg.SyncID, produceErr)
-				}
+				i.Logger.Errorf("embedding processor failed for message %s, err:%v.", msg.ID, processErr)
 			} else {
 				value, ok := i.syncMetaFileCountDown.Load(syncMsg.SyncID)
 				if !ok {
@@ -302,10 +296,10 @@ func (i *indexJob) submitEmbeddingTask(msg *types.Message, syncMsg *types.Codeba
 
 		if errEmbeddingSubmit != nil {
 			// Submission failed (pool full or closed), log and re-queue the original message body
-			i.Logger.Errorf("failed to submit embedding processor task for message %d: %v. Re-queueing message.", syncMsg.SyncID, errEmbeddingSubmit)
-			produceErr := i.messageQueue.Produce(context.Background(), msg.Topic, msg.Body, types.ProduceOptions{})
+			i.Logger.Errorf("failed to submit embedding processor task for message %s, err: %v, nack message", msg.ID, errEmbeddingSubmit)
+			produceErr := i.messageQueue.Nack(i.ctx, msg.Topic, i.consumerGroup, msg.ID)
 			if produceErr != nil {
-				i.Logger.Errorf("failed to re-queue message %d after embedding submission failure: %v", syncMsg.SyncID, produceErr)
+				i.Logger.Errorf("failed to nack message %s after embedding submit, err: %v", msg.ID, produceErr)
 			}
 		}
 	}
@@ -325,7 +319,7 @@ func (i *indexJob) taskCounterIncr(syncId int32) {
 func (i *indexJob) IsCurrentLatestVersion(err error, syncMsg *types.CodebaseSyncMessage) bool {
 	latestVersion, err := i.svcCtx.Cache.GetLatestVersion(i.ctx, utils.FormatInt(int64(syncMsg.CodebaseID)))
 	if err != nil {
-		i.Logger.Errorf("index job GetLatestVersion err:%w", err)
+		i.Logger.Errorf("index job GetLatestVersion err:%v", err)
 	}
 	if latestVersion > 0 && latestVersion > int64(syncMsg.SyncID) {
 		logx.Infof("message %+v version less than the latest version %d, ack and skip it.", syncMsg, latestVersion)

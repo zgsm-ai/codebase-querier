@@ -10,11 +10,11 @@ type Scheduler struct {
 }
 
 func NewScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (*Scheduler, error) {
-	cleaner, err := newCleaner(serverCtx, svcCtx)
+	cleaner, err := NewCleaner(serverCtx, svcCtx)
 	if err != nil {
 		return nil, err
 	}
-	indexJob, err := newIndexJob(serverCtx, svcCtx)
+	indexJob, err := NewIndexJob(serverCtx, svcCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func NewScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (*Sched
 
 func (s *Scheduler) Schedule() {
 	for _, job := range s.jobs {
-		job.Start()
+		go job.Start()
 	}
 }
 

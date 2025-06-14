@@ -77,7 +77,7 @@ func (t *embeddingProcessor) Process() error {
 				case types.FileOpAdd, types.FileOpModify:
 					chunks, err := t.splitFile(&types.SyncFile{Path: path})
 					if err != nil {
-						if errors.Is(err, embedding.ErrUnSupportedFileExt) {
+						if errors.Is(err, embedding.ErrUnSupportedFileExt) || errors.Is(err, embedding.ErrFileNoExt) {
 							atomic.AddInt32(&t.ignoreFileCnt, 1)
 							return nil
 						}
@@ -155,7 +155,6 @@ func (t *embeddingProcessor) Process() error {
 }
 
 func (t *embeddingProcessor) splitFile(syncFile *types.SyncFile) ([]*types.CodeChunk, error) {
-	t.logger.Debugf("process add file %v", syncFile)
 	file, err := t.svcCtx.CodebaseStore.Read(t.ctx, t.msg.CodebasePath, syncFile.Path, types.ReadOptions{})
 	if err != nil {
 		return nil, err

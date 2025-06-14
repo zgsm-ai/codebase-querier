@@ -165,12 +165,36 @@ func (r *redisMQ) Ack(ctx context.Context, stream, group string, id string) erro
 }
 
 // Nack 实现MessageQueue接口的Nack方法
-// 在Streams实现中，Nack表示不确认消息，使其保留在Pending状态。
-// 这实际上不需要执行任何Redis命令，因为消息读取后默认就在Pending状态，除非被XACK。
+// 在Streams实现中，通过重新将消息添加到流中使其可以被再次消费
 func (r *redisMQ) Nack(ctx context.Context, stream, group string, id string) error {
-	// No operation needed for Streams Nack, as messages remain in PEL until ACKed
-	// You might add logging here if needed.
-	r.logger.Infof("Nacked message %s in stream %s, group %s. It remains in PEL.", id, stream, group)
+	// 获取消息内容
+	messages, err := r.client.XRangeN(ctx, stream, id, id, 1).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get message %s from stream %s: %w", id, stream, err)
+	}
+
+	if len(messages) == 0 {
+		r.logger.Errorf("message %s not found in stream %s", id, stream)
+		return nil
+	}
+
+	// 将消息重新添加到流中
+	_, err = r.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: stream,
+		Values: messages[0].Values,
+	}).Result()
+
+	if err != nil {
+		return fmt.Errorf("failed to readd message to stream %s: %w", stream, err)
+	}
+
+	// 确认原消息，避免重复
+	err = r.client.XAck(ctx, stream, group, id).Err()
+	if err != nil {
+		r.logger.Errorf("failed to ack original message %s: %v", id, err)
+	}
+
+	r.logger.Infof("nacked message %s in stream %s, group %s. Message has been readded to stream.", id, stream, group)
 	return nil
 }
 

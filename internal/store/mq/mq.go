@@ -18,9 +18,9 @@ type MessageQueue interface {
 	// DeleteTopic 删除主题
 	DeleteTopic(ctx context.Context, topic string) error
 	// Ack 确认消息已被成功处理
-	Ack(ctx context.Context, stream, group string, id string) error
+	Ack(ctx context.Context, topic, consumerGroup string, msgId string) error
 	// Nack 消息处理失败，不确认消息，使其保留在Pending状态以便重试或其他消费者认领
-	Nack(ctx context.Context, stream, group string, id string) error
+	Nack(ctx context.Context, topic, consumerGroup string, msgId string) error
 }
 
 // Status 队列状态

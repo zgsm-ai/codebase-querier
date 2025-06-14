@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 
 func setup(syncId int32) error {
 
-	svcCtx := initSvcCtx()
+	svcCtx := InitSvcCtx()
 	msg := &types.CodebaseSyncMessage{
 		SyncID:       syncId,
 		CodebaseID:   codebaseID,

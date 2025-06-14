@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const cleanLockKey = "codebase-indexer:cleaner:lock"
+const cleanLockKey = "codebase_indexer:cleaner:lock"
 const lockTimeout = time.Second * 120
 
 type cleaner struct {
@@ -32,7 +32,7 @@ func (c *cleaner) Start() {
 	logx.Infof("cleaner job started")
 }
 
-func newCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
+func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	// go cron
 	cr := cron.New() // 创建默认 Cron 实例（支持秒级精度）
 	// 添加任务（参数：Cron 表达式, 要执行的函数）

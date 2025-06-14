@@ -13,6 +13,7 @@ import (
 )
 
 var ErrUnSupportedFileExt error = errors.New("unsupported file ext")
+var ErrFileNoExt error = errors.New("file has no ext")
 
 type CodeSplitter struct {
 	tokenizer    tokenizer.Codec
@@ -42,7 +43,7 @@ func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, erro
 	// 确定文件语言
 	ext := filepath.Ext(codeFile.Path)
 	if ext == "" {
-		return nil, fmt.Errorf("file %s has no extension", codeFile.Path)
+		return nil, ErrFileNoExt
 	}
 
 	language := parser.GetLanguageConfigByExt(ext)

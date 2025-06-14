@@ -24,7 +24,7 @@ func main() {
 	conf.MustLoad(*configFile, &c, conf.UseEnv())
 
 	logx.MustSetup(c.Log)
-
+	logx.DisableStat()
 	if err := migrations.AutoMigrate(c.Database); err != nil {
 		panic(err)
 	}

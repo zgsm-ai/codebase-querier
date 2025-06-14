@@ -2,9 +2,14 @@ package scip
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zeromicro/go-zero/core/logx"
+	"io"
 	"path/filepath"
+	"strings"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -67,6 +72,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 
 // detectLanguageAndTool detects the language and tool for a repository
 func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
+
 	// Find language config
 	for _, lang := range c.config.Languages {
 		for _, file := range lang.DetectionFiles {
@@ -86,8 +92,41 @@ func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath
 			}
 		}
 	}
-
+	logx.Errorf("infer language and build tool failed for codebase:%s, try other way.", codebasePath)
+	// First try to detect Python project
+	isPython, err := c.isPythonProject(ctx, codebasePath)
+	if err != nil {
+		logx.Errorf("isPythonProject walk error: %v", err)
+	}
+	if isPython {
+		logx.Errorf("found .py file in codedebase:%s, assume it as python project.", codebasePath)
+		// Find Python config in languages
+		for _, lang := range c.config.Languages {
+			if lang.Name == "python" {
+				return lang.Index, nil, nil
+			}
+		}
+	}
 	return nil, nil, fmt.Errorf("no matching language configuration found")
+}
+
+// isPythonProject checks if the codebase contains any .py files
+func (c *IndexGenerator) isPythonProject(ctx context.Context, codebasePath string) (bool, error) {
+	hasPythonFile := false
+	err := c.codebaseStore.Walk(ctx, codebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
+		if strings.HasSuffix(walkCtx.RelativePath, ".py") {
+			hasPythonFile = true
+			return errors.New("found python file") // Use error to break the walk early
+		}
+		return nil
+	}, codebase.WalkOptions{
+		IgnoreError: true, // Ignore the error we use to break early
+	})
+
+	if err != nil && !hasPythonFile {
+		return false, fmt.Errorf("failed to walk codebase: %w", err)
+	}
+	return hasPythonFile, nil
 }
 
 // Cleanup removes the output directory and releases any locks

@@ -96,7 +96,7 @@ func (p *baseProcessor) handleIfTaskFailed(err error) bool {
 			UpdateColumnSimple(p.svcCtx.Querier.IndexHistory.Status.Value(status),
 				p.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
 		if err != nil {
-			p.logger.Errorf("update task history failed: %v", p.msg.CodebaseID, err)
+			p.logger.Errorf("update task history %d failed: %v", p.msg.CodebaseID, err)
 		}
 		return true
 	}

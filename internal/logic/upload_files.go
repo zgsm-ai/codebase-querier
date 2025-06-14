@@ -19,8 +19,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const syncVersionKeyPrefixFmt = "codebase_indexer:sync:%d"
-
 type UploadFilesLogic struct {
 	logx.Logger
 	ctx    context.Context
@@ -137,7 +135,7 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 		publishStatus = model.PublishStatusFailed
 	} else {
 		// 更新最新版本
-		err := l.svcCtx.Cache.AddVersion(l.ctx, syncVersionKey(codebase.ID), int64(syncHistory.ID), time.Hour*24)
+		err := l.svcCtx.Cache.AddVersion(l.ctx, types.SyncVersionKey(codebase.ID), int64(syncHistory.ID), time.Hour*24)
 		if err != nil {
 			l.Logger.Errorf("set sync version error: %v", err)
 		}
@@ -201,9 +199,4 @@ func (l *UploadFilesLogic) initCodebase(clientId string, clientPath string, user
 		return nil, err
 	}
 	return codebaseModel, nil
-}
-
-// syncVersionKey returns the Redis key for storing versions
-func syncVersionKey(syncId int32) string {
-	return fmt.Sprintf(syncVersionKeyPrefixFmt, syncId)
 }

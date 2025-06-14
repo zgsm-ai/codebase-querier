@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"archive/zip"
@@ -49,7 +49,7 @@ func createTestZip(opts zipOptions) (string, error) {
 	}
 
 	// 默认跳过的文件和目录
-	defaultExcludePrefixes := []string{".", "_", "node_modules", "vendor", "target", "build", "dist", "bin"}
+	defaultExcludePrefixes := []string{".", "_", "node_modules", "target", "build", "dist", "bin"}
 	defaultExcludeSuffixes := []string{".exe", ".dll", ".so", ".dylib", ".zip", ".tar", ".gz", ".rar"}
 
 	// 合并默认和用户指定的排除规则
