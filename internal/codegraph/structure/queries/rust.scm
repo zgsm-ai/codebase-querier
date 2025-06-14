@@ -39,4 +39,4 @@
 
 ;; Macro definitions
 (macro_definition
-  name: (identifier) @name) @function 
+  name: (identifier) @name) @definition.macro

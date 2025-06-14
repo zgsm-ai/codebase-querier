@@ -89,10 +89,10 @@ func TestMinioCodebase_Init(t *testing.T) {
 			codebasePath: "test-path",
 			setupMock: func(m *mocks.MockMinioClient) {
 				uniquePath := generateUniquePath("test-client", "test-path")
-				expectedPath := filepath.Join("test-bucket", uniquePath, "test-path", filepathSlash)
+				expectedPath := filepath.Join("test-bucket", uniquePath, filepathSlash)
 				m.EXPECT().PutObject(gomock.Any(), "test-bucket", expectedPath, gomock.Any(), int64(0), gomock.Any()).Return(minio.UploadInfo{}, nil)
 			},
-			want:    filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
+			want:    filepath.Join("test-bucket", generateUniquePath("test-client", "test-path"), filepathSlash),
 			wantErr: false,
 		},
 		{
@@ -387,7 +387,7 @@ func TestMinioCodebase_Tree(t *testing.T) {
 						ModTime: time.Time{},
 						Mode:    defaultFileMode,
 					},
-					Children: []types.TreeNode{},
+					Children: []*types.TreeNode{},
 				},
 			},
 			wantErr: false,
@@ -488,7 +488,7 @@ func TestMinioCodebase_Walk(t *testing.T) {
 					paths = append(paths, walkCtx.RelativePath)
 				}
 				return nil
-			})
+			}, WalkOptions{})
 
 			if tt.wantErr {
 				assert.Error(t, err)

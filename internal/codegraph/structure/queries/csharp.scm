@@ -71,7 +71,7 @@
 
 ;; Local function definitions
 (local_function_statement
-  name: (identifier) @name) @declaration.local_function
+  name: (identifier) @name) @definition.local_function
 
 ;; Conversion operator definitions
 (conversion_operator_declaration

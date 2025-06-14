@@ -3,56 +3,56 @@
 
 ;; Function declarations
 (function_declaration
-  name: (identifier) @name) @function
+  name: (identifier) @name) @declaration.function
 
 ;; Function expressions
 (variable_declaration
   (variable_declarator
     name: (identifier) @name
-    value: (function_expression))) @function
+    value: (function_expression))) @declaration.function_expression
 
 ;; Arrow functions
 (variable_declaration
   (variable_declarator
     name: (identifier) @name
-    value: (arrow_function))) @function
+    value: (arrow_function))) @declaration.arrow_function
 
 ;; Class declarations
 (class_declaration
-  name: (identifier) @name) @class
+  name: (identifier) @name) @declaration.class
 
 ;; Class expressions
 (variable_declaration
   (variable_declarator
     name: (identifier) @name
-    value: (class))) @class
+    value: (class))) @declaration.class
 
 ;; Method definitions (inside classes)
 (method_definition
-  name: (property_identifier) @name) @method
+  name: (property_identifier) @name) @definition.method
 
 ;; Variable declarations
 (variable_declaration
   (variable_declarator
-    name: (identifier) @name)) @variable
+    name: (identifier) @name)) @declaration.variable
 
 ;; Constant declarations (const)
 (lexical_declaration
   "const"
   (variable_declarator
-    name: (identifier) @name)) @constant
+    name: (identifier) @name)) @declaration.constant
 
 ;; Object properties
 (pair
-  key: (property_identifier) @name) @property
+  key: (property_identifier) @name) @declaration.property
 
 ;; Export declarations
 (export_statement
   declaration: (function_declaration
-    name: (identifier) @name)) @export
+    name: (identifier) @name)) @declaration.export_function
 
 ;; Export named declarations
 (export_statement
   (export_clause
     (export_specifier
-      name: (identifier) @name))) @export
+      name: (identifier) @name))) @declaration.export_statement

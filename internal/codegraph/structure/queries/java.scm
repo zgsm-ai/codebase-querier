@@ -48,7 +48,7 @@
 
 ;; Annotation declarations
 (annotation_type_declaration
-  name: (identifier) @name) @declaration.annotation
+  name: (identifier) @name) @declaration.annotation_type
 
 ;; Record declarations (Java 14+)
 (record_declaration

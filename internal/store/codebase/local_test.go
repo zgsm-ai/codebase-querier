@@ -51,7 +51,7 @@ func TestLocalCodebase_Init(t *testing.T) {
 			name:         "successful initialization",
 			clientId:     "test-client",
 			codebasePath: "test-path",
-			want:         filepath.Join("/tmp", generateUniquePath("test-client", "test-path"), "test-path", filepathSlash),
+			want:         filepath.Join("/tmp", generateUniquePath("test-client", "test-path"), filepathSlash),
 			wantErr:      false,
 		},
 		{
@@ -322,7 +322,7 @@ func TestLocalCodebase_Tree(t *testing.T) {
 						ModTime: time.Time{},
 						Mode:    defaultFileMode,
 					},
-					Children: []types.TreeNode{},
+					Children: []*types.TreeNode{},
 				},
 			},
 			wantErr: false,
@@ -445,7 +445,7 @@ func TestLocalCodebase_Walk(t *testing.T) {
 					visitedPaths = append(visitedPaths, walkCtx.RelativePath)
 				}
 				return nil
-			})
+			}, WalkOptions{})
 
 			if tt.wantErr {
 				assert.Error(t, err)

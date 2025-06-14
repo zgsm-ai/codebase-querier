@@ -63,6 +63,7 @@ var TestVar = "test"
 
 	// 预期的位置信息 (tree-sitter 使用从0开始的行列号)
 	expectedRanges := map[string][]int32{
+		"test":          {1, 0, 1, 12},   // line 4: type TestStruct struct {
 		"TestStruct":    {4, 0, 7, 1},    // line 4: type TestStruct struct {
 		"TestInterface": {10, 0, 13, 1},  // line 10: type TestInterface interface {
 		"TestFunc":      {16, 0, 18, 1},  // line 16: func TestFunc(...)
@@ -79,17 +80,19 @@ var TestVar = "test"
 		// 验证类型
 		switch def.Name {
 		case "TestStruct":
-			assert.Equal(t, "type_declaration", def.Type)
+			assert.Equal(t, "declaration.struct", def.Type)
 		case "TestInterface":
-			assert.Equal(t, "type_declaration", def.Type)
+			assert.Equal(t, "declaration.interface", def.Type)
 		case "TestFunc":
-			assert.Equal(t, "function_declaration", def.Type)
+			assert.Equal(t, "declaration.function", def.Type)
 		case "TestMethod":
-			assert.Equal(t, "method_declaration", def.Type)
+			assert.Equal(t, "declaration.method", def.Type)
 		case "TestConst":
-			assert.Equal(t, "const_declaration", def.Type)
+			assert.Equal(t, "declaration.const", def.Type)
+		case "test":
+			assert.Equal(t, "package", def.Type)
 		case "TestVar":
-			assert.Equal(t, "var_declaration", def.Type)
+			assert.Equal(t, "declaration.var", def.Type)
 		default:
 			t.Errorf("unexpected definition: %s", def.Name)
 		}

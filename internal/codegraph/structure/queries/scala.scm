@@ -9,35 +9,35 @@
 
 ;; Class definitions
 (class_definition
-  name: (identifier) @name) @class
+  name: (identifier) @name) @definition.class
 
 ;; Object declarations
 (object_definition
-  name: (identifier) @name) @object
+  name: (identifier) @name) @definition.object
 
 ;; Trait definitions
 (trait_definition
-  name: (identifier) @name) @trait
+  name: (identifier) @name) @definition.trait
 
 ;; Method definitions
 (function_definition
-  name: (identifier) @name) @method
+  name: (identifier) @name) @definition.method
 
 ;; Type alias definitions
 (type_definition
-  name: (identifier) @name) @type
+  name: (identifier) @name) @definition.type
 
 ;; Enum definitions (Scala 3)
 (enum_definition
-  name: (identifier) @name) @enum
+  name: (identifier) @name) @definition.enum
 
 ;; Value definitions (val)
 (val_definition
-  pattern: (identifier) @name) @val
+  pattern: (identifier) @name) @definition.val
 
 ;; Variable definitions (var)
 (var_definition
-  pattern: (identifier) @name) @var
+  pattern: (identifier) @name) @definition.var
 
 ;; Package object definitions
 (package_object

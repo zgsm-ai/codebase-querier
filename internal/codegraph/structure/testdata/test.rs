@@ -186,7 +186,15 @@ trait Iterator {
     fn next(&mut self) -> Option<Self::Item>;
 }
 
-// 20. 主函数
+// 新增: 20. 宏定义 - 计算阶乘
+macro_rules! factorial {
+    // 基础情况: 0 的阶乘是 1
+    (0) => { 1 };
+    // 递归情况: n! = n * (n-1)!
+    ($n:expr) => { $n * factorial!($n - 1) };
+}
+
+// 21. 主函数
 fn main() {
     // 测试 Point
     let p = Point::new(3.0, 4.0);
@@ -226,4 +234,8 @@ fn main() {
 
     // 测试智能指针
     count_rc();
+
+    // 测试宏
+    println!("Factorial of 5: {}", factorial!(5));
+    println!("Factorial of 10: {}", factorial!(10));
 }

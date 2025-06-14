@@ -29,12 +29,12 @@
 
 ;; Struct declarations
 (struct_specifier
-  name: (type_identifier) @name) @struct_declaration
+  name: (type_identifier) @name) @declaration.struct
 
 ;; Enum declarations
 (enum_specifier
-  name: (type_identifier) @name) @enum_declaration
+  name: (type_identifier) @name) @declaration.enum
 
 ;; Union declarations
 (union_specifier
-  name: (type_identifier) @name) @union_declaration
+  name: (type_identifier) @name) @declaration.union
