@@ -14,7 +14,7 @@ type CodebaseHashResponseData struct {
 type FileContentRequest struct {
 	ClientId    string `form:"clientId"`                      // 用户机器ID
 	CodebasePath string `form:"codebasePath"`                   // 项目绝对路径
-	FilePath    string `form:"filePath"`                      // 文件相对路径
+	FilePath    string `form:"FilePath"`                      // 文件相对路径
 	StartLine   int    `form:"startLine,optional,default=1"`  // 开始行（默认1）
 	EndLine     int    `form:"endLine,optional,default=100"` // 结束行（默认100，-1=全部）
 }
@@ -41,7 +41,7 @@ type CodebaseFileHashItem struct {
 type RelationQueryOptions struct {
 	ClientId       string `form:"clientId"`                     // 用户机器ID
 	CodebasePath    string `form:"codebasePath"`                  // 项目绝对路径
-	FilePath       string `form:"filePath"`                     // 文件相对路径
+	FilePath       string `form:"FilePath"`                     // 文件相对路径
 	StartLine      int    `form:"startLine"`                    // 开始行
 	StartColumn    int    `form:"startColumn"`                  // 开始列
 	EndLine        int    `form:"endLine"`                      // 结束行
@@ -57,7 +57,7 @@ type RelationResponseData struct {
 
 type SemanticFileItem struct {
 	Content  string  `json:"Content"`  // 代码片段
-	FilePath string  `json:"filePath"` // 文件相对路径
+	FilePath string  `json:"FilePath"` // 文件相对路径
 	Score    float32 `json:"score"`    // 匹配得分
 }
 
@@ -129,7 +129,7 @@ type StructreItem struct {
 type StructureRequest struct {
 	ClientId     string `form:"clientId"`     // 用户机器ID
 	CodebasePath string `form:"codebasePath"` // 项目绝对路径
-	FilePath     string `form:"filePath"`     // 文件相对路径
+	FilePath     string `form:"FilePath"`     // 文件相对路径
 }
 
 type StructureResponseData struct {

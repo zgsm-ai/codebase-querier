@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
-	"google.golang.org/protobuf/proto"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
@@ -18,8 +19,6 @@ import (
 )
 
 const dbName = "badger.db"
-
-const filePath = "filePath"
 
 // BadgerDBGraph implements GraphStore using BadgerDB
 type BadgerDBGraph struct {
@@ -113,24 +112,27 @@ func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*cod
 
 // Query 实现查询接口
 func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
-	if opts.MaxLayer <= 0 {
-		opts.MaxLayer = 1
-	}
-	if opts.FilePath == types.EmptyString {
-		return nil, errs.NewMissingParamError(filePath)
-	}
+	startTime := time.Now()
+	defer func() {
+		logx.WithContext(ctx).Infof("Query execution time: %v", time.Since(startTime))
+	}()
+
 	// 1. 获取文档
 	var doc codegraphpb.Document
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(DocKey(opts.FilePath))
 		if err != nil {
-			return err
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				return fmt.Errorf("document not found: %s", opts.FilePath)
+			}
+			return fmt.Errorf("failed to get document: %w", err)
 		}
 		return item.Value(func(val []byte) error {
 			return DeserializeDocument(val, &doc)
 		})
 	})
 	if err != nil {
+		logx.WithContext(ctx).Errorf("Failed to get document: %v", err)
 		return nil, err
 	}
 
@@ -140,14 +142,19 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	// Find root symbols based on query options
 	if opts.SymbolName != "" {
 		foundSymbols = b.querySymbolsByNameAndLine(&doc, opts)
+		logx.WithContext(ctx).Debugf("Found %d symbols by name and line", len(foundSymbols))
 	} else {
 		foundSymbols = b.querySymbolsByPosition(&doc, opts)
+		logx.WithContext(ctx).Debugf("Found %d symbols by position", len(foundSymbols))
 	}
 
 	// Check if any root symbols were found
 	if len(foundSymbols) == 0 {
-		return nil, fmt.Errorf("symbol not found: name %s startLine %d in document %s", opts.SymbolName, opts.StartLine, opts.FilePath)
+		err := fmt.Errorf("symbol not found: name %s startLine %d in document %s", opts.SymbolName, opts.StartLine, opts.FilePath)
+		logx.WithContext(ctx).Errorf("%v", err)
+		return nil, err
 	}
+
 	// root
 	// 找定义节点，以定义节点为根节点进行深度遍历
 	for _, s := range foundSymbols {
@@ -181,57 +188,15 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 		}
 	}
 
-	// Convert root symbols to GraphNodes and add to result
-	//for _, sym := range foundSymbols {
-	//	graphNode := b.convertSymbolToGraphNode(doc.Path, sym)
-	//	if graphNode != nil {
-	//		res = append(res, graphNode)
-	//	}
-	//}
-	// TODO 一层递归，返回内容，range可能需要从struct_file中获取，或者将tree_sitter 获取到的定义range和当前的合并。
+	logx.Debugf("Found %d root nodes", len(res))
+
 	// Build the rest of the tree recursively
 	// We need to build children for the root nodes found
 	for _, rootNode := range res {
 		// Pass the corresponding original symbol proto to the recursive function
 		b.buildChildrenRecursive(rootNode, opts.MaxLayer)
 	}
-	//TODO symbolName 不一致，有些是 scip-go开头，有些是函数名。统一为函数名。 数据结构需要优化下， 定义-> 引用行-> 定义函数/变量（这里是否要前面的引用行合并）-> 引用。 即函数A被函数B调用（在某行），函数B被函数C调用。
 	return res, nil
-}
-
-// convertSymbolToGraphNode converts a codegraphpb.Symbol to a types.GraphNode
-func (b BadgerDBGraph) convertSymbolToGraphNode(filePath string, symbol *codegraphpb.Symbol) *types.GraphNode {
-	if symbol == nil {
-		return nil
-	}
-
-	// Determine NodeType based on Symbol Role
-	nodeType := types.NodeTypeUnknown
-	switch symbol.Role {
-	case codegraphpb.RelationType_RELATION_DEFINITION:
-		nodeType = types.NodeTypeDefinition
-	case codegraphpb.RelationType_RELATION_REFERENCE:
-		nodeType = types.NodeTypeReference
-	// Add other cases if needed, e.g., implementation, type definition
-	case codegraphpb.RelationType_RELATION_IMPLEMENTATION:
-		nodeType = types.NodeTypeImplementation
-	case codegraphpb.RelationType_RELATION_TYPE_DEFINITION:
-		nodeType = types.NodeTypeDefinition // Map type definition relation to NodeTypeDefinition
-	default:
-		nodeType = types.NodeTypeReference // Defaulting to reference or unknown
-	}
-
-	graphNode := &types.GraphNode{
-		FilePath:   filePath,
-		SymbolName: symbol.Identifier,
-		Position:   types.ToPosition(symbol.Range), // Use the helper function from types
-		// Content:    symbol.Content, TODO one-layer return
-		NodeType: string(nodeType),
-		Children: []*types.GraphNode{}, // Initialize children slice
-		Caller:   nil,                  // Parent will be set by the caller when building the tree
-	}
-
-	return graphNode
 }
 
 // findSymbolInDoc 在文档中查找指定名称的符号
@@ -288,27 +253,33 @@ func (b BadgerDBGraph) buildChildrenForNodes(nodes []*types.GraphNode, maxLayer 
 }
 
 // buildChildrenRecursive recursively builds the child nodes for a given GraphNode and its corresponding Symbol.
-// node: The current GraphNode to build children for.
-// symbol: The codegraphpb.Symbol corresponding to the node, containing the Relations.
-// maxLayer: Maximum depth to build the tree from this node downwards.
 func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer int) {
 	if maxLayer <= 0 || node == nil {
+		logx.Debugf("buildChildrenRecursive stopped: maxLayer=%d, node is nil=%v", maxLayer, node == nil)
 		return
 	}
 	maxLayer-- // 防止死递归
 
+	startTime := time.Now()
+	defer func() {
+		logx.Debugf("buildChildrenRecursive for node %s took %v", node.Identifier, time.Since(startTime))
+	}()
+
 	symbolPath := node.FilePath
 	identifier := node.Identifier
 	position := node.Position
+
 	// 根据path和position，定义到 symbol，从而找到它的relation
-	// TODO node 节点如果自己就是Symbol 定义节点，则它的relation是知道的，不需要再查找；如果它是relation中的定义，则它的relation是0，需要定位到它在document 中的symbol。这里多查了一次，有点消耗性能
 	var document codegraphpb.Document
 	err := b.findDocument(DocKey(symbolPath), &document)
 	if err != nil {
+		logx.Errorf("Failed to find document for path %s: %v", symbolPath, err)
 		return
 	}
+
 	symbol := b.findSymbolInDoc(&document, identifier)
 	if symbol == nil {
+		logx.Debugf("Symbol not found in document: path=%s, identifier=%s", symbolPath, identifier)
 		return
 	}
 
@@ -328,6 +299,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 				})
 			}
 		}
+		logx.Debugf("Found %d reference relations for symbol %s", len(children), identifier)
 	}
 
 	if len(children) == 0 {
@@ -335,13 +307,18 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 		var structFile codegraphpb.CodeStructure
 		err = b.findDocument(StructKey(symbolPath), &structFile)
 		if err != nil {
+			logx.Errorf("Failed to find struct file for path %s: %v", symbolPath, err)
 			return
 		}
 		if structFile.Path == types.EmptyString { // 没找到
-			logx.Debugf("cannot found symbol %s struct file by symbol path %s", identifier, symbolPath)
+			logx.Debugf("Cannot find symbol %s struct file by symbol path %s", identifier, symbolPath)
 		}
-		// 定义symbol TODO 这里找到了定义，它的relation 需要处理，这里不处理，后面的递归，又重新处理。这里的递归，和入口上面的递归，需要合并下。逻辑相似
+		// 定义symbol
 		foundDefSymbol := b.findSymbolInStruct(&structFile, position)
+		if foundDefSymbol == nil {
+			logx.Debugf("No definition found for symbol at position %+v", position)
+			return
+		}
 		children = append(children, &types.GraphNode{
 			FilePath:   foundDefSymbol.Path,
 			SymbolName: foundDefSymbol.Name,
@@ -349,33 +326,54 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 			Position:   types.ToPosition(foundDefSymbol.Range),
 			NodeType:   string(types.NodeTypeDefinition),
 		})
+		logx.Debugf("Found definition for reference node: %s", foundDefSymbol.Identifier)
 	}
+
 	//当前节点的子
 	node.Children = children
+
 	// 继续递归
 	for _, ch := range children {
 		b.buildChildrenRecursive(ch, maxLayer)
 	}
-
 }
 
+// findDocument 查找并反序列化文档
 func (b BadgerDBGraph) findDocument(key []byte, message proto.Message) error {
+	startTime := time.Now()
+	defer func() {
+		logx.Debugf("findDocument took %v", time.Since(startTime))
+	}()
+
+	if len(key) == 0 {
+		return fmt.Errorf("invalid input: key is empty")
+	}
+	if message == nil {
+		return fmt.Errorf("invalid input: message is nil")
+	}
+
 	err := b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				return nil // Not finding the doc is not an error we should stop for
 			}
-			return err // Propagate other errors
+			return fmt.Errorf("failed to get document: %w", err)
 		}
 		return item.Value(func(val []byte) error {
-			err = DeserializeDocument(val, message)
-			if err != nil {
-				return err
+			if len(val) == 0 {
+				return fmt.Errorf("empty document value")
+			}
+			if err := DeserializeDocument(val, message); err != nil {
+				return fmt.Errorf("failed to deserialize document: %w", err)
 			}
 			return nil
 		})
 	})
+
+	if err != nil {
+		logx.Errorf("findDocument error for key %s: %v", string(key), err)
+	}
 	return err
 }
 
