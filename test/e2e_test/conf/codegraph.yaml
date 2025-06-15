@@ -76,7 +76,7 @@ languages:
         priority: 10
         build_commands:
           - base: "docker"
-            args: 
+            args:
               - "run"
               - "--rm"
               - "-v"
@@ -84,6 +84,15 @@ languages:
               - "-w"
               - "__sourcePath__"
               - "__image__"
+              - "scip-java"
+              - "index"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--targetroot"
+              - "__outputPath__/build"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--"
               - "mvn"
               - "verify"
               - "--batch-mode"
@@ -105,6 +114,15 @@ languages:
               - "-w"
               - "__sourcePath__"
               - "__image__"
+              - "scip-java"
+              - "index"
+              - "--cwd"
+              - "__sourcePath__"
+              - "--targetroot"
+              - "__outputPath__/build"
+              - "--output"
+              - "__outputPath__/index.scip"
+              - "--"
               - "gradle"
               - "--offline"
               - "--continue"
@@ -126,15 +144,7 @@ languages:
             - "__sourcePath__"
             - "__image__"
             - "scip-java"
-            - "index"
-            - "--cwd"
-            - "__sourcePath__"
-            - "--targetroot"
-            - "__outputPath__/build"
-            - "--output"
             - "__outputPath__/index.scip"
-            - "--"
-            - "__buildArgs__"
 
   - name: python
     detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
