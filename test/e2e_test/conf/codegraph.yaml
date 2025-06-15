@@ -204,8 +204,8 @@ languages:
             - "--gem-metadata"
             - "ruby@v0.0.1"
 
-  - name: dotnet
-    detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+  - name: csharp
+    detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
     index:
       name: scip-dotnet
       commands:
@@ -408,6 +408,12 @@ languages:
             - "__sourcePath__:__sourcePath__"
             - "-w"
             - "__sourcePath__"
+            - "-e"
+            - "CARGO_NET_OFFLINE=true"
+            - "-e"
+            - "NUM_JOBS=32"
+            - "-e"
+            - "CARGO_BUILD_JOBS=32"
             - "__image__"
             - "rust-analyzer"
             - "scip"
@@ -418,3 +424,4 @@ languages:
             - "CARGO_NET_OFFLINE=true"
             - "NUM_JOBS=32"
             - "CARGO_BUILD_JOBS=32"
+            - "RUSTUP_AUTO_INSTALL=0"

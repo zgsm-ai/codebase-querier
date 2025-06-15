@@ -114,8 +114,8 @@ languages:
             - "--gem-metadata"
             - "ruby@v0.0.1"
 
-  - name: dotnet
-    detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+  - name: csharp
+    detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
     index:
       name: scip-dotnet
       commands:
@@ -244,3 +244,4 @@ languages:
             - "CARGO_NET_OFFLINE=true"
             - "NUM_JOBS=32"
             - "CARGO_BUILD_JOBS=32"
+            - "RUSTUP_AUTO_INSTALL=0"

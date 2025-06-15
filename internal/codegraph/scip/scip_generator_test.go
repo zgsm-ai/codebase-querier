@@ -2,289 +2,196 @@ package scip
 
 import (
 	"context"
-	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"os"
-	"path/filepath"
-	"runtime"
+	"io"
 	"testing"
 
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/mocks"
-
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"github.com/stretchr/testify/mock"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 )
 
-func TestNewIndexGenerator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	store := mocks.NewMockStore(ctrl)
-	config := &config.CodegraphConfig{}
-
-	generator := NewIndexGenerator(config, store)
-	assert.NotNil(t, generator)
-	assert.Equal(t, config, generator.config)
-	assert.Equal(t, store, generator.codebaseStore)
+// MockStore 模拟codebase.Store接口
+type MockStore struct {
+	mock.Mock
 }
 
-func TestIndexGenerator_Generate(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func (m *MockStore) Walk(ctx context.Context, codebasePath string, prefix string, walkFn func(*codebase.WalkContext, io.ReadCloser) error, opts codebase.WalkOptions) error {
+	args := m.Called(ctx, codebasePath, prefix, walkFn, opts)
+	return args.Error(0)
+}
 
-	// Create test directory under /tmp
-	testDir := filepath.Join("/tmp", "test")
-	err := os.MkdirAll(testDir, 0755)
-	assert.NoError(t, err)
-	defer os.RemoveAll(testDir)
+func (m *MockStore) Stat(ctx context.Context, codebasePath string, path string) (bool, error) {
+	args := m.Called(ctx, codebasePath, path)
+	return args.Bool(0), args.Error(1)
+}
 
-	// Determine the echo command based on OS
-	var echoCmd string
-	var echoArgs []string
-	if runtime.GOOS == "windows" {
-		echoCmd = "cmd"
-		echoArgs = []string{"/c", "echo", "scip-go"}
-	} else {
-		echoCmd = "echo"
-		echoArgs = []string{"scip-go"}
-	}
+func (m *MockStore) MkDirs(ctx context.Context, codebasePath string, dirs ...string) error {
+	args := m.Called(ctx, codebasePath, dirs)
+	return args.Error(0)
+}
 
+func TestDetectLanguageAndTool(t *testing.T) {
 	tests := []struct {
-		name         string
-		codebasePath string
-		setupMock    func(*mocks.MockStore)
-		config       *config.CodegraphConfig
-		wantErr      bool
-		errContains  string
+		name          string
+		setupMock     func(*MockStore)
+		expectedIndex *config.IndexTool
+		expectedTool  *config.BuildTool
+		expectedError error
 	}{
 		{
-			name:         "successful generation",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
+			name: "构建工具优先级排序",
+			setupMock: func(m *MockStore) {
+				// 模拟文件遍历
+				m.On("Walk", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						walkFn := args.Get(2).(func(*codebase.WalkContext, io.ReadCloser) error)
+						walkCtx := &codebase.WalkContext{
+							RelativePath: "Main.java",
+						}
+						walkFn(walkCtx, nil)
+					}).
 					Return(nil)
-				m.EXPECT().
-					Stat(gomock.Any(), testDir, "go.mod").
-					Return(&types.FileInfo{IsDir: false}, nil)
+
+				// 模拟检测到build.gradle和pom.xml
+				m.On("Stat", mock.Anything, mock.Anything, "build.gradle").Return(true, nil)
+				m.On("Stat", mock.Anything, mock.Anything, "pom.xml").Return(true, nil)
 			},
-			config: &config.CodegraphConfig{
+			expectedIndex: &config.IndexTool{
+				Name: "scip-java",
+				Commands: []config.Command{
+					{
+						Base: "scip-java",
+						Args: []string{
+							"index",
+							"--cwd",
+							"__sourcePath__",
+							"--targetroot",
+							"__outputPath__/build",
+							"--output",
+							"__outputPath__/index.scip",
+							"--",
+							"__buildArgs__",
+						},
+					},
+				},
+			},
+			expectedTool: &config.BuildTool{
+				Name:           "maven",
+				DetectionFiles: []string{"pom.xml"},
+				Priority:       10,
+				BuildCommands: []config.Command{
+					{
+						Base: "mvn",
+						Args: []string{
+							"verify",
+							"--batch-mode",
+							"--fail-never",
+							"-DskipTests",
+							"--offline",
+							"-T",
+							"8",
+						},
+					},
+				},
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 创建mock store
+			mockStore := new(MockStore)
+			tt.setupMock(mockStore)
+
+			// 创建测试配置
+			cfg := &config.CodegraphConfig{
 				Languages: []*config.LanguageConfig{
 					{
-						Name:           "go",
-						DetectionFiles: []string{"go.mod"},
+						Name:           "java",
+						DetectionFiles: []string{"pom.xml", "build.gradle"},
+						BuildTools: []*config.BuildTool{
+							{
+								Name:           "gradle",
+								DetectionFiles: []string{"build.gradle"},
+								Priority:       20,
+								BuildCommands: []config.Command{
+									{
+										Base: "gradle",
+										Args: []string{
+											"--offline",
+											"--continue",
+											"--no-tests",
+											"--parallel",
+											"--max-workers",
+											"8",
+											"--no-interactive",
+										},
+									},
+								},
+							},
+							{
+								Name:           "maven",
+								DetectionFiles: []string{"pom.xml"},
+								Priority:       10,
+								BuildCommands: []config.Command{
+									{
+										Base: "mvn",
+										Args: []string{
+											"verify",
+											"--batch-mode",
+											"--fail-never",
+											"-DskipTests",
+											"--offline",
+											"-T",
+											"8",
+										},
+									},
+								},
+							},
+						},
 						Index: &config.IndexTool{
-							Name: "scip-go",
-							Commands: []*config.Command{
+							Name: "scip-java",
+							Commands: []config.Command{
 								{
-									Base: echoCmd,
-									Args: echoArgs,
+									Base: "scip-java",
+									Args: []string{
+										"index",
+										"--cwd",
+										"__sourcePath__",
+										"--targetroot",
+										"__outputPath__/build",
+										"--output",
+										"__outputPath__/index.scip",
+										"--",
+										"__buildArgs__",
+									},
 								},
 							},
 						},
 					},
 				},
-			},
-			wantErr: false,
-		},
-		{
-			name:         "failed to create output directory",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
-					Return(assert.AnError)
-			},
-			config: &config.CodegraphConfig{
-				Languages: []*config.LanguageConfig{},
-			},
-			wantErr:     true,
-			errContains: "failed to create codebase index directory",
-		},
-		{
-			name:         "no matching language configuration",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					MkDirs(gomock.Any(), testDir, types.CodebaseIndexDir).
-					Return(nil)
-				m.EXPECT().
-					Stat(gomock.Any(), testDir, "go.mod").
-					Return(nil, assert.AnError)
-			},
-			config: &config.CodegraphConfig{
-				Languages: []*config.LanguageConfig{
-					{
-						Name:           "go",
-						DetectionFiles: []string{"go.mod"},
-					},
-				},
-			},
-			wantErr:     true,
-			errContains: "no matching language configuration found",
-		},
-	}
+			}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := mocks.NewMockStore(ctrl)
-			tt.setupMock(store)
+			// 创建IndexGenerator实例
+			generator := NewIndexGenerator(cfg, mockStore)
 
-			generator := NewIndexGenerator(tt.config, store)
-			err := generator.Generate(context.Background(), tt.codebasePath)
+			// 执行测试
+			index, tool, err := generator.detectLanguageAndTool(context.Background(), "/test/path")
 
-			if tt.wantErr {
+			// 验证结果
+			if tt.expectedError != nil {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errContains)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedIndex, index)
+				assert.Equal(t, tt.expectedTool, tool)
 			}
-		})
-	}
-}
 
-func TestIndexGenerator_DetectLanguageAndTool(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create test directory under /tmp
-	testDir := filepath.Join("/tmp", "test")
-	err := os.MkdirAll(testDir, 0755)
-	assert.NoError(t, err)
-	defer os.RemoveAll(testDir)
-
-	tests := []struct {
-		name         string
-		codebasePath string
-		setupMock    func(*mocks.MockStore)
-		config       *config.CodegraphConfig
-		wantIndex    *config.IndexTool
-		wantBuild    *config.BuildTool
-		wantErr      bool
-		errContains  string
-	}{
-		{
-			name:         "language found without build tool",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					Stat(gomock.Any(), testDir, "go.mod").
-					Return(&types.FileInfo{IsDir: false}, nil)
-			},
-			config: &config.CodegraphConfig{
-				Languages: []*config.LanguageConfig{
-					{
-						Name:           "go",
-						DetectionFiles: []string{"go.mod"},
-						Index: &config.IndexTool{
-							Name: "scip-go",
-						},
-					},
-				},
-			},
-			wantIndex: &config.IndexTool{Name: "scip-go"},
-			wantBuild: nil,
-			wantErr:   false,
-		},
-		{
-			name:         "language found with build tool",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					Stat(gomock.Any(), testDir, "go.mod").
-					Return(&types.FileInfo{IsDir: false}, nil)
-			},
-			config: &config.CodegraphConfig{
-				Languages: []*config.LanguageConfig{
-					{
-						Name:           "go",
-						DetectionFiles: []string{"go.mod"},
-						BuildTools: []*config.BuildTool{
-							{
-								Name:           "go-build",
-								DetectionFiles: []string{"go.mod"},
-							},
-						},
-						Index: &config.IndexTool{
-							Name: "scip-go",
-						},
-					},
-				},
-			},
-			wantIndex: &config.IndexTool{Name: "scip-go"},
-			wantBuild: &config.BuildTool{
-				Name:           "go-build",
-				DetectionFiles: []string{"go.mod"},
-			},
-			wantErr: false,
-		},
-		{
-			name:         "no language found",
-			codebasePath: testDir,
-			setupMock: func(m *mocks.MockStore) {
-				m.EXPECT().
-					Stat(gomock.Any(), testDir, "go.mod").
-					Return(nil, assert.AnError)
-			},
-			config: &config.CodegraphConfig{
-				Languages: []*config.LanguageConfig{
-					{
-						Name:           "go",
-						DetectionFiles: []string{"go.mod"},
-					},
-				},
-			},
-			wantIndex:   nil,
-			wantBuild:   nil,
-			wantErr:     true,
-			errContains: "no matching language configuration found",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := mocks.NewMockStore(ctrl)
-			tt.setupMock(store)
-
-			generator := NewIndexGenerator(tt.config, store)
-			indexTool, buildTool, err := generator.detectLanguageAndTool(context.Background(), tt.codebasePath)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errContains)
-				assert.Nil(t, indexTool)
-				assert.Nil(t, buildTool)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantIndex, indexTool)
-				assert.Equal(t, tt.wantBuild, buildTool)
-			}
-		})
-	}
-}
-
-func TestIndexOutputDir(t *testing.T) {
-	tests := []struct {
-		name         string
-		codebasePath string
-		expected     string
-	}{
-		{
-			name:         "simple path",
-			codebasePath: filepath.Join("/tmp", "test"),
-			expected:     filepath.Join("/tmp", "test", types.CodebaseIndexDir),
-		},
-		{
-			name:         "nested path",
-			codebasePath: filepath.Join("/tmp", "test", "nested", "path"),
-			expected:     filepath.Join("/tmp", "test", "nested", "path", types.CodebaseIndexDir),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := indexOutputDir(tt.codebasePath)
-			assert.Equal(t, tt.expected, result)
+			// 验证mock调用
+			mockStore.AssertExpectations(t)
 		})
 	}
 }

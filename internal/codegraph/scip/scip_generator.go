@@ -4,23 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/zeromicro/go-zero/core/logx"
 	"io"
 	"path/filepath"
-	"strings"
+	"sort"
+	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 )
 
 const (
 	placeholderSourcePath = "__sourcePath__"
 	placeholderOutputPath = "__outputPath__"
 	indexFileName         = "index.scip"
+	// 基础限制
+	defaultMaxFiles   = 100             // 默认最大文件数
+	minFilesToAnalyze = 20              // 最少需要分析的文件数
+	maxAnalysisTime   = 2 * time.Second // 最大分析时间
 )
+
+var maxFileReached = errors.New("max files reached")
 
 // IndexGenerator represents the SCIP index generator
 type IndexGenerator struct {
@@ -78,60 +86,99 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 // detectLanguageAndTool detects the language and tool for a repository
 func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
 
-	// Find language config
-	for _, lang := range c.config.Languages {
-		for _, file := range lang.DetectionFiles {
-			if fileInfo, err := c.codebaseStore.Stat(ctx, codebasePath, file); err == nil {
-				if fileInfo.IsDir {
-					continue
-				}
-				if len(lang.BuildTools) == 0 {
-					return lang.Index, nil, nil
-				}
-				for _, tool := range lang.BuildTools {
-					if utils.SliceContains[string](tool.DetectionFiles, file) {
-						return lang.Index, tool, nil
-					}
-				}
-				return lang.Index, nil, nil
-			}
-		}
-	}
-	logx.Errorf("infer language and build tool failed for codebase:%s, try other way.", codebasePath)
-	// First try to detect Python project
-	isPython, err := c.isPythonProject(ctx, codebasePath)
-	if err != nil {
-		logx.Errorf("isPythonProject walk error: %v", err)
-	}
-	if isPython {
-		logx.Errorf("found .py file in codedebase:%s, assume it as python project.", codebasePath)
-		// Find Python config in languages
-		for _, lang := range c.config.Languages {
-			if lang.Name == "python" {
-				return lang.Index, nil, nil
-			}
-		}
-	}
-	return nil, nil, fmt.Errorf("no matching language configuration found")
-}
+	// 通过Walk统计文件频率
+	languageStats := make(map[string]int)
+	analyzedFiles := 0
+	startTime := time.Now()
 
-// isPythonProject checks if the codebase contains any .py files
-func (c *IndexGenerator) isPythonProject(ctx context.Context, codebasePath string) (bool, error) {
-	hasPythonFile := false
-	err := c.codebaseStore.Walk(ctx, codebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
-		if strings.HasSuffix(walkCtx.RelativePath, ".py") {
-			hasPythonFile = true
-			return errors.New("found python file") // Use error to break the walk early
+	err := c.codebaseStore.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
+		// 检查是否超时
+		if time.Since(startTime) > maxAnalysisTime {
+			return maxFileReached
 		}
+
+		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
+		if analyzedFiles >= minFilesToAnalyze {
+			totalFiles := 0
+			maxCount := 0
+			for _, count := range languageStats {
+				totalFiles += count
+				if count > maxCount {
+					maxCount = count
+				}
+			}
+			if float64(maxCount)/float64(totalFiles) > 0.6 {
+				return maxFileReached
+			}
+		}
+
+		if analyzedFiles >= defaultMaxFiles {
+			return maxFileReached
+		}
+
+		ext := filepath.Ext(walkCtx.RelativePath)
+		if ext == "" {
+			return nil
+		}
+
+		// 使用parser包中的语言配置
+		langConfig := parser.GetLanguageConfigByExt(ext)
+		if langConfig != nil {
+			languageStats[string(langConfig.Language)]++
+		} else {
+			return nil
+		}
+
+		analyzedFiles++
 		return nil
 	}, codebase.WalkOptions{
-		IgnoreError: true, // Ignore the error we use to break early
+		IgnoreError: true,
 	})
 
-	if err != nil && !hasPythonFile {
-		return false, fmt.Errorf("failed to walk codebase: %w", err)
+	if err != nil && !errors.Is(err, maxFileReached) {
+		logx.Errorf("failed to analyze codebase: %v", err)
 	}
-	return hasPythonFile, nil
+
+	// 5. 选择出现频率最高的语言
+	var dominantLanguage string
+	maxCount := 0
+	for lang, count := range languageStats {
+		if count > maxCount {
+			maxCount = count
+			dominantLanguage = lang
+		}
+	}
+
+	var langConfig *config.LanguageConfig
+	if dominantLanguage != "" {
+		// 查找对应的语言配置
+		for _, lang := range c.config.Languages {
+			if lang.Name == dominantLanguage {
+				langConfig = lang
+			}
+		}
+	}
+	if langConfig == nil {
+		return nil, nil, fmt.Errorf("no matching language configuration found")
+	}
+	if len(langConfig.BuildTools) == 0 {
+		return langConfig.Index, nil, nil
+	}
+
+	// 按优先级排序构建工具
+	sort.Slice(langConfig.BuildTools, func(i, j int) bool {
+		return langConfig.BuildTools[i].Priority < langConfig.BuildTools[j].Priority
+	})
+
+	for _, tool := range langConfig.BuildTools {
+		for _, detectFile := range tool.DetectionFiles {
+			if _, err := c.codebaseStore.Stat(ctx, codebasePath, detectFile); err == nil {
+				return langConfig.Index, tool, nil
+			}
+		}
+	}
+
+	return nil, nil, fmt.Errorf("no matching language configuration found")
 }
 
 // Cleanup removes the output directory and releases any locks

@@ -36,17 +36,17 @@ func (m *MockMessageQueue) EXPECT() *MockMessageQueueMockRecorder {
 }
 
 // Ack mocks base method.
-func (m *MockMessageQueue) Ack(ctx context.Context, stream, group, id string) error {
+func (m *MockMessageQueue) Ack(ctx context.Context, topic, consumerGroup, msgId string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ack", ctx, stream, group, id)
+	ret := m.ctrl.Call(m, "Ack", ctx, topic, consumerGroup, msgId)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Ack indicates an expected call of Ack.
-func (mr *MockMessageQueueMockRecorder) Ack(ctx, stream, group, id interface{}) *gomock.Call {
+func (mr *MockMessageQueueMockRecorder) Ack(ctx, topic, consumerGroup, msgId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*MockMessageQueue)(nil).Ack), ctx, stream, group, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*MockMessageQueue)(nil).Ack), ctx, topic, consumerGroup, msgId)
 }
 
 // Consume mocks base method.
@@ -93,17 +93,17 @@ func (mr *MockMessageQueueMockRecorder) DeleteTopic(ctx, topic interface{}) *gom
 }
 
 // Nack mocks base method.
-func (m *MockMessageQueue) Nack(ctx context.Context, stream, group, id string) error {
+func (m *MockMessageQueue) Nack(ctx context.Context, topic, consumerGroup, msgId string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Nack", ctx, stream, group, id)
+	ret := m.ctrl.Call(m, "Nack", ctx, topic, consumerGroup, msgId)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Nack indicates an expected call of Nack.
-func (mr *MockMessageQueueMockRecorder) Nack(ctx, stream, group, id interface{}) *gomock.Call {
+func (mr *MockMessageQueueMockRecorder) Nack(ctx, topic, consumerGroup, msgId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*MockMessageQueue)(nil).Nack), ctx, stream, group, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*MockMessageQueue)(nil).Nack), ctx, topic, consumerGroup, msgId)
 }
 
 // Produce mocks base method.
