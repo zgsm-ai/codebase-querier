@@ -20,7 +20,7 @@ func getSvcCtx(ctx context.Context) *svc.ServiceContext {
 	projectPath := "/root/projects/codebase-indexer"
 	configPath := filepath.Join(projectPath, "etc/conf.yaml")
 	conf.MustLoad(configPath, &c, conf.UseEnv())
-	c.IndexTask.GraphTask.ConfFile = filepath.Join(projectPath, "test/e2e_test/codegraph.yaml")
+	c.IndexTask.GraphTask.ConfFile = filepath.Join(projectPath, "test/e2e_test/conf/codegraph.yaml")
 	return api_test.InitSvcCtx(ctx, &c)
 }
 func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
@@ -34,7 +34,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Minute*10)
 	svcCtx := getSvcCtx(timeout)
 
-	codegraphConfig := config.MustLoadCodegraphConfig("./config/")
+	codegraphConfig := config.MustLoadCodegraphConfig(svcCtx.Config.IndexTask.GraphTask.ConfFile)
 	generator := scip.NewIndexGenerator(codegraphConfig, svcCtx.CodebaseStore)
 	defer cancelFunc()
 	basePath := "/tmp/projects/"

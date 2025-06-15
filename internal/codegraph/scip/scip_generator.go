@@ -52,6 +52,11 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		placeholderSourcePath: codebasePath,
 		placeholderOutputPath: indexOutputDir(codebasePath),
 	}
+	if len(g.config.Variables) > 0 {
+		for k, v := range g.config.Variables {
+			placeHolders[k] = v
+		}
+	}
 
 	executor, err := newCommandExecutor(ctx,
 		codebasePath,
