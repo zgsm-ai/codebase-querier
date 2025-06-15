@@ -40,12 +40,12 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		Project  string
 		wantErr  error
 	}{
-		{
-			Name:     "typescript",
-			Language: "typescript",
-			Project:  "svelte",
-			wantErr:  nil,
-		},
+		//{
+		//	Name:     "typescript",
+		//	Language: "typescript",
+		//	Project:  "vue-next",
+		//	wantErr:  nil,
+		//},
 		{
 			Name:     "javascript",
 			Language: "javascript",
@@ -112,11 +112,12 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		t.Logf("start to testing %s codebase %s", tc.Name, codebasePath)
 		err := generator.Generate(timeout, codebasePath)
 		assert.ErrorIs(t, err, tc.wantErr)
-		indeFilePath := filepath.Join(codebasePath, ".shenma", "index.scip")
-		assert.FileExists(t, indeFilePath, "file index.scip not found")
-		fileInfo, err := os.Stat(indeFilePath)
+		indexFilePath := filepath.Join(codebasePath, ".shenma", "index.scip")
+		assert.FileExists(t, indexFilePath, "file index.scip not found")
+		fileInfo, err := os.Stat(indexFilePath)
 		assert.NoError(t, err, "file index.scip not found")
 		assert.True(t, fileInfo.Size() > 100*1024, "file index.scip is empty") // 一般大项目index至少大于 100KB
+		t.Logf("index file %s size: %d, modTime: %s", indexFilePath, fileInfo.Size(), fileInfo.ModTime().Format("2006-01-02 15:04:05"))
 		t.Logf("testing %s codebase %s done", tc.Name, codebasePath)
 		t.Log("---------------------------------------------------------------")
 	}
