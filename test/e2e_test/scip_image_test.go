@@ -43,7 +43,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		{
 			Name:     "typescript",
 			Language: "typescript",
-			Project:  "TypeScript",
+			Project:  "svelte",
 			wantErr:  nil,
 		},
 		{

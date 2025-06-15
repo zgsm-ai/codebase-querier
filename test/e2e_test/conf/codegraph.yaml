@@ -17,8 +17,8 @@ languages:
             - "__sourcePath__"
             - "__image__"
             - "node"
-            - "--max-old-space-size=16000"
-            - "scip-typescript"
+            - "--max-old-space-size=16000" #16g
+            - "/usr/bin/scip-typescript"
             - "index"
             - "--cwd"
             - "__sourcePath__"
@@ -40,7 +40,9 @@ languages:
             - "-w"
             - "__sourcePath__"
             - "__image__"
-            - "scip-typescript"
+            - "node"
+            - "--max-old-space-size=16000" #16g
+            - "/usr/bin/scip-typescript"
             - "index"
             - "--cwd"
             - "__sourcePath__"
