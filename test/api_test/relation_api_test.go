@@ -59,7 +59,7 @@ func TestRelationQuery(t *testing.T) {
 	err = json.Unmarshal(body, &result)
 	assert.NoError(t, err)
 
-	t.Logf("resp:%+v", string(body))
+	//t.Logf("resp:%+v", string(body))
 
 	// Verify response structure
 	assert.Equal(t, 0, result.Code) // 0 indicates success

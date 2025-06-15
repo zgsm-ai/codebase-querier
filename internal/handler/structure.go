@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/zgsm-ai/codebase-indexer/internal/response"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -13,16 +14,16 @@ func structureHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.StructureRequest
 		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
+			response.Error(w, err)
 			return
 		}
 
 		l := logic.NewStructureLogic(r.Context(), svcCtx)
 		resp, err := l.Structure(&req)
 		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
+			response.Error(w, err)
 		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
+			response.Json(w, resp)
 		}
 	}
 }
