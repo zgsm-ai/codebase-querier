@@ -1,0 +1,419 @@
+log_dir: "/tmp/logs"
+languages:
+  - name: typescript
+    detection_files: ["tsconfig.json"]
+    index:
+      name: scip-typescript
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "index"
+            - "--cwd"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--infer-tsconfig"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: javascript
+    detection_files: ["package.json"]
+    index:
+      name: scip-typescript
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "index"
+            - "--cwd"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--infer-tsconfig"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: go
+    detection_files: ["go.mod", "go.work"]
+    index:
+      name: scip-go
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "--output"
+            - "__outputPath__/index.scip"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: java
+    detection_files: ["pom.xml", "build.gradle"]
+    build_tools:
+      - name: maven
+        detection_files: ["pom.xml"]
+        priority: 10
+        build_commands:
+          - base: "docker"
+            args: 
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "verify"
+              - "--batch-mode"
+              - "--fail-never"
+              - "-DskipTests"
+              - "--offline"
+              - "-T"
+              - "8"
+            env:
+              - "IMAGE=${IMAGE}"
+      - name: gradle
+        detection_files: ["build.gradle"]
+        priority: 20
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "--offline"
+              - "--continue"
+              - "--no-tests"
+              - "--parallel"
+              - "--max-workers"
+              - "8"
+              - "--no-interactive"
+            env:
+              - "IMAGE=${IMAGE}"
+    index:
+      name: scip-java
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "index"
+            - "--cwd"
+            - "__sourcePath__"
+            - "--targetroot"
+            - "__outputPath__/build"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--"
+            - "__buildArgs__"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: python
+    detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
+    build_tools:
+      - name: poetry
+        detection_files: ["poetry.lock", "pyproject.toml"]
+        priority: 10
+        build_commands: []
+      - name: pipenv
+        detection_files: ["Pipfile"]
+        priority: 20
+        build_commands: []
+      - name: pip
+        detection_files: ["requirements.txt"]
+        priority: 30
+        build_commands: []
+    index:
+      name: scip-python
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "index"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--cwd"
+            - "__sourcePath__"
+            - "--project-version"
+            - "1"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: ruby
+    detection_files: ["Gemfile"]
+    index:
+      name: scip-ruby
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "--dir"
+            - "__sourcePath__"
+            - "--max-threads"
+            - "32"
+            - "--index-file"
+            - "__outputPath__/index.scip"
+            - "--gem-metadata"
+            - "ruby@v0.0.1"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: dotnet
+    detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+    index:
+      name: scip-dotnet
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "index"
+            - "--output"
+            - "__outputPath__/index.scip"
+            - "--working-directory"
+            - "__sourcePath__"
+            - "--skip-dotnet-restore"
+            - "True"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: c
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+            env:
+              - "IMAGE=${IMAGE}"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+            env:
+              - "IMAGE=${IMAGE}"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+            env:
+              - "IMAGE=${IMAGE}"
+    index:
+      name: scip-clang
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "--compdb-path"
+            - "__outputPath__/build/compile_commands.json"
+            - "--index-output-path"
+            - "__outputPath__/index.scip"
+            - "-j"
+            - "$(nproc)"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: cpp
+    detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
+    build_tools:
+      - name: cmake
+        detection_files: ["CMakeLists.txt"]
+        priority: 10
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "-B"
+              - "build"
+              - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+              - "-S"
+              - "__sourcePath__"
+              - "-B"
+              - "__outputPath__/build/"
+            env:
+              - "IMAGE=${IMAGE}"
+      - name: make
+        detection_files: ["Makefile"]
+        priority: 20
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "--output"
+              - "__outputPath__/build/compile_commands.json"
+              - "--"
+              - "make"
+              - "-C"
+              - "__sourcePath__"
+              - "-j"
+              - "$(nproc)"
+            env:
+              - "IMAGE=${IMAGE}"
+      - name: autoconf
+        detection_files: ["configure", "Configure"]
+        priority: 30
+        build_commands:
+          - base: "docker"
+            args:
+              - "run"
+              - "--rm"
+              - "-v"
+              - "__sourcePath__:__sourcePath__"
+              - "-e"
+              - "IMAGE=${IMAGE}"
+              - "${IMAGE}"
+              - "-c"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+            env:
+              - "IMAGE=${IMAGE}"
+    index:
+      name: scip-clang
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "--compdb-path"
+            - "__outputPath__/build/compile_commands.json"
+            - "--index-output-path"
+            - "__outputPath__/index.scip"
+            - "-j"
+            - "$(nproc)"
+          env:
+            - "IMAGE=${IMAGE}"
+
+  - name: rust
+    detection_files: ["Cargo.toml"]
+    index:
+      name: scip-rust
+      commands:
+        - base: "docker"
+          args:
+            - "run"
+            - "--rm"
+            - "-v"
+            - "__sourcePath__:__sourcePath__"
+            - "-e"
+            - "IMAGE=${IMAGE}"
+            - "${IMAGE}"
+            - "scip"
+            - "__sourcePath__"
+            - "--output"
+            - "__outputPath__/index.scip"
+          env:
+            - "IMAGE=${IMAGE}"
+            - "CARGO_NET_OFFLINE=true"
+            - "NUM_JOBS=32"
+            - "CARGO_BUILD_JOBS=32"

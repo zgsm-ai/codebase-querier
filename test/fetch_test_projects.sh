@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 目标目录设置为脚本所在目录下的testdata
+# 目标目录
 TARGET_DIR="/tmp/projects"
 mkdir -p ${TARGET_DIR}
 
