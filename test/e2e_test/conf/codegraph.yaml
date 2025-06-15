@@ -97,6 +97,7 @@ languages:
               - "--batch-mode"
               - "--fail-never"
               - "-DskipTests"
+              - "--offline"
               - "-T"
               - "8"
       - name: gradle
@@ -121,6 +122,7 @@ languages:
               - "--output"
               - "__outputPath__/index.scip"
               - "--"
+              - "--offline"
               - "--continue"
               - "--no-tests"
               - "--parallel"
