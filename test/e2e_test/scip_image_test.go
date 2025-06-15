@@ -21,7 +21,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	}
 	logx.DisableStat()
 	basePath := "/tmp/projects/"
-	svcCtx := api_test.InitSvcCtx()
+	svcCtx := api_test.InitSvcCtx("/root/projects/codebase-indexer/etc/conf.yaml")
 	codegraphConfig := config.MustLoadCodegraphConfig("./config/")
 	generator := scip.NewIndexGenerator(codegraphConfig, svcCtx.CodebaseStore)
 	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Minute*10)
