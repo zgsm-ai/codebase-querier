@@ -25,10 +25,6 @@ func getSvcCtx(ctx context.Context) *svc.ServiceContext {
 }
 func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	// 运行 ../fetch_test_projects.sh 拉取开源项目用于测试
-	// 运行docker, 设置环境变量 IMAGE=zgsm/scip-base:latest
-	if os.Getenv("IMAGE") == "" {
-		panic("please set env IMAGE")
-	}
 	logx.DisableStat()
 
 	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Minute*10)
@@ -39,23 +35,89 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	defer cancelFunc()
 	basePath := "/tmp/projects/"
 	testcases := []struct {
+		Name     string
 		Language string
 		Project  string
 		wantErr  error
 	}{
 		{
-			Language: "go",
-			Project:  "kubernetes",
+			Name:     "typescript",
+			Language: "typescript",
+			Project:  "TypeScript",
+			wantErr:  nil,
+		},
+		{
+			Name:     "javascript",
+			Language: "javascript",
+			Project:  "vue",
+			wantErr:  nil,
+		},
+		//{
+		//	Name:     "go",
+		//	Language: "go",
+		//	Project:  "kubernetes",
+		//	wantErr:  nil,
+		//},
+		{
+			Name:     "java maven",
+			Language: "java",
+			Project:  "hadoop",
+			wantErr:  nil,
+		},
+		{
+			Name:     "java gradle",
+			Language: "java",
+			Project:  "spring-boot",
+			wantErr:  nil,
+		},
+		{
+			Name:     "python",
+			Language: "python",
+			Project:  "django",
+			wantErr:  nil,
+		},
+		{
+			Name:     "ruby",
+			Language: "ruby",
+			Project:  "vagrant",
+			wantErr:  nil,
+		},
+		{
+			Name:     "csharp",
+			Language: "csharp",
+			Project:  "mono",
+			wantErr:  nil,
+		},
+		{
+			Name:     "c cmake",
+			Language: "c",
+			Project:  "netdata",
+			wantErr:  nil,
+		},
+		{
+			Name:     "cpp",
+			Language: "cpp",
+			Project:  "opencv",
+			wantErr:  nil,
+		},
+		{
+			Name:     "rust",
+			Language: "rust",
+			Project:  "rust",
 			wantErr:  nil,
 		},
 	}
 	for _, tc := range testcases {
 		codebasePath := filepath.Join(basePath, tc.Language, tc.Project)
-		t.Logf("start to testing %s codebase %s", tc.Language, codebasePath)
+		t.Logf("start to testing %s codebase %s", tc.Name, codebasePath)
 		err := generator.Generate(timeout, codebasePath)
 		assert.ErrorIs(t, err, tc.wantErr)
-		assert.FileExists(t, filepath.Join(codebasePath, ".shenma", "index.scip"), "file index.scip not found")
-		t.Logf("testing %s codebase %s done", tc.Language, codebasePath)
+		indeFilePath := filepath.Join(codebasePath, ".shenma", "index.scip")
+		assert.FileExists(t, indeFilePath, "file index.scip not found")
+		fileInfo, err := os.Stat(indeFilePath)
+		assert.NoError(t, err, "file index.scip not found")
+		assert.True(t, fileInfo.Size() > 100*1024, "file index.scip is empty") // 一般大项目index至少大于 100KB
+		t.Logf("testing %s codebase %s done", tc.Name, codebasePath)
 		t.Log("---------------------------------------------------------------")
 	}
 }
