@@ -21,15 +21,15 @@ var clientPath = "/tmp/test/test-project"
 const codebasePath = "\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f52249a98afbe95b824f815917" // your local repo path
 const codebaseID = 2
 
-func InitSvcCtx(configPath string) *svc.ServiceContext {
-	if configPath == "" {
-		configPath = filepath.Join(basePath, "etc/conf.yaml")
+func InitSvcCtx(ctx context.Context, c *config.Config) *svc.ServiceContext {
+	if c.Host == "" {
+		c = new(config.Config)
+		configPath := filepath.Join(basePath, "etc/conf.yaml")
+		conf.MustLoad(configPath, &c, conf.UseEnv())
+		c.IndexTask.GraphTask.ConfFile = filepath.Join(basePath, "etc/codegraph.yaml")
 	}
-	ctx := context.Background()
-	var c config.Config
-	conf.MustLoad(configPath, &c, conf.UseEnv())
-	c.IndexTask.GraphTask.ConfFile = filepath.Join(basePath, "etc/codegraph.yaml")
-	svcCtx, err := svc.NewServiceContext(ctx, c)
+
+	svcCtx, err := svc.NewServiceContext(ctx, *c)
 	if err != nil {
 		panic(err)
 	}

@@ -3,9 +3,11 @@ package e2e
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/test/api_test"
 	"os"
 	"path/filepath"
@@ -13,6 +15,14 @@ import (
 	"time"
 )
 
+func getSvcCtx(ctx context.Context) *svc.ServiceContext {
+	var c config.Config
+	projectPath := "/root/projects/codebase-indexer"
+	configPath := filepath.Join(projectPath, "etc/conf.yaml")
+	conf.MustLoad(configPath, &c, conf.UseEnv())
+	c.IndexTask.GraphTask.ConfFile = filepath.Join(projectPath, "test/e2e_test/codegraph.yaml")
+	return api_test.InitSvcCtx(ctx, &c)
+}
 func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	// 运行 ../fetch_test_projects.sh 拉取开源项目用于测试
 	// 运行docker, 设置环境变量 IMAGE=zgsm/scip-base:latest
@@ -20,12 +30,14 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		panic("please set env IMAGE=")
 	}
 	logx.DisableStat()
-	basePath := "/tmp/projects/"
-	svcCtx := api_test.InitSvcCtx("/root/projects/codebase-indexer/etc/conf.yaml")
+
+	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Minute*10)
+	svcCtx := getSvcCtx(timeout)
+
 	codegraphConfig := config.MustLoadCodegraphConfig("./config/")
 	generator := scip.NewIndexGenerator(codegraphConfig, svcCtx.CodebaseStore)
-	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancelFunc()
+	basePath := "/tmp/projects/"
 	testcases := []struct {
 		Language string
 		Project  string

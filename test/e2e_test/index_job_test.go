@@ -17,8 +17,9 @@ func TestIndexJobRun(t *testing.T) {
 		panic("please set env INDEX_NODE=1")
 	}
 	logx.DisableStat()
-	serviceContext := api_test.InitSvcCtx("")
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx := context.Background()
+	serviceContext := api_test.InitSvcCtx(ctx, nil)
+	ctx, cancelFunc := context.WithTimeout(ctx, time.Minute*5)
 	defer cancelFunc()
 	indexJob, err := job.NewIndexJob(ctx, serviceContext)
 	assert.NoError(t, err)
