@@ -1,6 +1,6 @@
 log_dir: "/tmp/logs"
 variables:
-  __image__: "codegraph/codegraph:latest"
+  __image__: "zgsm/scip-base:latest"
 languages:
   - name: typescript
     detection_files: ["tsconfig.json"]
