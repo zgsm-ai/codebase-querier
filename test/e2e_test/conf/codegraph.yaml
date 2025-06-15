@@ -16,6 +16,8 @@ languages:
             - "-w"
             - "__sourcePath__"
             - "__image__"
+            - "node"
+            - "--max-old-space-size=16000"
             - "scip-typescript"
             - "index"
             - "--cwd"
