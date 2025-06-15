@@ -26,8 +26,8 @@ func getSvcCtx(ctx context.Context) *svc.ServiceContext {
 func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	// 运行 ../fetch_test_projects.sh 拉取开源项目用于测试
 	// 运行docker, 设置环境变量 IMAGE=zgsm/scip-base:latest
-	if os.Getenv("IMAGE") == "=" {
-		panic("please set env IMAGE=")
+	if os.Getenv("IMAGE") == "" {
+		panic("please set env IMAGE")
 	}
 	logx.DisableStat()
 

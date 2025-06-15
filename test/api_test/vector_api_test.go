@@ -18,14 +18,14 @@ import (
 
 func setup(syncId int32) error {
 
-	svcCtx := InitSvcCtx()
+	ctx := context.Background()
+	svcCtx := InitSvcCtx(ctx, nil)
 	msg := &types.CodebaseSyncMessage{
 		SyncID:       syncId,
 		CodebaseID:   codebaseID,
 		CodebasePath: codebasePath,
 		SyncTime:     time.Now(),
 	}
-	ctx := context.Background()
 	// 本次同步的元数据列表
 	syncFileModeMap, _, err := svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, msg.CodebasePath)
 	if err != nil {

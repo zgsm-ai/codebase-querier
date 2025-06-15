@@ -191,7 +191,7 @@ func TestFileUpload(t *testing.T) {
 	// Prepare test data
 	opts := fileTestOptions{
 		ClientId:      "test-client-123",
-		ClientPath:    "G:\\tmp\\projects\\go\\kubernetes",
+		ClientPath:    "F:\\tmp\\projects\\go\\kubernetes",
 		CodebaseName:  "kubernetes",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 	}
@@ -211,7 +211,7 @@ func TestFileDelete(t *testing.T) {
 	// Prepare test data with delete operation
 	opts := fileTestOptions{
 		ClientId:      "test-client-123",
-		ClientPath:    "G:\\tmp\\projects\\go\\kubernetes",
+		ClientPath:    "F:\\tmp\\projects\\go\\kubernetes",
 		CodebaseName:  "kubernetes",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 		DeleteFileList: []string{
@@ -220,9 +220,10 @@ func TestFileDelete(t *testing.T) {
 			"cluster/gce/gci/apiserver_kms_test.go",
 		},
 	}
-	svcCtx := InitSvcCtx()
+	ctx := context.Background()
+	svcCtx := InitSvcCtx(ctx, nil)
 	// Get the real codebase path from database
-	codebase, err := svcCtx.Querier.Codebase.FindByClientIdAndPath(context.Background(), opts.ClientId, opts.ClientPath)
+	codebase, err := svcCtx.Querier.Codebase.FindByClientIdAndPath(ctx, opts.ClientId, opts.ClientPath)
 	assert.NoError(t, err)
 	assert.NotNil(t, codebase)
 
