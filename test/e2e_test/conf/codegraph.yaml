@@ -414,6 +414,8 @@ languages:
             - "NUM_JOBS=32"
             - "-e"
             - "CARGO_BUILD_JOBS=32"
+            - "-e"
+            - "RUSTUP_AUTO_INSTALL=0"
             - "__image__"
             - "rust-analyzer"
             - "scip"
