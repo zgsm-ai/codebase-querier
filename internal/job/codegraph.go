@@ -58,13 +58,20 @@ func NewCodegraphProcessor(ctx context.Context,
 
 func (t *codegraphProcessor) Process() error {
 	t.logger.Infof("start to execute codegraph processor %v", t.msg)
-
+	defer t.graphStore.Close()
+	var wait sync.WaitGroup
 	// 启动一个协程去将所有文件的结构提取处理
-	go t.parseCodeStructure()
+	go func() {
+		wait.Add(1)
+		defer wait.Done()
+		t.parseCodeStructure()
+	}()
 
 	start := time.Now()
 
 	err := func(t *codegraphProcessor) error {
+		wait.Add(1)
+		defer wait.Done()
 		if err := t.initTaskHistory(taskTypeCodegraph); err != nil {
 			return err
 		}
@@ -88,6 +95,8 @@ func (t *codegraphProcessor) Process() error {
 
 		return nil
 	}(t)
+
+	wait.Wait()
 
 	if t.handleIfTaskFailed(err) {
 		return err

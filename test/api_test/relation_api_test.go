@@ -15,29 +15,22 @@ import (
 )
 
 func TestRelationQuery(t *testing.T) {
-	// init data
-	syncId := int32(time.Now().Unix())
-	err := setup(syncId)
-	if err != nil {
-		panic(err)
-	}
-
 	// Prepare test data
 	req := types.RelationQueryOptions{
-		ClientId:       clientId,
-		CodebasePath:   clientPath,
-		FilePath:       "internal/logic/relation.go",
-		StartLine:      1,
+		ClientId:       "test-client-123",
+		CodebasePath:   "tmp\\projects\\go\\kubernetes",
+		FilePath:       "pkg/auth/authorizer/abac/abac.go",
+		StartLine:      59,
 		StartColumn:    1,
-		EndLine:        10,
+		EndLine:        59,
 		EndColumn:      50,
-		SymbolName:     "RelationLogic",
+		SymbolName:     "NewFromFile",
 		IncludeContent: 1,
 		MaxLayer:       2,
 	}
 
 	// Send request to local service
-	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/codegraph/relation?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&startColumn=%d&endLine=%d&endColumn=%d&symbolName=%s&includeContent=%d&maxLayer=%d",
+	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/search/relation?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&startColumn=%d&endLine=%d&endColumn=%d&symbolName=%s&includeContent=%d&maxLayer=%d",
 		baseURL,
 		req.ClientId,
 		url.QueryEscape(req.CodebasePath),

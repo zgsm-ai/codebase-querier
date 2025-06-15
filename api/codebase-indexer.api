@@ -106,7 +106,7 @@
 			isDir bool `json:"isDir,omitempty"`          // 是否为目录
 			path string `json:"path"`
 			size int64 `json:"size,omitempty"`           // 仅文件有大小
-			Name string `json:"Language"`                // 节点名称
+			Name string `json:"language"`                // 节点名称
 			ModTime string `json:"modTime,omitempty"` // 修改时间（可选）
 			children []*TreeNode `json:"children,omitempty"`
 		}

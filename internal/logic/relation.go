@@ -62,11 +62,12 @@ func (l *RelationLogic) Relation(req *types.RelationQueryOptions) (resp *types.R
 		return nil, err
 	}
 	codebasePath := codebase.Path
-
+	// todo concurrency control
 	graphStore, err := codegraph.NewBadgerDBGraph(l.ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
 	}
+	defer graphStore.Close()
 	nodes, err := graphStore.Query(l.ctx, req)
 	if err != nil {
 		return nil, err

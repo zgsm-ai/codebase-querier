@@ -15,22 +15,16 @@ import (
 )
 
 func TestStructureQuery(t *testing.T) {
-	// init data
-	syncId := int32(time.Now().Unix())
-	err := setup(syncId)
-	if err != nil {
-		panic(err)
-	}
 
 	// Prepare test data
 	req := types.StructureRequest{
-		ClientId:     clientId,
-		CodebasePath: clientPath,
-		FilePath:     "internal/logic/relation.go",
+		ClientId:     "test-client-123",
+		CodebasePath: "tmp\\projects\\go\\kubernetes",
+		FilePath:     "pkg/auth/authorizer/abac/abac.go",
 	}
 
 	// Send request to local service
-	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/codegraph/structure?clientId=%s&codebasePath=%s&filePath=%s",
+	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/files/structure?clientId=%s&codebasePath=%s&filePath=%s",
 		baseURL,
 		req.ClientId,
 		url.QueryEscape(req.CodebasePath),
