@@ -44,5 +44,5 @@ func (l *GetFileContentLogic) GetFileContent(req *types.FileContentRequest) ([]b
 	if utils.IsBlank(codebasePath) {
 		return nil, errors.New("codebase path is empty")
 	}
-	return l.svcCtx.CodebaseStore.Read(l.ctx, codebasePath, relativePath, types.ReadOptions{})
+	return l.svcCtx.CodebaseStore.Read(l.ctx, codebasePath, relativePath, types.ReadOptions{StartLine: req.StartLine, EndLine: req.EndLine})
 }

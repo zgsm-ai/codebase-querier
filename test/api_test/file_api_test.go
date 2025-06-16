@@ -256,32 +256,69 @@ func TestFileDelete(t *testing.T) {
 }
 
 func TestFileRead(t *testing.T) {
-	// Prepare test data
-	req := types.FileContentRequest{
-		ClientId:     "test-client-123",
-		CodebasePath: "/tmp/test/test-project",
-		FilePath:     "src/main.go",
-		StartLine:    1,
-		EndLine:      3,
+	testCases := []struct {
+		Name       string
+		ClientId   string
+		ClientPath string
+		FilePath   string
+		StartLine  int
+		EndLine    int
+		WantErr    error
+		WantLines  int
+	}{
+
+		{
+			ClientId:   "test-client-123",
+			ClientPath: "/tmp/test/test-project",
+			FilePath:   "src/main.go",
+			StartLine:  1,
+			EndLine:    3,
+			WantErr:    nil,
+			WantLines:  3,
+		},
+		{
+			ClientId:   "test-client-123",
+			ClientPath: "/tmp/test/test-project",
+			FilePath:   "src/main.go",
+			StartLine:  0,
+			EndLine:    -1,
+			WantErr:    nil,
+			WantLines:  55,
+		},
 	}
 
-	// Send request to local service
-	url := fmt.Sprintf("%s/codebase-indexer/api/v1/files/content?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&endLine=%d",
-		baseURL, req.ClientId, req.CodebasePath, req.FilePath, req.StartLine, req.EndLine)
+	for _, tt := range testCases {
+		t.Run(tt.Name, func(t *testing.T) {
+			// Prepare test data
+			req := types.FileContentRequest{
+				ClientId:     tt.ClientId,
+				CodebasePath: tt.ClientPath,
+				FilePath:     tt.FilePath,
+				StartLine:    tt.StartLine,
+				EndLine:      tt.EndLine,
+			}
 
-	client := &http.Client{
-		Timeout: time.Second * 10,
+			// Send request to local service
+			url := fmt.Sprintf("%s/codebase-indexer/api/v1/files/content?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&endLine=%d",
+				baseURL, req.ClientId, req.CodebasePath, req.FilePath, req.StartLine, req.EndLine)
+
+			client := &http.Client{
+				Timeout: time.Second * 20,
+			}
+			resp, err := client.Get(url)
+			defer resp.Body.Close()
+			assert.ErrorIs(t, err, tt.WantErr)
+			if tt.WantErr != nil {
+				return
+			}
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			// Read and verify response
+			content, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Contains(t, string(content), "package main")
+			assert.Len(t, strings.Split(string(content), "\n"), tt.WantLines)
+		})
 	}
-	resp, err := client.Get(url)
-	assert.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Read and verify response
-	content, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-	assert.Contains(t, string(content), "package main")
 }
 
 func TestCodebaseHash(t *testing.T) {

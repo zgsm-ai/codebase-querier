@@ -2,6 +2,7 @@ package codebase
 
 import (
 	"archive/zip"
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -558,11 +559,43 @@ func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath 
 	}
 
 	fullPath := filepath.Join(codebasePath, filePath)
-	content, err := os.ReadFile(fullPath)
+
+	// 如果StartLine <= 0，设置为1
+	if option.StartLine <= 0 {
+		option.StartLine = 1
+	}
+
+	// 打开文件
+	file, err := os.Open(fullPath)
 	if err != nil {
 		return nil, err
 	}
-	return content, nil
+	defer file.Close()
+
+	// 创建scanner来读取行
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	lineNum := 1
+
+	// 读取行
+	for scanner.Scan() {
+		// 如果当前行号大于等于StartLine，则添加到结果中
+		if lineNum >= option.StartLine {
+			// 如果EndLine > 0 且当前行号大于EndLine，则退出
+			if option.EndLine > 0 && lineNum > option.EndLine {
+				break
+			}
+			lines = append(lines, scanner.Text())
+		}
+		lineNum++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// 将结果转换为字节数组
+	return []byte(strings.Join(lines, "\n")), nil
 }
 
 func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir string, walkFn WalkFunc, walkOpts WalkOptions) error {
