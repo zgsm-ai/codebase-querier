@@ -158,7 +158,7 @@ languages:
               - "-C"
               - "__sourcePath__"
               - "-j"
-              - "$(nproc)"
+              - "16"
       - name: autoconf
         detection_files: ["configure", "Configure"]
         priority: 30
@@ -166,7 +166,7 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
     index:
       name: scip-clang
       commands:
@@ -177,7 +177,7 @@ languages:
             - "--index-output-path"
             - "__outputPath__/index.scip"
             - "-j"
-            - "$(nproc)"
+            - "16"
 
   - name: cpp
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
@@ -208,7 +208,7 @@ languages:
               - "-C"
               - "__sourcePath__"
               - "-j"
-              - "$(nproc)"
+              - "16"
       - name: autoconf
         detection_files: ["configure", "Configure"]
         priority: 30
@@ -216,7 +216,7 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
     index:
       name: scip-clang
       commands:
@@ -227,7 +227,7 @@ languages:
             - "--index-output-path"
             - "__outputPath__/index.scip"
             - "-j"
-            - "$(nproc)"
+            - "16"
 
   - name: rust
     detection_files: ["Cargo.toml"]
