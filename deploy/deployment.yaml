@@ -99,7 +99,7 @@ data:
       Rotation: daily # split by day or size
 
   codegraph.yaml: |
-    log_dir: "/app/logs"
+    log_dir: "/tmp/logs"
     languages:
       - name: typescript
         detection_files: ["tsconfig.json"]
@@ -215,8 +215,8 @@ data:
                 - "--gem-metadata"
                 - "ruby@v0.0.1"
     
-      - name: dotnet
-        detection_files: [".sln", "*.csproj", "*.fsproj", "*.vbproj"]
+      - name: csharp
+        detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
         index:
           name: scip-dotnet
           commands:
@@ -345,6 +345,7 @@ data:
                 - "CARGO_NET_OFFLINE=true"
                 - "NUM_JOBS=32"
                 - "CARGO_BUILD_JOBS=32"
+                - "RUSTUP_AUTO_INSTALL=0"
 ---
 apiVersion: apps/v1
 kind: Deployment

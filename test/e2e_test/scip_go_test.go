@@ -3,7 +3,6 @@ package e2e_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
@@ -17,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	scipindex "github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	tparser "github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -110,7 +110,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 			CodebasePath: codebasePath,
 			Content:      bytes,
 		}, structure.ParseOptions{IncludeContent: false})
-		if err != nil && !errors.Is(err, structure.ErrExtNotFound) && !errors.Is(err, structure.ErrLangConfNotFound) {
+		if err != nil && !tparser.IsNotSupportedFileError(err) {
 			return err
 		}
 		if parsed == nil {
