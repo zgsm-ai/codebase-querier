@@ -38,7 +38,7 @@ func mustLoad() {
 			panic(fmt.Sprintf("failed to read structure query file %s for %s: %v", queryPath, lang.Language, err))
 		}
 		query, queryError := sitter.NewQuery(sitterLang, string(structureQueryContent))
-		if queryError != nil && parser.IsRealErr(queryError) {
+		if queryError != nil && parser.IsRealQueryErr(queryError) {
 			panic(fmt.Sprintf("failed to parse structure file %s query %s : %v", queryPath, lang.Language, queryError))
 		}
 		query.Close()

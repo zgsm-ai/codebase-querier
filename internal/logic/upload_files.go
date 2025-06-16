@@ -189,8 +189,8 @@ func (l *SyncFilesLogic) initCodebaseIfNotExists(userUid, clientId, clientPath, 
 		}
 	}
 	if codebase == nil {
-		logx.Errorf("init codebase failed, clientId:%s, clientPath:%s, codebase: %v",
-			codebase, clientId, clientPath)
+		logx.Errorf("init codebase failed, clientId:%s, clientPath:%s, codebase model is nil",
+			clientId, clientPath)
 		return nil, fmt.Errorf("init codebase failed")
 	}
 

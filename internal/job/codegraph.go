@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -150,6 +151,12 @@ func (t *codegraphProcessor) parseCodeStructure() {
 					Name:         filepath.Base(path),
 					Content:      content,
 				}, structure.ParseOptions{IncludeContent: false})
+
+				if parser.IsNotSupportedFileError(err) {
+					atomic.AddInt32(&t.ignoreFileCnt, 1)
+					return nil
+				}
+
 				if err != nil {
 					atomic.AddInt32(&t.failedFileCnt, 1)
 					return fmt.Errorf("parse file failed: %w", err)

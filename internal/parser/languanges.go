@@ -15,6 +15,7 @@ import (
 	sitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	sitterscala "github.com/tree-sitter/tree-sitter-scala/bindings/go"
 	sittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
+	"path/filepath"
 )
 
 // Language represents a programming language.
@@ -151,8 +152,8 @@ func GetLanguageConfigs() []*LanguageConfig {
 	return languageConfigs
 }
 
-// GetLanguageConfigByExt 根据文件扩展名获取语言配置
-func GetLanguageConfigByExt(ext string) *LanguageConfig {
+// getLanguageConfigByExt 根据文件扩展名获取语言配置
+func getLanguageConfigByExt(ext string) *LanguageConfig {
 	for _, config := range languageConfigs {
 		for _, supportedExt := range config.SupportedExts {
 			if supportedExt == ext {
@@ -161,4 +162,16 @@ func GetLanguageConfigByExt(ext string) *LanguageConfig {
 		}
 	}
 	return nil
+}
+
+func GetLangConfigByFilePath(path string) (*LanguageConfig, error) {
+	ext := filepath.Ext(path)
+	if ext == "" {
+		return nil, ErrFileExtNotFound
+	}
+	langConf := getLanguageConfigByExt(ext)
+	if langConf == nil {
+		return nil, ErrLangConfNotFound
+	}
+	return langConf, nil
 }

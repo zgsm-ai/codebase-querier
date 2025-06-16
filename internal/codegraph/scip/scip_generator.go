@@ -122,7 +122,7 @@ func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath
 		}
 
 		// 使用parser包中的语言配置
-		langConfig := parser.GetLanguageConfigByExt(ext)
+		langConfig, _ := parser.GetLangConfigByFilePath(walkCtx.RelativePath)
 		if langConfig != nil {
 			languageStats[string(langConfig.Language)]++
 		} else {

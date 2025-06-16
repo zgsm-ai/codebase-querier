@@ -3,13 +3,13 @@ package job
 import (
 	"context"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zgsm-ai/codebase-indexer/internal/embedding"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -77,7 +77,7 @@ func (t *embeddingProcessor) Process() error {
 				case types.FileOpAdd, types.FileOpModify:
 					chunks, err := t.splitFile(&types.SyncFile{Path: path})
 					if err != nil {
-						if errors.Is(err, embedding.ErrUnSupportedFileExt) || errors.Is(err, embedding.ErrFileNoExt) {
+						if parser.IsNotSupportedFileError(err) {
 							atomic.AddInt32(&t.ignoreFileCnt, 1)
 							return nil
 						}

@@ -5,8 +5,11 @@ import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// IsRealErr prevent *sitter.QueryError(nil)
-func IsRealErr(err error) bool {
+var ErrFileExtNotFound = errors.New("file extension not found")
+var ErrLangConfNotFound = errors.New("langConf not found")
+
+// IsRealQueryErr prevent *sitter.QueryError(nil)
+func IsRealQueryErr(err error) bool {
 	if err != nil {
 		var qe *sitter.QueryError
 		if errors.As(err, &qe) && qe == nil {
@@ -15,4 +18,8 @@ func IsRealErr(err error) bool {
 		return true
 	}
 	return false
+}
+
+func IsNotSupportedFileError(err error) bool {
+	return errors.Is(err, ErrFileExtNotFound) || errors.Is(err, ErrLangConfNotFound)
 }

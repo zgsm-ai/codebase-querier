@@ -1,9 +1,7 @@
 package embedding
 
 import (
-	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 
 	"github.com/tiktoken-go/tokenizer"
@@ -11,9 +9,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
-
-var ErrUnSupportedFileExt error = errors.New("unsupported file ext")
-var ErrFileNoExt error = errors.New("file has no ext")
 
 type CodeSplitter struct {
 	tokenizer    tokenizer.Codec
@@ -40,15 +35,10 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 
 // Split 将代码文件分割成多个代码块
 func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
-	// 确定文件语言
-	ext := filepath.Ext(codeFile.Path)
-	if ext == "" {
-		return nil, ErrFileNoExt
-	}
 
-	language := parser.GetLanguageConfigByExt(ext)
-	if language == nil {
-		return nil, ErrUnSupportedFileExt
+	language, err := parser.GetLangConfigByFilePath(codeFile.Path)
+	if err != nil {
+		return nil, err
 	}
 	sitterParser := sitter.NewParser()
 
