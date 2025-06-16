@@ -329,7 +329,7 @@ func TestProjectTree(t *testing.T) {
 		codebasePath: "/tmp/test/test-project",
 		depth:        3,
 		includeFiles: 1,
-		subDir:       "",
+		subDir:       "src",
 	}
 
 	// Send request to local service

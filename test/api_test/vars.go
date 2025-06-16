@@ -22,7 +22,7 @@ const codebasePath = "\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f5
 const codebaseID = 2
 
 func InitSvcCtx(ctx context.Context, c *config.Config) *svc.ServiceContext {
-	if c.Host == "" {
+	if c == nil {
 		c = new(config.Config)
 		configPath := filepath.Join(basePath, "etc/conf.yaml")
 		conf.MustLoad(configPath, &c, conf.UseEnv())

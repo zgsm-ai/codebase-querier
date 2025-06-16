@@ -399,7 +399,7 @@ func (l *localCodebase) List(ctx context.Context, codebasePath string, dir strin
 	return files, nil
 }
 
-func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir string, option types.TreeOptions) ([]*types.TreeNode, error) {
+func (l *localCodebase) Tree(ctx context.Context, codebasePath string, subDir string, option types.TreeOptions) ([]*types.TreeNode, error) {
 	if codebasePath == types.EmptyString {
 		return nil, errors.New("codebasePath cannot be empty")
 	}
@@ -414,9 +414,9 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 
 	// 使用 map 来构建目录树
 	nodeMap := make(map[string]*types.TreeNode)
-	fullPath := filepath.Join(codebasePath, dir)
+	walkBasePath := filepath.Join(codebasePath, subDir)
 
-	err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(walkBasePath, func(absFilePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -429,20 +429,25 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			return nil
 		}
 
-		// 获取相对路径
-		relPath, err := filepath.Rel(fullPath, path)
+		// 获取相对路径，相对codebasePath
+		codeBaseRelativePath, err := filepath.Rel(codebasePath, absFilePath)
+		if err != nil {
+			return err
+		}
+		// 获取相对路径，相对codebasePath + subdir
+		walkBaseRelativePath, err := filepath.Rel(walkBasePath, absFilePath)
 		if err != nil {
 			return err
 		}
 
 		// 应用过滤规则
-		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(relPath) {
+		if option.ExcludePattern != nil && option.ExcludePattern.MatchString(walkBaseRelativePath) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if option.IncludePattern != nil && !option.IncludePattern.MatchString(relPath) {
+		if option.IncludePattern != nil && !option.IncludePattern.MatchString(walkBaseRelativePath) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -451,7 +456,8 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 
 		// 检查深度限制
 		if option.MaxDepth > 0 {
-			depth := len(strings.Split(relPath, string(filepath.Separator)))
+			// 相对根+subdir 的depth
+			depth := len(strings.Split(walkBaseRelativePath, string(filepath.Separator)))
 			if depth > option.MaxDepth {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -464,17 +470,17 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 		var parts []string
 
 		// 如果是根目录本身，跳过
-		if relPath == "." {
+		if walkBaseRelativePath == "." || utils.PathEqual(walkBaseRelativePath, subDir) {
 			return nil
 		}
 
 		// 如果是根目录下的文件或目录
-		if !strings.Contains(relPath, string(filepath.Separator)) {
-			currentPath = relPath
-			parts = []string{relPath}
+		if !strings.Contains(walkBaseRelativePath, string(filepath.Separator)) {
+			currentPath = walkBaseRelativePath
+			parts = []string{walkBaseRelativePath}
 		} else {
 			// 处理子目录中的文件和目录
-			parts = strings.Split(relPath, string(filepath.Separator))
+			parts = strings.Split(walkBaseRelativePath, string(filepath.Separator))
 			currentPath = parts[0]
 		}
 
@@ -503,7 +509,7 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 			node := &types.TreeNode{
 				FileInfo: types.FileInfo{
 					Name:    part,
-					Path:    currentPath,
+					Path:    codeBaseRelativePath,
 					IsDir:   isLast && info.IsDir(),
 					Size:    size,
 					ModTime: info.ModTime(),
@@ -586,7 +592,7 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 			return nil
 		}
 
-		relativePath, err := filepath.Rel(fullDir, filePath)
+		relativePath, err := filepath.Rel(codebasePath, filePath)
 		if err != nil && !walkOpts.IgnoreError {
 			return err
 		}

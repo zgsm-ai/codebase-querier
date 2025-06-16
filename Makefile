@@ -26,3 +26,4 @@ build:
 .PHONY:docker
 docker:
 	docker build -t zgsm/codebase-indexer:$(TAG) .
+	docker push zgsm/codebase-indexer:$(TAG)

@@ -10,7 +10,6 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	cache "github.com/zgsm-ai/codebase-indexer/internal/store/cache"
 )
 
 // MockStore is a mock of Store interface.
@@ -79,10 +78,10 @@ func (mr *MockStoreMockRecorder) Delete(ctx, key interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockStore) Get(ctx context.Context, key string) (*cache.T, error) {
+func (m *MockStore) Get(ctx context.Context, key string) (*any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, key)
-	ret0, _ := ret[0].(*cache.T)
+	ret0, _ := ret[0].(*any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -124,7 +123,7 @@ func (mr *MockStoreMockRecorder) GetVersions(ctx, key interface{}) *gomock.Call 
 }
 
 // Set mocks base method.
-func (m *MockStore) Set(ctx context.Context, key string, value cache.T, expiration time.Duration) error {
+func (m *MockStore) Set(ctx context.Context, key string, value any, expiration time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", ctx, key, value, expiration)
 	ret0, _ := ret[0].(error)
