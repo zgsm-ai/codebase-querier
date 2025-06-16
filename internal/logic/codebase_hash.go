@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"gorm.io/gorm"
 
@@ -33,18 +32,19 @@ func NewCompareCodebaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CodebaseHash) GetCodebaseHash(req *types.CodebaseHashRequest) (resp *types.CodebaseHashResponseData, err error) {
-	clientCodebasePath := req.CodebasePath
+	clientPath := req.CodebasePath
 	clientId := req.ClientId
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		logx.Errorf("clientId: %s, clientPath: %s, codebase not exists in database", clientId, clientPath)
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	codebasePath := codebase.Path
 	if utils.IsBlank(codebasePath) {
-		return nil, errors.New("codebase path is empty")
+		return nil, errors.New("illegal database data, codebase path is empty")
 	}
 
 	// 构建响应数据
@@ -85,7 +85,8 @@ func (l *CodebaseHash) GetCodebaseHash(req *types.CodebaseHashRequest) (resp *ty
 		return nil
 	}, codebasestore.WalkOptions{IgnoreError: true, ExcludePrefixes: []string{"."}})
 
-	if err != nil {
+	// 不存在，返回空即可
+	if err != nil && !errors.Is(err, codebasestore.ErrCodebasePathNotExists) {
 		return nil, fmt.Errorf("failed to walk directory: %w", err)
 	}
 

@@ -39,7 +39,7 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		return nil, nil, err
 	}
 	if !exists {
-		return nil, nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, nil, ErrCodebasePathNotExists
 	}
 	// filepath -> mode(add delete modify)
 	// 根据元数据获取代码文件列表
@@ -97,7 +97,7 @@ func (l *localCodebase) Open(ctx context.Context, codebasePath string, filePath 
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 	return os.Open(filepath.Join(codebasePath, filePath))
 }
@@ -108,7 +108,7 @@ func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 	return os.RemoveAll(codebasePath)
 }
@@ -159,7 +159,7 @@ func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	// 构建完整路径
@@ -193,7 +193,7 @@ func (l *localCodebase) Unzip(ctx context.Context, codebasePath string, source i
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	// Create a temporary file to store the zip content
@@ -272,7 +272,7 @@ func (l *localCodebase) Delete(ctx context.Context, codebasePath string, path st
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -289,7 +289,7 @@ func (l *localCodebase) MkDirs(ctx context.Context, codebasePath string, path st
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -322,7 +322,7 @@ func (l *localCodebase) Stat(ctx context.Context, codebasePath string, path stri
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 
 	fullPath := filepath.Join(codebasePath, path)
@@ -351,7 +351,7 @@ func (l *localCodebase) List(ctx context.Context, codebasePath string, dir strin
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 
 	fullPath := filepath.Join(codebasePath, dir)
@@ -409,7 +409,7 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, subDir st
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 
 	// 使用 map 来构建目录树
@@ -554,7 +554,7 @@ func (l *localCodebase) Read(ctx context.Context, codebasePath string, filePath 
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 
 	fullPath := filepath.Join(codebasePath, filePath)
@@ -575,7 +575,7 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	fullDir := filepath.Join(codebasePath, dir)
@@ -661,7 +661,7 @@ func (l *localCodebase) BatchDelete(ctx context.Context, codebasePath string, pa
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return ErrCodebasePathNotExists
 	}
 
 	var wg sync.WaitGroup

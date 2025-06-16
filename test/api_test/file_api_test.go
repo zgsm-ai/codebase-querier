@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	url2 "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -284,38 +285,76 @@ func TestFileRead(t *testing.T) {
 }
 
 func TestCodebaseHash(t *testing.T) {
-	// Prepare test data
-	req := types.CodebaseHashRequest{
-		ClientId:     "test-client-123",
-		CodebasePath: "/tmp/test/test-project",
+	testCases := []struct {
+		Name         string
+		clientId     string
+		clientPath   string
+		wantErr      error
+		assertResult func(t *testing.T, r *http.Response)
+	}{
+		{
+			Name:       "exists",
+			clientId:   "test-client-123",
+			clientPath: "/tmp/test/test-project",
+			wantErr:    nil,
+			assertResult: func(t *testing.T, resp *http.Response) {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+				var result response.Response[types.CodebaseHashResponseData]
+				err := json.NewDecoder(resp.Body).Decode(&result)
+				assert.NoError(t, err)
+				// Verify response contains expected files
+				foundFiles := make(map[string]bool)
+				for _, item := range result.Data.CodebaseHash {
+					foundFiles[filepath.Base(item.Path)] = true
+				}
+
+				expectedFiles := []string{"main.go", "go.mod"}
+				for _, file := range expectedFiles {
+					assert.True(t, foundFiles[file], "Expected file %s in response", file)
+				}
+			},
+		},
+		{
+			Name:       "not exists",
+			clientId:   "not-exists",
+			clientPath: "not exists",
+			wantErr:    nil,
+			assertResult: func(t *testing.T, resp *http.Response) {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+				var result response.Response[types.CodebaseHashResponseData]
+				err := json.NewDecoder(resp.Body).Decode(&result)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, len(result.Data.CodebaseHash))
+			},
+		},
 	}
 
-	// Send request to local service
-	url := fmt.Sprintf("%s/codebase-indexer/api/v1/codebases/hash?clientId=%s&codebasePath=%s",
-		baseURL, req.ClientId, req.CodebasePath)
+	for _, tt := range testCases {
+		t.Run(tt.Name, func(t *testing.T) {
+			// Prepare test data
+			req := types.CodebaseHashRequest{
+				ClientId:     tt.clientId,
+				CodebasePath: tt.clientPath,
+			}
 
-	client := &http.Client{
-		Timeout: time.Second * 10,
+			// Send request to local service
+			url := fmt.Sprintf("%s/codebase-indexer/api/v1/codebases/hash?clientId=%s&codebasePath=%s",
+				baseURL, req.ClientId, url2.QueryEscape(req.CodebasePath))
+			client := &http.Client{
+				Timeout: time.Second * 10,
+			}
+			resp, err := client.Get(url)
+			assert.NoError(t, err)
+			defer resp.Body.Close()
+			assert.ErrorIs(t, tt.wantErr, err)
+			tt.assertResult(t, resp)
+
+		})
+
 	}
-	resp, err := client.Get(url)
-	assert.NoError(t, err)
-	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var result response.Response[types.CodebaseHashResponseData]
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	assert.NoError(t, err)
-	// Verify response contains expected files
-	foundFiles := make(map[string]bool)
-	for _, item := range result.Data.CodebaseHash {
-		foundFiles[filepath.Base(item.Path)] = true
-	}
-
-	expectedFiles := []string{"main.go", "go.mod"}
-	for _, file := range expectedFiles {
-		assert.True(t, foundFiles[file], "Expected file %s in response", file)
-	}
 }
 
 func TestProjectTree(t *testing.T) {

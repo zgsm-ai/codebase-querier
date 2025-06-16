@@ -47,7 +47,7 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		return nil, nil, err
 	}
 	if !exists {
-		return nil, nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, nil, ErrCodebasePathNotExists
 	}
 	// filepath -> mode(add delete modify)
 	// 根据元数据获取代码文件列表
@@ -103,7 +103,7 @@ func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath 
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("codebase path %s does not exist", codebasePath)
+		return nil, ErrCodebasePathNotExists
 	}
 	objectName := filepath.Join(codebasePath, filePath)
 	return m.client.GetObject(ctx, m.cfg.Minio.Bucket, objectName, minio.GetObjectOptions{})
