@@ -165,7 +165,7 @@ func (m *minioCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	return &types.Codebase{
-		FullPath: codebasePath,
+		BasePath: codebasePath,
 	}, nil
 }
 

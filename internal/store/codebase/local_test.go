@@ -36,7 +36,7 @@ func setupTestLocalCodebase(t *testing.T) (Store, string) {
 		t.Fatalf("Init failed: %v", err)
 	}
 
-	return codebase, path.FullPath
+	return codebase, path.BasePath
 }
 
 func TestLocalCodebase_Init(t *testing.T) {
@@ -92,7 +92,7 @@ func TestLocalCodebase_Init(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got.FullPath)
+				assert.Equal(t, tt.want, got.BasePath)
 			}
 		})
 	}
@@ -138,7 +138,7 @@ func TestLocalCodebase_Add(t *testing.T) {
 				// 先初始化路径
 				result, err := codebase.Init(context.Background(), tt.clientId, tt.codebasePath)
 				assert.NoError(t, err)
-				fullPath = result.FullPath
+				fullPath = result.BasePath
 			} else {
 				fullPath = tt.codebasePath
 			}

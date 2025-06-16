@@ -21,9 +21,11 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
+const testBasePath = "G:\\"
+
 func TestCreateZipFile(t *testing.T) {
 
-	clientLocalPath := "G:\\tmp\\projects\\go\\kubernetes"
+	clientLocalPath := filepath.Join(testBasePath, "\\tmp\\projects\\go\\kubernetes")
 	testZip, err := createTestZip(zipOptions{
 		ClientId:        clientId,
 		ProjectPath:     clientLocalPath,
@@ -191,7 +193,7 @@ func TestFileUpload(t *testing.T) {
 	// Prepare test data
 	opts := fileTestOptions{
 		ClientId:      "test-client-123",
-		ClientPath:    "F:\\tmp\\projects\\go\\kubernetes",
+		ClientPath:    filepath.Join(testBasePath, "\\tmp\\projects\\go\\kubernetes"),
 		CodebaseName:  "kubernetes",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 	}
@@ -211,7 +213,7 @@ func TestFileDelete(t *testing.T) {
 	// Prepare test data with delete operation
 	opts := fileTestOptions{
 		ClientId:      "test-client-123",
-		ClientPath:    "F:\\tmp\\projects\\go\\kubernetes",
+		ClientPath:    filepath.Join(testBasePath, "\\tmp\\projects\\go\\kubernetes"),
 		CodebaseName:  "kubernetes",
 		ExtraMetadata: `{"language": "go", "version": "1.0.0"}`,
 		DeleteFileList: []string{

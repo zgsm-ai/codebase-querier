@@ -11,7 +11,7 @@ import (
 type Store interface {
 	// Init initializes a new codebase for a client
 	// Returns the initialized codebase or an error if initialization fails
-	Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error)
+	Init(ctx context.Context, clientId string, clientPath string) (*types.Codebase, error)
 
 	// Add adds a file to the codebase
 	// source: the source reader containing the file content

@@ -145,7 +145,7 @@
 		get /api/v1/files/content (FileContentRequest)
 
 		// 文件上传
-		@handler uploadFiles
+		@handler syncFiles
 		post /api/v1/files/upload (FileUploadRequest)
 
 		@handler codebaseTree

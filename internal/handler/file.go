@@ -28,7 +28,7 @@ func getFileContentHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-func uploadFilesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func syncFilesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req types.FileUploadRequest
 		if err := httpx.Parse(r, &req); err != nil {
@@ -36,8 +36,8 @@ func uploadFilesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		l := logic.NewUploadFilesLogic(r.Context(), svcCtx)
-		err := l.UploadFiles(&req, r)
+		l := logic.NewSyncFilesLogic(r.Context(), svcCtx)
+		err := l.SyncFiles(&req, r)
 		if err != nil {
 			response.Error(w, err)
 		} else {

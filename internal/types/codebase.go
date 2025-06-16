@@ -6,7 +6,7 @@ import (
 )
 
 type Codebase struct {
-	FullPath string
+	BasePath string
 }
 
 const CodebaseIndexDir = ".shenma"

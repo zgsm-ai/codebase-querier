@@ -33,7 +33,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			{
 				Method:  http.MethodPost,
 				Path:    "/api/v1/files/upload",
-				Handler: uploadFilesHandler(serverCtx),
+				Handler: syncFilesHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),

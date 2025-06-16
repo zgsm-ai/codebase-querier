@@ -17,7 +17,7 @@ type CodeChunk struct {
 	CodebaseName string
 	Language     string
 	Content      []byte // The actual code snippet
-	FilePath     string // The FullPath to the file this block came from
+	FilePath     string // The BasePath to the file this block came from
 	Range        []int  // start from zero, startLine, startColumn, endLine, endColumn
 	TokenCount   int    // The number of tokens in this block
 }

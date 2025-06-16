@@ -140,10 +140,10 @@ func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	// 创建目录
 	err = os.MkdirAll(codebasePath, defaultLocalDirMode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create codebase directory: %v", err)
+		return nil, fmt.Errorf("failed to create codebase directory: %w", err)
 	}
 
-	return &types.Codebase{FullPath: codebasePath}, nil
+	return &types.Codebase{BasePath: codebasePath}, nil
 }
 
 func (l *localCodebase) Add(ctx context.Context, codebasePath string, source io.Reader, target string) error {

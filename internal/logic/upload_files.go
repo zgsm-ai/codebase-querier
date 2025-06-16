@@ -19,41 +19,31 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type UploadFilesLogic struct {
+type SyncFilesLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewUploadFilesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UploadFilesLogic {
-	return &UploadFilesLogic{
+func NewSyncFilesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SyncFilesLogic {
+	return &SyncFilesLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Request) error {
+func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request) error {
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 	codebaseName := req.CodebaseName
 	metadata := req.ExtraMetadata
 	l.Logger.Debugf("uploadFiles request: %s, %s, %s", clientId, clientPath, codebaseName)
-
-	// 判断是否存在
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-
 	userUid := utils.ParseJWTUserInfo(r, l.svcCtx.Config.Auth.UserInfoHeader)
-	// 存在 则 直接插入， 不存在则需要先init
-	// 数据库唯一索引
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		codebase, err = l.initCodebase(clientId, clientPath, userUid, codebaseName, metadata)
-		if err != nil {
-			return err
-		}
+	// 判断代码库数据库记录、存储路径是否存在
+	codebase, err := l.initCodebaseIfNotExists(userUid, clientId, clientPath, codebaseName, metadata)
+	if err != nil {
+		return err
 	}
 
 	// Parse multipart form
@@ -164,6 +154,49 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
 	return nil
 }
 
+func (l *SyncFilesLogic) initCodebaseIfNotExists(userUid, clientId, clientPath, codebaseName, metadata string) (*model.Codebase, error) {
+	var codebase *model.Codebase
+	var err error
+	// 判断数据库记录是否存在 ，状态为 active
+	codebase, err = l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// 存在 则 直接插入， 不存在则需要先init
+	// 数据库唯一索引
+	// 连数据库记录都不存在，那存储理论上也不存在
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		storeCodebase, err := l.svcCtx.CodebaseStore.Init(l.ctx, clientId, clientPath)
+		if err != nil {
+			logx.Errorf("init codebase store err:%v", err)
+			return nil, fmt.Errorf("init codebase err:%w", err)
+		}
+		codebase, err = l.saveCodebase(clientId, clientPath, storeCodebase.BasePath, userUid, codebaseName, metadata)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// 检查存储路径是否存在
+	exists, existsErr := l.svcCtx.CodebaseStore.Exists(l.ctx, codebase.Path, types.EmptyString)
+	if existsErr != nil {
+		logx.Errorf("check codebase exists err:%v", existsErr)
+	}
+	if existsErr != nil || !exists {
+		if _, err := l.svcCtx.CodebaseStore.Init(l.ctx, clientId, clientPath); err != nil {
+			logx.Errorf("init codebase store err:%v", err)
+			return nil, fmt.Errorf("init codebase err:%w", err)
+		}
+	}
+	if codebase == nil {
+		logx.Errorf("init codebase failed, clientId:%s, clientPath:%s, codebase: %v",
+			codebase, clientId, clientPath)
+		return nil, fmt.Errorf("init codebase failed")
+	}
+
+	return codebase, nil
+}
+
 /**
  * @Description: 初始化 codebase
  * @receiver l
@@ -175,25 +208,21 @@ func (l *UploadFilesLogic) UploadFiles(req *types.FileUploadRequest, r *http.Req
  * @return error
  * @return bool
  */
-func (l *UploadFilesLogic) initCodebase(clientId string, clientPath string, userUId string,
-	codebaseName string, metadata string) (*model.Codebase, error) {
+func (l *SyncFilesLogic) saveCodebase(clientId, clientPath, codebasePath, userUId,
+	codebaseName, metadata string) (*model.Codebase, error) {
 	// 不存在则插入
 	// clientId + codebasepath 为联合唯一索引
 	// 保存到数据库
-	codebaseStore, err := l.svcCtx.CodebaseStore.Init(l.ctx, clientId, clientPath)
-	if err != nil {
-		return nil, err
-	}
 	codebaseModel := &model.Codebase{
 		ClientID:      clientId,
 		UserID:        userUId,
 		Name:          codebaseName,
 		ClientPath:    clientPath,
 		Status:        string(model.CodebaseStatusActive),
-		Path:          codebaseStore.FullPath,
+		Path:          codebasePath,
 		ExtraMetadata: &metadata,
 	}
-	err = l.svcCtx.Querier.Codebase.WithContext(l.ctx).Save(codebaseModel)
+	err := l.svcCtx.Querier.Codebase.WithContext(l.ctx).Save(codebaseModel)
 	if err != nil && !errors.Is(err, gorm.ErrDuplicatedKey) {
 		// 不是 唯一索引冲突
 		return nil, err

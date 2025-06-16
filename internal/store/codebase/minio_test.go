@@ -71,7 +71,7 @@ func setupTestMinioCodebase(t *testing.T) (*mocks.MockMinioClient, *minioCodebas
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
-	return mockClient, codebase, path.FullPath
+	return mockClient, codebase, path.BasePath
 }
 
 func TestMinioCodebase_Init(t *testing.T) {
@@ -136,7 +136,7 @@ func TestMinioCodebase_Init(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got.FullPath)
+				assert.Equal(t, tt.want, got.BasePath)
 			}
 		})
 	}

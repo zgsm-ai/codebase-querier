@@ -139,7 +139,7 @@ func (c codebase) replaceDB(db *gorm.DB) codebase {
 }
 
 func (c codebase) FindByClientIdAndPath(ctx context.Context, clientId string, clientPath string) (*model.Codebase, error) {
-	return c.codebaseDo.WithContext(ctx).Where(c.ClientID.Value(clientId), c.ClientPath.Value(clientPath)).First()
+	return c.codebaseDo.WithContext(ctx).Where(c.ClientID.Value(clientId), c.ClientPath.Value(clientPath), c.Status.Value(string(model.CodebaseStatusActive))).First()
 }
 
 type codebaseDo struct{ gen.DO }

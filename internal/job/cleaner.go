@@ -57,7 +57,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 
 		logx.Infof("cleaner get lock %s successfully, start.", cleanLockKey)
 
-		expireDays := time.Duration(24*svcCtx.Config.Cleaner.CodebaseExpireDays) * time.Hour
+		expireDays := time.Duration(svcCtx.Config.Cleaner.CodebaseExpireDays) * 24 * time.Hour
 		expiredDate := time.Now().Add(-expireDays)
 
 		codebases, err := findExpiredCodebases(ctx, svcCtx, expiredDate)
@@ -70,14 +70,12 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			// todo clean codebase
 			err = svcCtx.CodebaseStore.DeleteAll(ctx, cb.Path)
 			if err != nil {
-				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
-				continue
+				logx.Errorf("cleaner drop codebase store %s error: %v", cb.Path, err)
 			}
 			// todo clean vector store
 			err = svcCtx.VectorStore.DeleteCodeChunks(ctx, []*types.CodeChunk{{CodebaseId: cb.ID}}, vector.Options{})
 			if err != nil {
-				logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
-				continue
+				logx.Errorf("cleaner drop codebase store %s error: %v", cb.Path, err)
 			}
 			// todo clean graph store ， clean codebase alerady delete all files， now graph store is in codebase store.
 			//graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
@@ -89,8 +87,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			//}
 			// 清理redis cache
 			if err = svcCtx.Cache.CleanExpiredVersions(ctx, utils.FormatInt(int64(cb.ID))); err != nil {
-				logx.Errorf("clean codebase store %s error: %v", cb.Path, err)
-				continue
+				logx.Errorf("cleaner clean codebase store %s error: %v", cb.Path, err)
 			}
 
 			// todo update db status
@@ -98,12 +95,12 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).
 				Where(svcCtx.Querier.Codebase.ID.Eq(cb.ID)).
 				Updates(cb); err != nil {
-				logx.Errorf("update codebase %s status expired error: %v", cb.Path, err)
+				logx.Errorf("cleaner update codebase %s status expired error: %v", cb.Path, err)
 				return
 			}
-			logx.Infof("clean codebase successfully: %s", cb.Path)
+			logx.Infof("cleaner clean codebase successfully: %s", cb.Path)
 		}
-		logx.Infof("clean codebases end, cnt: %d", len(codebases))
+		logx.Infof("cleaner clean codebases end, cnt: %d", len(codebases))
 	})
 	if err != nil {
 		return nil, err
