@@ -8,7 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
-	"github.com/zgsm-ai/codebase-indexer/test/api_test"
+	api "github.com/zgsm-ai/codebase-indexer/test/api_test"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +21,7 @@ func getSvcCtx(ctx context.Context) *svc.ServiceContext {
 	configPath := filepath.Join(projectPath, "etc/conf.yaml")
 	conf.MustLoad(configPath, &c, conf.UseEnv())
 	c.IndexTask.GraphTask.ConfFile = filepath.Join(projectPath, "test/e2e_test/conf/codegraph.yaml")
-	return api_test.InitSvcCtx(ctx, &c)
+	return api.InitSvcCtx(ctx, &c)
 }
 func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	// 运行 ../fetch_test_projects.sh 拉取开源项目用于测试

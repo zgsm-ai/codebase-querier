@@ -19,7 +19,7 @@ func TestIndexJobRun(t *testing.T) {
 	}
 	logx.DisableStat()
 	ctx := context.Background()
-	serviceContext := api_test.InitSvcCtx(ctx, nil)
+	serviceContext := api.InitSvcCtx(ctx, nil)
 	ctx, cancelFunc := context.WithTimeout(ctx, time.Minute*5)
 	defer cancelFunc()
 	indexJob, err := job.NewIndexJob(ctx, serviceContext)

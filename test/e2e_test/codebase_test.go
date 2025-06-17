@@ -64,7 +64,7 @@ func TestTree(t *testing.T) {
 
 	ctx := context.Background()
 
-	svcCtx := api_test.InitSvcCtx(ctx, nil)
+	svcCtx := api.InitSvcCtx(ctx, nil)
 
 	localCodebase, err := codebase.NewLocalCodebase(ctx, svcCtx.Config.CodeBaseStore)
 	assert.NoError(t, err)
