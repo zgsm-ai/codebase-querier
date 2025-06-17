@@ -16,8 +16,8 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const fillContentLayerLimit = 2
-const fillContentLayerNodeLimit = 10
+const relationFillContentLayerLimit = 2
+const relationFillContentLayerNodeLimit = 10
 const maxLayerLimit = 5
 
 type RelationLogic struct {
@@ -76,7 +76,7 @@ func (l *RelationLogic) Relation(req *types.RelationRequest) (resp *types.Relati
 		return nil, err
 	}
 	// 填充content，控制层数和节点数
-	if err = l.fillContent(l.ctx, nodes, codebasePath, fillContentLayerLimit, fillContentLayerNodeLimit); err != nil {
+	if err = l.fillContent(l.ctx, nodes, codebasePath, relationFillContentLayerLimit, relationFillContentLayerNodeLimit); err != nil {
 		logx.Errorf("fill graph query contents err:%v", err)
 	}
 

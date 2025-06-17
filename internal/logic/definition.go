@@ -16,6 +16,7 @@ import (
 )
 
 const maxLineLimit = 500
+const definitionFillContentNodeLimit = 100
 
 type DefinitionLogic struct {
 	logx.Logger
@@ -79,7 +80,7 @@ func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.
 		return nil, err
 	}
 	// 填充content，控制层数和节点数
-	if err = l.fillContent(l.ctx, nodes, codebasePath, fillContentLayerNodeLimit); err != nil {
+	if err = l.fillContent(l.ctx, nodes, codebasePath, definitionFillContentNodeLimit); err != nil {
 		logx.Errorf("fill definition query contents err:%v", err)
 	}
 
@@ -94,7 +95,7 @@ func (l *DefinitionLogic) fillContent(ctx context.Context, nodes []*types.Defini
 	}
 	// 处理当前层的节点
 	for i, node := range nodes {
-		// 如果超过每层节点限制，跳过剩余节点
+		// 如果超过节点限制，跳过剩余节点
 		if i >= nodeLimit {
 			break
 		}
