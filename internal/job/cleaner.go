@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
@@ -90,7 +91,8 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				logx.Errorf("cleaner clean codebase store %s error: %v", cb.Path, err)
 			}
 
-			// todo update db status
+			// todo update db status， 唯一索引的存在(client_id、codebasePath)，给client_id 加个唯一后缀，避免冲突。
+			cb.ClientID = cb.ClientID + "@" + uuid.New().String()
 			cb.Status = string(model.CodebaseStatusExpired)
 			if _, err = svcCtx.Querier.Codebase.WithContext(ctx).
 				Where(svcCtx.Querier.Codebase.ID.Eq(cb.ID)).
