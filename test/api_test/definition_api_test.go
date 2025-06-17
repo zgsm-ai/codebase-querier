@@ -14,38 +14,28 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-func TestRelationQuery(t *testing.T) {
+func TestQueryDefinition(t *testing.T) {
 	// Prepare test data
 	req := types.RelationRequest{
-		ClientId:       "test-client-123",
-		CodebasePath:   "G:\\tmp\\projects\\go\\kubernetes",
-		FilePath:       "pkg/auth/authorizer/abac/abac.go",
-		StartLine:      59,
-		StartColumn:    1,
-		EndLine:        59,
-		EndColumn:      50,
-		SymbolName:     "NewFromFile",
-		IncludeContent: 1,
-		MaxLayer:       2,
+		ClientId:     "test-client-123",
+		CodebasePath: "G:\\tmp\\projects\\go\\kubernetes",
+		FilePath:     "pkg/auth/authorizer/abac/abac.go",
+		StartLine:    59,
+		EndLine:      119,
 	}
 
 	// Send request to local service
-	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/search/relation?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&startColumn=%d&endLine=%d&endColumn=%d&symbolName=%s&includeContent=%d&maxLayer=%d",
+	reqUrl := fmt.Sprintf("%s/codebase-indexer/api/v1/search/definition?clientId=%s&codebasePath=%s&filePath=%s&startLine=%d&endLine=%d",
 		baseURL,
 		req.ClientId,
 		url.QueryEscape(req.CodebasePath),
 		req.FilePath,
 		req.StartLine,
-		req.StartColumn,
 		req.EndLine,
-		req.EndColumn,
-		url.QueryEscape(req.SymbolName),
-		req.IncludeContent,
-		req.MaxLayer,
 	)
 
 	client := &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 30,
 	}
 	resp, err := client.Get(reqUrl)
 	assert.NoError(t, err)
@@ -55,7 +45,7 @@ func TestRelationQuery(t *testing.T) {
 
 	body, _ := io.ReadAll(resp.Body)
 	// Parse response
-	var result response.Response[types.RelationResponseData]
+	var result response.Response[types.DefinitionResponseData]
 	err = json.Unmarshal(body, &result)
 	assert.NoError(t, err)
 
@@ -71,13 +61,9 @@ func TestRelationQuery(t *testing.T) {
 		// Verify the structure of the first result
 		firstNode := result.Data.List[0]
 		assert.NotEmpty(t, firstNode.FilePath)
-		assert.NotEmpty(t, firstNode.SymbolName)
-		assert.NotEmpty(t, firstNode.NodeType)
 		assert.NotNil(t, firstNode.Position)
+		assert.NotNil(t, firstNode.Content)
+		assert.NotEmpty(t, firstNode.Content)
 
-		// If includeContent is 1, verify content is present
-		if req.IncludeContent == 1 {
-			assert.NotEmpty(t, firstNode.Content)
-		}
 	}
 }

@@ -75,15 +75,11 @@
                     "isDir",
                     "path",
                     "size",
-                    "Language",
+                    "language",
                     "modTime",
                     "children"
                   ],
                   "properties": {
-                    "Language": {
-                      "description": "节点名称",
-                      "type": "string"
-                    },
                     "children": {
                       "type": "array",
                       "items": {
@@ -93,15 +89,11 @@
                           "isDir",
                           "path",
                           "size",
-                          "Language",
+                          "language",
                           "modTime",
                           "children"
                         ],
                         "properties": {
-                          "Language": {
-                            "description": "节点名称",
-                            "type": "string"
-                          },
                           "children": {
                             "type": "array",
                             "items": {
@@ -111,6 +103,10 @@
                           "isDir": {
                             "description": "是否为目录",
                             "type": "boolean"
+                          },
+                          "language": {
+                            "description": "节点名称",
+                            "type": "string"
                           },
                           "modTime": {
                             "description": "修改时间（可选）",
@@ -132,6 +128,10 @@
                     "isDir": {
                       "description": "是否为目录",
                       "type": "boolean"
+                    },
+                    "language": {
+                      "description": "节点名称",
+                      "type": "string"
                     },
                     "modTime": {
                       "description": "修改时间（可选）",
@@ -394,8 +394,8 @@
         "schemes": [
           "https"
         ],
-        "summary": "uploadFiles",
-        "operationId": "uploadFiles",
+        "summary": "syncFiles",
+        "operationId": "syncFiles",
         "parameters": [
           {
             "type": "string",
@@ -430,6 +430,125 @@
           "200": {
             "description": "",
             "schema": {}
+          }
+        }
+      }
+    },
+    "/codebase-indexer/api/v1/search/definition": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "definition",
+        "operationId": "definition",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "用户机器ID",
+            "name": "clientId",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "项目绝对路径",
+            "name": "codebasePath",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "文件相对路径",
+            "name": "filePath",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "开始行",
+            "name": "startLine",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "结束行",
+            "name": "endLine",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "list": {
+                  "description": "关系树列表",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "content",
+                      "type",
+                      "filePath",
+                      "position"
+                    ],
+                    "properties": {
+                      "content": {
+                        "description": "代码内容",
+                        "type": "string"
+                      },
+                      "filePath": {
+                        "description": "文件相对路径",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "节点名",
+                        "type": "string"
+                      },
+                      "position": {
+                        "description": "代码位置",
+                        "type": "object",
+                        "required": [
+                          "startLine",
+                          "startColumn",
+                          "endLine",
+                          "endColumn"
+                        ],
+                        "properties": {
+                          "endColumn": {
+                            "description": "结束列（从1开始）",
+                            "type": "integer"
+                          },
+                          "endLine": {
+                            "description": "结束行（从1开始）",
+                            "type": "integer"
+                          },
+                          "startColumn": {
+                            "description": "开始列（从1开始）",
+                            "type": "integer"
+                          },
+                          "startLine": {
+                            "description": "开始行（从1开始）",
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "type": {
+                        "description": "节点类型",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -729,7 +848,7 @@
       }
     }
   },
-  "x-date": "2025-06-13 19:22:59",
+  "x-date": "2025-06-17 11:34:25",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

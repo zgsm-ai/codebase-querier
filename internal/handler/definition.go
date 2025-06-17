@@ -10,16 +10,16 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-func relationHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func definitionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.RelationRequest
+		var req types.DefinitionRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return
 		}
 
-		l := logic.NewRelationLogic(r.Context(), svcCtx)
-		resp, err := l.Relation(&req)
+		l := logic.NewDefinitionLogic(r.Context(), svcCtx)
+		resp, err := l.Definition(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {

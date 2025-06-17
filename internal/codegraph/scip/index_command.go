@@ -6,31 +6,29 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
-// commandExecutor handles command execution for SCIP indexing
-type commandExecutor struct {
+// CommandExecutor handles command execution for SCIP indexing
+type CommandExecutor struct {
 	workDir string
 	// build
-	buildCmds          []*exec.Cmd
-	indexCmds          []*exec.Cmd
+	BuildCmds          []*exec.Cmd
+	IndexCmds          []*exec.Cmd
 	indexFileLogWriter io.WriteCloser
 }
 
-// newCommandExecutor creates a new commandExecutor
+// newCommandExecutor creates a new CommandExecutor
 func newCommandExecutor(ctx context.Context,
 	workDir string,
 	indexTool *config.IndexTool,
 	buildTool *config.BuildTool,
 	logDir string,
-	placeHolders map[string]string) (*commandExecutor, error) {
+	placeHolders map[string]string) (*CommandExecutor, error) {
 	if workDir == "" {
 		return nil, fmt.Errorf("working dir is required")
 	}
@@ -41,14 +39,14 @@ func newCommandExecutor(ctx context.Context,
 	if err != nil {
 		logx.Errorf("failed to create index log writer: %v", err)
 	}
-	var logWriter io.Writer
+	var logWriter io.WriteCloser
 	if indexFileLogger != nil {
 		logWriter = indexFileLogger
 	}
-	return &commandExecutor{
+	return &CommandExecutor{
 		workDir:            workDir,
-		buildCmds:          buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
-		indexCmds:          buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
+		BuildCmds:          buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
+		IndexCmds:          buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
 		indexFileLogWriter: indexFileLogger,
 	}, nil
 }
@@ -113,7 +111,7 @@ func replacePlaceHolder(base string, placeHolders map[string]string) string {
 }
 
 // Execute executes a command string
-func (e *commandExecutor) Execute() error {
+func (e *CommandExecutor) Execute() error {
 	start := time.Now()
 	defer func() {
 		if e.indexFileLogWriter != nil {
@@ -128,7 +126,7 @@ func (e *commandExecutor) Execute() error {
 
 	var err error
 
-	for _, cmd := range e.buildCmds {
+	for _, cmd := range e.BuildCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute build command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
 			logx.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
@@ -140,7 +138,7 @@ func (e *commandExecutor) Execute() error {
 		}
 	}
 
-	for _, cmd := range e.indexCmds {
+	for _, cmd := range e.IndexCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
 			logx.Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
@@ -158,6 +156,6 @@ func (e *commandExecutor) Execute() error {
 	return err
 }
 
-func indexLogDir(baseDir string) string {
-	return filepath.Join(baseDir, types.CodebaseIndexDir, "logs")
+func (e *CommandExecutor) Close() error {
+	return e.indexFileLogWriter.Close()
 }

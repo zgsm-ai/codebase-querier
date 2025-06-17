@@ -58,7 +58,7 @@ var TestVar = "test"
 	if len(structure.Definitions) == 0 {
 		t.Fatal("no definitions found")
 	}
-	assert.NotEmpty(t, structure.Path)
+	assert.NotEmpty(t, structure.FilePath)
 	assert.Equal(t, "go", structure.Language)
 
 	// 预期的位置信息 (tree-sitter 使用从0开始的行列号)

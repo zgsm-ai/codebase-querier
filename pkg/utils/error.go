@@ -1,18 +1,15 @@
 package utils
 
-import (
-	"errors"
-	"strings"
-)
+const maxLen = 200
 
-func JoinErrors(errs []error) error {
-	if len(errs) == 0 {
-		return nil
+// TruncateError 截断错误信息，避免过长
+func TruncateError(err error) string {
+	if err == nil {
+		return ""
 	}
-	var b strings.Builder
-	for _, err := range errs {
-		b.WriteString(err.Error())
-		b.WriteString(",")
+	msg := err.Error()
+	if len(msg) <= maxLen {
+		return msg
 	}
-	return errors.New(b.String())
+	return msg[:maxLen] + "..."
 }

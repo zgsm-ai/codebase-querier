@@ -118,7 +118,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 		}
 		data = append(data, parsed)
 		return nil
-	}, codebase.WalkOptions{IgnoreError: true, ExcludePrefixes: []string{"vendor"}, IncludePrefixes: []string{"cmd"}, IncludeExts: []string{".go"}})
+	}, codebase.WalkOptions{IgnoreError: true, ExcludePrefixes: []string{"vendor"}, IncludePrefixes: []string{"pkg"}, IncludeExts: []string{".go"}})
 	t.Logf("parse time cost: %v seconds", time.Since(start).Seconds())
 	assert.NoError(t, err)
 	err = graph.BatchWriteCodeStructures(ctx, data)
@@ -144,7 +144,7 @@ func TestQueryBadgerDB(t *testing.T) {
 	// 4. 执行查询
 	targetPath := "cmd/kubeadm/app/util/endpoint.go"
 	t.Logf("\nQuerying for file: %s\n", targetPath)
-	references, err := graph.Query(ctx, &types.RelationQueryOptions{
+	references, err := graph.QueryRelation(ctx, &types.RelationRequest{
 		FilePath:   targetPath,
 		StartLine:  37,
 		EndLine:    37,

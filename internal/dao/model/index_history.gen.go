@@ -15,7 +15,7 @@ type IndexHistory struct {
 	ID                int32      `gorm:"column:id;primaryKey;autoIncrement:true;comment:Unique identifier for the index task history record" json:"id"`        // Unique identifier for the index task history record
 	SyncID            int32      `gorm:"column:sync_id;not null;comment:ID of the associated synchronization history record" json:"sync_id"`                   // ID of the associated synchronization history record
 	CodebaseID        int32      `gorm:"column:codebase_id;not null;comment:ID of the associated project repository" json:"codebase_id"`                       // ID of the associated project repository
-	CodebasePath      string     `gorm:"column:codebase_path;not null;comment:Path of the project repository" json:"codebase_path"`                            // Path of the project repository
+	CodebasePath      string     `gorm:"column:codebase_path;not null;comment:FilePath of the project repository" json:"codebase_path"`                            // FilePath of the project repository
 	CodebaseName      string     `gorm:"column:codebase_name;not null;comment:name of the project repository" json:"codebase_name"`                            // name of the project repository
 	TotalFileCount    *int32     `gorm:"column:total_file_count;comment:Total number of files" json:"total_file_count"`                                        // Total number of files
 	TotalSuccessCount *int32     `gorm:"column:total_success_count;comment:Total success number of files" json:"total_success_count"`                          // Total success number of files

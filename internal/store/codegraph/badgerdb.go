@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
 	"strings"
 	"time"
@@ -110,11 +111,11 @@ func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*cod
 	return wb.Flush()
 }
 
-// Query 实现查询接口
-func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error) {
+// QueryRelation 实现查询接口
+func (b BadgerDBGraph) QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error) {
 	startTime := time.Now()
 	defer func() {
-		logx.WithContext(ctx).Infof("Query execution time: %v", time.Since(startTime))
+		logx.WithContext(ctx).Infof("QueryRelation execution time: %d ms", time.Since(startTime).Milliseconds())
 	}()
 
 	// 1. 获取文档
@@ -199,8 +200,96 @@ func (b BadgerDBGraph) Query(ctx context.Context, opts *types.RelationQueryOptio
 	return res, nil
 }
 
-// findSymbolInDoc 在文档中查找指定名称的符号
-func (b BadgerDBGraph) findSymbolInDoc(doc *codegraphpb.Document, identifier string) *codegraphpb.Symbol {
+// QueryDefinition 查询定义
+func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error) {
+	startTime := time.Now()
+	defer func() {
+		logx.WithContext(ctx).Infof("QueryDefinition execution time: %d ms", time.Since(startTime).Milliseconds())
+	}()
+
+	// 1. 获取文档
+	var doc codegraphpb.Document
+	err := b.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(DocKey(opts.FilePath))
+		if err != nil {
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				return fmt.Errorf("document not found: %s", opts.FilePath)
+			}
+			return fmt.Errorf("failed to get document: %w", err)
+		}
+		return item.Value(func(val []byte) error {
+			return DeserializeDocument(val, &doc)
+		})
+	})
+	if err != nil {
+		logx.WithContext(ctx).Errorf("Failed to get document: %v", err)
+		return nil, err
+	}
+	queryStartLine := int32(opts.StartLine - 1)
+	queryEndLine := int32(opts.EndLine - 1)
+	var res []*types.DefinitionNode
+	foundSymbols := b.findSymbolInDocByLineRange(&doc, queryStartLine, queryEndLine)
+	// 去重, 如果range 出现过，则剔除
+	existedDefs := make(map[string]bool)
+	// 遍历，封装结果，取定义
+	for _, s := range foundSymbols {
+		// 本身是定义
+		if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
+			// 去掉本范围内的定义
+			if len(s.Range) > 0 && isInLinesRange(s.Range[0], queryStartLine, queryEndLine) {
+				continue
+			}
+			res = append(res, &types.DefinitionNode{
+				FilePath: s.Path,
+				Name:     s.Name,
+				Position: types.ToPosition(s.Range),
+			})
+
+			continue
+		} else if s.Role == codegraphpb.RelationType_RELATION_REFERENCE { // 引用
+			for _, r := range s.Relations {
+				// 引用的 relation 是定义
+				if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
+					// 如果已经访问过，就跳过
+					if isSymbolExists(r.FilePath, r.Range, existedDefs) {
+						continue
+					}
+					existedDefs[symbolMapKey(r.FilePath, r.Range)] = true
+					// 引用节点，加入node的children
+					res = append(res, &types.DefinitionNode{
+						FilePath: r.FilePath,
+						Name:     r.Name, //TODO r.Name 有时候是identifier，未处理
+						Position: types.ToPosition(r.Range),
+					})
+				}
+			}
+		} else {
+			logx.Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
+		}
+	}
+	//TODO  根据struct_doc 重新封装它的 position，变为范围。doc的range是单行。
+	if err := b.refillDefinitionRange(res); err != nil {
+		logx.Errorf("QueryDefinition:  refill definition range err:%v", utils.TruncateError(err))
+	}
+
+	return res, nil
+}
+
+func isInLinesRange(current, start, end int32) bool {
+	return current >= start-1 && current <= end-1
+}
+
+func isSymbolExists(filePath string, ranges []int32, state map[string]bool) bool {
+	key := symbolMapKey(filePath, ranges)
+	_, ok := state[key]
+	return ok
+}
+func symbolMapKey(filePath string, ranges []int32) string {
+	return filePath + "-" + utils.SliceToString(ranges)
+}
+
+// findSymbolInDocByIdentifier 在文档中查找指定名称的符号
+func (b BadgerDBGraph) findSymbolInDocByIdentifier(doc *codegraphpb.Document, identifier string) *codegraphpb.Symbol {
 	// TODO 使用Position 二分查找
 	for _, sym := range doc.Symbols {
 		if sym.Identifier == identifier {
@@ -210,7 +299,7 @@ func (b BadgerDBGraph) findSymbolInDoc(doc *codegraphpb.Document, identifier str
 	return nil
 }
 
-// findSymbolInDoc 在结构文件中符号在该范围的symbol
+// findSymbolInDocByIdentifier 在结构文件中符号在该范围的symbol
 func (b BadgerDBGraph) findSymbolInStruct(doc *codegraphpb.CodeStructure, position types.Position) *codegraphpb.Symbol {
 	line := position.StartLine
 	column := position.StartColumn
@@ -247,11 +336,6 @@ func (b BadgerDBGraph) findSymbolInStruct(doc *codegraphpb.CodeStructure, positi
 
 }
 
-// buildChildrenForNodes (Deprecated) - Replaced by buildChildrenRecursive
-func (b BadgerDBGraph) buildChildrenForNodes(nodes []*types.GraphNode, maxLayer int) {
-	// This function is no longer used.
-}
-
 // buildChildrenRecursive recursively builds the child nodes for a given GraphNode and its corresponding Symbol.
 func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer int) {
 	if maxLayer <= 0 || node == nil {
@@ -277,7 +361,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(node *types.GraphNode, maxLayer in
 		return
 	}
 
-	symbol := b.findSymbolInDoc(&document, identifier)
+	symbol := b.findSymbolInDocByIdentifier(&document, identifier)
 	if symbol == nil {
 		logx.Debugf("Symbol not found in document: path=%s, identifier=%s", symbolPath, identifier)
 		return
@@ -377,49 +461,8 @@ func (b BadgerDBGraph) findDocument(key []byte, message proto.Message) error {
 	return err
 }
 
-// func (b BadgerDBGraph) findDocument(relation any, relatedDoc *codegraphpb.Document,
-//
-//		relatedSymbol *codegraphpb.Symbol) (error, *codegraphpb.Symbol) {
-//		err := b.db.View(func(txn *badger.Txn) error {
-//			item, err := txn.Get(DocKey(relation.FilePath))
-//			if err != nil {
-//				if errors.Is(err, badger.ErrKeyNotFound) {
-//					return nil // Not finding the doc is not an error we should stop for
-//				}
-//				return err // Propagate other errors
-//			}
-//			return item.Value(func(val []byte) error {
-//				err = DeserializeDocument(val, relatedDoc)
-//				if err != nil {
-//					return err
-//				}
-//				// Document found, now try to find the specific symbol within it
-//				relatedSymbol = b.findSymbolInDoc(relatedDoc, relation.Name)
-//				// If relatedSymbol is still nil after finding the doc, that's unexpected but handled below
-//				return nil
-//			})
-//		})
-//		return err, relatedSymbol
-//	}
-//
-// Helper to map codegraphpb.RelationType to types.NodeType (string)
-func getGraphNodeTypeFromRelationType(relationType codegraphpb.RelationType) string {
-	switch relationType {
-	case codegraphpb.RelationType_RELATION_DEFINITION:
-		return string(types.NodeTypeDefinition)
-	case codegraphpb.RelationType_RELATION_TYPE_DEFINITION:
-		return string(types.NodeTypeDefinition) // Map type definition relation to NodeTypeDefinition
-	case codegraphpb.RelationType_RELATION_IMPLEMENTATION:
-		return string(types.NodeTypeImplementation)
-	case codegraphpb.RelationType_RELATION_REFERENCE:
-		return string(types.NodeTypeReference)
-	default:
-		return string(types.NodeTypeUnknown)
-	}
-}
-
 // querySymbolsByNameAndLine 通过 symbolName + startLine
-func (b BadgerDBGraph) querySymbolsByNameAndLine(doc *codegraphpb.Document, opts *types.RelationQueryOptions) []*codegraphpb.Symbol {
+func (b BadgerDBGraph) querySymbolsByNameAndLine(doc *codegraphpb.Document, opts *types.RelationRequest) []*codegraphpb.Symbol {
 	var nodes []*codegraphpb.Symbol
 	queryName := opts.SymbolName
 	// 根据名字和 行号， 找到symbol
@@ -438,7 +481,7 @@ func (b BadgerDBGraph) querySymbolsByNameAndLine(doc *codegraphpb.Document, opts
 }
 
 // querySymbolsByPosition 按位置查询 occurrence
-func (b BadgerDBGraph) querySymbolsByPosition(doc *codegraphpb.Document, opts *types.RelationQueryOptions) []*codegraphpb.Symbol {
+func (b BadgerDBGraph) querySymbolsByPosition(doc *codegraphpb.Document, opts *types.RelationRequest) []*codegraphpb.Symbol {
 	var nodes []*codegraphpb.Symbol
 	scipPosition, err := toScipPosition([]int32{int32(opts.StartLine), int32(opts.StartColumn)})
 	if err != nil {
@@ -496,7 +539,7 @@ func (b BadgerDBGraph) findSymbolInDocByRange(document *codegraphpb.Document, sy
 			logx.Debugf("findSymbolInDocByRange invalid range in doc:%s, less than 2: %v", s.Identifier, s.Range)
 			continue
 		}
-		// 开始行、TODO 列一致   这里，当前tree-sitter 捕获的是 整个函数体，而scip则是name，暂时先只通过行号处理（要确保local被过滤）
+		// 开始行、(TODO 列一致)   这里，当前tree-sitter 捕获的是 整个函数体，而scip则是name，暂时先只通过行号处理（要确保local被过滤）
 		if s.Range[0] == symbolRange[0] {
 			return s
 		}
@@ -522,4 +565,68 @@ func (b BadgerDBGraph) Delete(ctx context.Context, files []string) error {
 	err := b.db.DropPrefix(docKeys...)
 	logx.Debugf("docs delete end:%v", docKeys)
 	return err
+}
+
+func (b BadgerDBGraph) findSymbolInDocByLineRange(doc *codegraphpb.Document, startLine int32, endLine int32) []*codegraphpb.Symbol {
+	var res []*codegraphpb.Symbol
+	for _, s := range doc.Symbols {
+		// s
+		// 开始行
+		if len(s.Range) < 2 {
+			logx.Debugf("findSymbolInDocByLineRange invalid range in doc:%s, less than 2: %v", s.Identifier, s.Range)
+			continue
+		}
+		if s.Range[0] > endLine {
+			break
+		}
+		// 开始行、(TODO 列一致)   这里，当前tree-sitter 捕获的是 整个函数体，而scip则是name，暂时先只通过行号处理（要确保local被过滤）
+		if s.Range[0] >= startLine && s.Range[0] <= endLine {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
+func (b BadgerDBGraph) refillDefinitionRange(nodes []*types.DefinitionNode) error {
+	var errs []error
+	for _, n := range nodes {
+		line := n.Position.StartLine - 1
+		if line < 0 {
+			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s invalid line :%d, length less than 0", n.FilePath, n.Name, line))
+			continue
+		}
+		var structFile codegraphpb.CodeStructure
+		err := b.findDocument(StructKey(n.FilePath), &structFile)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s ,failed to find struct file for path %s: %v", n.FilePath, n.Name, line, err))
+			continue
+		}
+		if structFile.Path == types.EmptyString { // 没找到
+			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s ,struct file not found", n.FilePath, n.Name))
+			continue
+		}
+
+		// TODO 二分查找
+		var foundDef *codegraphpb.Definition
+		for _, d := range structFile.Definitions {
+			if len(d.Range) == 0 {
+				errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s , struct doc range length is 0", n.FilePath, n.Name))
+				continue
+			}
+			if d.Range[0] == int32(line) {
+				foundDef = d
+				break
+			}
+		}
+		if foundDef == nil { // 目前发现变量的定义会找不到
+			errs = append(errs, fmt.Errorf("refillDefinitionRange definition not found by line %d in doc: %s", line, structFile.Path))
+			continue
+		}
+		n.Position = types.ToPosition(foundDef.Range)
+		n.NodeType = foundDef.Type
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }

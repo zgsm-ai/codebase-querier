@@ -215,7 +215,7 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 			//symbolDef = &codegraphpb.Symbol{
 			//	Language: symbolName,
 			//	Role: codegraphpb.RelationType_RELATION_DEFINITION,
-			//	Path: relativePath,
+			//	FilePath: relativePath,
 			//}
 		}
 	}

@@ -262,12 +262,12 @@ func TestCommandExecutor_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := &commandExecutor{
+			executor := &CommandExecutor{
 				workDir:   tmpDir,
-				buildCmds: buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
-				indexCmds: buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+				BuildCmds: buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
+				IndexCmds: buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
 			}
-
+			defer executor.Close()
 			err := executor.Execute()
 			if tt.wantErr {
 				assert.Error(t, err)

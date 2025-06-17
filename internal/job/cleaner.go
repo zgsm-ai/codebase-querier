@@ -78,11 +78,11 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				logx.Errorf("cleaner drop codebase store %s error: %v", cb.Path, err)
 			}
 			// todo clean graph store ， clean codebase alerady delete all files， now graph store is in codebase store.
-			//graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.Path, types.CodebaseIndexDir)))
+			//graphStore, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(cb.FilePath, types.CodebaseIndexDir)))
 			//
 			//err = graphStore.DeleteAll(ctx)
 			//if err != nil {
-			//	logx.Errorf("drop codebase store %s error: %v", cb.Path, err)
+			//	logx.Errorf("drop codebase store %s error: %v", cb.FilePath, err)
 			//	continue
 			//}
 			// 清理redis cache

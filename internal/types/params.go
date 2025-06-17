@@ -1,3 +1,5 @@
 package types
 
-const FilePath = "FilePath"
+const FilePath = "filePath"
+const ClientId = "clientId"
+const CodebasePath = "codebasePath"

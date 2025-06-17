@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
-
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"gorm.io/gorm"
+	"path/filepath"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -16,39 +15,43 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const fillContentLayerLimit = 2
-const fillContentLayerNodeLimit = 10
-const maxLayerLimit = 5
+const maxLineLimit = 500
 
-type RelationLogic struct {
+type DefinitionLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewRelationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *RelationLogic {
-	return &RelationLogic{
+func NewDefinitionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *DefinitionLogic {
+	return &DefinitionLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *RelationLogic) Relation(req *types.RelationRequest) (resp *types.RelationResponseData, err error) {
-
+func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.DefinitionResponseData, err error) {
 	// 参数验证
 	if req.ClientId == types.EmptyString {
-		return nil, errs.NewMissingParamError("clientId")
+		return nil, errs.NewMissingParamError(types.ClientId)
 	}
 	if req.CodebasePath == types.EmptyString {
-		return nil, errs.NewMissingParamError("codebasePath")
+		return nil, errs.NewMissingParamError(types.CodebasePath)
 	}
-	if req.MaxLayer <= 0 {
-		req.MaxLayer = 1
+	if req.StartLine <= 0 {
+		req.StartLine = 1
 	}
 
-	if req.MaxLayer > maxLayerLimit {
-		return nil, errs.NewInvalidParamErr("maxLayer", fmt.Sprintf("参数maxLayer非法，最大值为%d", maxLayerLimit))
+	if req.EndLine <= 0 {
+		req.EndLine = 1
+	}
+	if req.EndLine < req.StartLine {
+		req.EndLine = req.StartLine
+	}
+
+	if req.EndLine-req.StartLine > maxLineLimit {
+		req.EndLine = req.StartLine + maxLineLimit
 	}
 
 	if req.FilePath == types.EmptyString {
@@ -71,31 +74,30 @@ func (l *RelationLogic) Relation(req *types.RelationRequest) (resp *types.Relati
 		return nil, err
 	}
 	defer graphStore.Close()
-	nodes, err := graphStore.QueryRelation(l.ctx, req)
+	nodes, err := graphStore.QueryDefinition(l.ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	// 填充content，控制层数和节点数
-	if err = l.fillContent(l.ctx, nodes, codebasePath, fillContentLayerLimit, fillContentLayerNodeLimit); err != nil {
-		logx.Errorf("fill graph query contents err:%v", err)
+	if err = l.fillContent(l.ctx, nodes, codebasePath, fillContentLayerNodeLimit); err != nil {
+		logx.Errorf("fill definition query contents err:%v", err)
 	}
 
-	return &types.RelationResponseData{
+	return &types.DefinitionResponseData{
 		List: nodes,
 	}, nil
 }
 
-func (l *RelationLogic) fillContent(ctx context.Context, nodes []*types.GraphNode, codebasePath string, layerLimit, layerNodeLimit int) error {
+func (l *DefinitionLogic) fillContent(ctx context.Context, nodes []*types.DefinitionNode, codebasePath string, nodeLimit int) error {
 	if len(nodes) == 0 {
 		return nil
 	}
 	// 处理当前层的节点
 	for i, node := range nodes {
 		// 如果超过每层节点限制，跳过剩余节点
-		if i >= layerNodeLimit {
+		if i >= nodeLimit {
 			break
 		}
-
 		// 读取文件内容
 		content, err := l.svcCtx.CodebaseStore.Read(ctx, codebasePath, node.FilePath, types.ReadOptions{
 			StartLine: node.Position.StartLine,
@@ -109,13 +111,6 @@ func (l *RelationLogic) fillContent(ctx context.Context, nodes []*types.GraphNod
 
 		// 设置节点内容
 		node.Content = string(content)
-
-		// 如果还没有达到层级限制且有子节点，递归处理子节点
-		if layerLimit > 1 && len(node.Children) > 0 {
-			if err := l.fillContent(ctx, node.Children, codebasePath, layerLimit-1, layerNodeLimit); err != nil {
-				l.Logger.Errorf("fill children content failed: %v", err)
-			}
-		}
 	}
 
 	return nil

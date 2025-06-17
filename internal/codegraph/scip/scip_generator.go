@@ -51,9 +51,22 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		return fmt.Errorf("failed to create codebase index directory: %w", err)
 	}
 
-	index, build, err := g.detectLanguageAndTool(ctx, codebasePath)
+	executor, err := g.InitCommandExecutor(ctx, codebasePath)
 	if err != nil {
 		return err
+	}
+	defer executor.Close()
+	if err = executor.Execute(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, codebasePath string) (*CommandExecutor, error) {
+	index, build, err := g.detectLanguageAndTool(ctx, codebasePath)
+	if err != nil {
+		return nil, err
 	}
 
 	placeHolders := map[string]string{
@@ -66,21 +79,12 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		}
 	}
 
-	executor, err := newCommandExecutor(ctx,
+	return newCommandExecutor(ctx,
 		codebasePath,
 		index,
 		build,
 		g.config.LogDir,
 		placeHolders)
-	if err != nil {
-		return err
-	}
-
-	if err = executor.Execute(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // detectLanguageAndTool detects the language and tool for a repository

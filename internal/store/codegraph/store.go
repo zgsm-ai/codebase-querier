@@ -20,8 +20,11 @@ type GraphStore interface {
 	// BatchWriteCodeStructures BatchWrite 批量写入接口
 	BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeStructure) error
 
-	// Query 查询接口
-	Query(ctx context.Context, opts *types.RelationQueryOptions) ([]*types.GraphNode, error)
+	// QueryRelation 查询接口
+	QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)
+
+	// QueryDefinition 查询定义
+	QueryDefinition(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error)
 
 	// Close 数据库操作
 	Close() error

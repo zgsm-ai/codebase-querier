@@ -38,7 +38,7 @@ type CodebaseFileHashItem struct {
 }
 
 
-type RelationQueryOptions struct {
+type RelationRequest struct {
 	ClientId       string `form:"clientId"`                     // 用户机器ID
 	CodebasePath    string `form:"codebasePath"`                  // 项目绝对路径
 	FilePath       string `form:"filePath"`                     // 文件相对路径
@@ -134,4 +134,25 @@ type StructureRequest struct {
 
 type StructureResponseData struct {
 	List []*StructreItem `json:"list"` // 关系树列表
+}
+
+
+type DefinitionNode struct {
+	Name     string   `json:"name"`     // 节点名
+	Content  string   `json:"content"`  // 代码内容
+	NodeType string   `json:"type"`     // 节点类型
+	FilePath string   `json:"filePath"` // 文件相对路径
+	Position Position `json:"position"` // 代码位置
+}
+
+type DefinitionRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+	FilePath     string `form:"filePath"`     // 文件相对路径
+	StartLine    int    `form:"startLine"`    // 开始行
+	EndLine      int    `form:"endLine"`      // 结束行
+}
+
+type DefinitionResponseData struct {
+	List []*DefinitionNode `json:"list"` // 关系树列表
 }
