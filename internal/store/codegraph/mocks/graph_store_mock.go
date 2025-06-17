@@ -106,7 +106,22 @@ func (mr *MockGraphStoreMockRecorder) DeleteAll(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockGraphStore)(nil).DeleteAll), ctx)
 }
 
-// Query mocks base method.
+// QueryDefinition mocks base method.
+func (m *MockGraphStore) QueryDefinition(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryDefinition", ctx, opts)
+	ret0, _ := ret[0].([]*types.DefinitionNode)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryDefinition indicates an expected call of QueryDefinition.
+func (mr *MockGraphStoreMockRecorder) QueryDefinition(ctx, opts interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryDefinition", reflect.TypeOf((*MockGraphStore)(nil).QueryDefinition), ctx, opts)
+}
+
+// QueryRelation mocks base method.
 func (m *MockGraphStore) QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryRelation", ctx, opts)
@@ -115,8 +130,8 @@ func (m *MockGraphStore) QueryRelation(ctx context.Context, opts *types.Relation
 	return ret0, ret1
 }
 
-// Query indicates an expected call of Query.
-func (mr *MockGraphStoreMockRecorder) Query(ctx, opts interface{}) *gomock.Call {
+// QueryRelation indicates an expected call of QueryRelation.
+func (mr *MockGraphStoreMockRecorder) QueryRelation(ctx, opts interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRelation", reflect.TypeOf((*MockGraphStore)(nil).QueryRelation), ctx, opts)
 }

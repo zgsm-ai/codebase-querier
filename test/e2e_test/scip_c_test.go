@@ -23,7 +23,7 @@ func Test_GenerateCScipIndex(t *testing.T) {
 		}
 		scipConf := config.MustLoadCodegraphConfig("../../etc/codegraph.yaml")
 
-		localCodebase, err := codebase.NewLocalCodebase(context.Background(), storeConf)
+		localCodebase, err := codebase.NewLocalCodebase(storeConf)
 		assert.NoError(t, err)
 		generator := scipindex.NewIndexGenerator(scipConf, localCodebase)
 		err = generator.Generate(context.Background(), codebasePath)

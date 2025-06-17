@@ -5,8 +5,10 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/weaviate/weaviate/entities/vectorindex/dynamic"
 
@@ -17,7 +19,6 @@ import (
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/filters"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/graphql"
 	"github.com/weaviate/weaviate/entities/models"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
@@ -29,10 +30,9 @@ type weaviateWrapper struct {
 	client    *goweaviate.Client
 	className string
 	cfg       config.VectorStoreConf
-	logger    logx.Logger
 }
 
-func New(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
+func New(cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
 	var authConf auth.Config
 	if cfg.Weaviate.APIKey != types.EmptyString {
 		authConf = auth.ApiKey{Value: cfg.Weaviate.APIKey}
@@ -49,16 +49,14 @@ func New(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, rer
 
 	store := &weaviateWrapper{
 		client:    client,
-		ctx:       ctx,
 		className: cfg.Weaviate.ClassName,
 		embedder:  embedder,
 		reranker:  reranker,
 		cfg:       cfg,
-		logger:    logx.WithContext(ctx),
 	}
 
 	// init class
-	err = store.createClassWithAutoTenantEnabled(ctx, client)
+	err = store.createClassWithAutoTenantEnabled(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create class: %w", err)
 	}
@@ -239,12 +237,12 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 	if err != nil {
 		return err
 	}
-	logx.Infof("embedded %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
+	tracer.WithTrace(ctx).Infof("embedded %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
 
 	// 先删除已有的相同codebaseId和FilePath的数据，避免重复  TODO 启动一个定时任务，清理重复数据。根据CodebaseId、FilePath、Content 去重。
 	err = r.DeleteCodeChunks(ctx, docs, options)
 	if err != nil {
-		r.logger.Errorf("failed to delete existing code chunks before upsert: %v", err)
+		tracer.WithTrace(ctx).Errorf("[%s]failed to delete existing code chunks before upsert: %v", docs[0].CodebasePath, err)
 	}
 
 	objs := make([]*models.Object, len(chunks), len(chunks))
@@ -270,7 +268,7 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 			},
 		}
 	}
-	logx.Infof("start to save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
+	tracer.WithTrace(ctx).Infof("start to save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
 	resp, err := r.client.Batch().ObjectsBatcher().WithObjects(objs...).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to send batch to Weaviate: %w", err)
@@ -278,7 +276,7 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 	if err = CheckBatchErrors(resp); err != nil {
 		return fmt.Errorf("failed to send batch to Weaviate: %w", err)
 	}
-	logx.Infof("save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
+	tracer.WithTrace(ctx).Infof("save %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
 	return nil
 }
 
@@ -291,7 +289,7 @@ func (r *weaviateWrapper) Query(ctx context.Context, query string, topK int, opt
 	//  调用reranker模型进行重排
 	rerankedDocs, err := r.reranker.Rerank(ctx, query, documents)
 	if err != nil {
-		r.logger.Errorf("failed customReranker docs: %v", err)
+		tracer.WithTrace(ctx).Errorf("failed customReranker docs: %v", err)
 	}
 	if len(rerankedDocs) == 0 {
 		rerankedDocs = documents
@@ -301,15 +299,16 @@ func (r *weaviateWrapper) Query(ctx context.Context, query string, topK int, opt
 	return rerankedDocs, nil
 }
 
-func (r *weaviateWrapper) createClassWithAutoTenantEnabled(ctx context.Context, client *goweaviate.Client) error {
-
-	logx.Infof("start to create weaviate class %s", r.className)
-	res, err := client.Schema().ClassExistenceChecker().WithClassName(r.className).Do(ctx)
+func (r *weaviateWrapper) createClassWithAutoTenantEnabled(client *goweaviate.Client) error {
+	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second*60)
+	defer cancelFunc()
+	tracer.WithTrace(timeout).Infof("start to create weaviate class %s", r.className)
+	res, err := client.Schema().ClassExistenceChecker().WithClassName(r.className).Do(timeout)
 	if err != nil {
-		logx.Errorf("check weaviate class exists err:%v", err)
+		tracer.WithTrace(timeout).Errorf("check weaviate class exists err:%v", err)
 	}
 	if err == nil && res {
-		logx.Infof("weaviate class %s already exists, not create.", r.className)
+		tracer.WithTrace(timeout).Infof("weaviate class %s already exists, not create.", r.className)
 		return nil
 	}
 
@@ -327,14 +326,14 @@ func (r *weaviateWrapper) createClassWithAutoTenantEnabled(ctx context.Context, 
 		VectorIndexConfig: dynamicConf,
 	}
 
-	logx.Infof("class info:%v", class)
-	err = client.Schema().ClassCreator().WithClass(class).Do(ctx)
+	tracer.WithTrace(timeout).Infof("class info:%v", class)
+	err = client.Schema().ClassCreator().WithClass(class).Do(timeout)
 	// TODO skip already exists err
 	if err != nil && strings.Contains(err.Error(), "already exists") {
-		logx.Infof("weaviate class %s already exists, not create.", r.className)
+		tracer.WithTrace(timeout).Infof("weaviate class %s already exists, not create.", r.className)
 		return nil
 	}
-	logx.Infof("weaviate class %s end.", r.className)
+	tracer.WithTrace(timeout).Infof("weaviate class %s end.", r.className)
 	return err
 }
 

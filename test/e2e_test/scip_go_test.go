@@ -7,6 +7,7 @@ import (
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
 	"testing"
@@ -37,7 +38,7 @@ func Test_GenerateGoScipIndex(t *testing.T) {
 		}
 		scipConf := config.MustLoadCodegraphConfig("../etc/codegraph.yaml")
 
-		localCodebase, err := codebase.NewLocalCodebase(context.Background(), storeConf)
+		localCodebase, err := codebase.NewLocalCodebase(storeConf)
 		assert.NoError(t, err)
 		generator := scipindex.NewIndexGenerator(scipConf, localCodebase)
 		err = generator.Generate(context.Background(), codebasePath)
@@ -59,14 +60,15 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
+	localCodebase, err := codebase.NewLocalCodebase(storeConf)
 	assert.NoError(t, err)
 	//indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
 	indexFile := filepath.Join(types.CodebaseIndexDir, indexFileName)
-	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
-	parser := scipindex.NewIndexParser(ctx, localCodebase, graph)
+	parser := scipindex.NewIndexParser(localCodebase, graph)
+	ctx = context.WithValue(ctx, tracer.Key, tracer.TaskTraceId(codebaseID))
 	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
 	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
@@ -82,9 +84,9 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-	localCodebase, err := codebase.NewLocalCodebase(ctx, storeConf)
+	localCodebase, err := codebase.NewLocalCodebase(storeConf)
 	assert.NoError(t, err)
-	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
 	parser, err := structure.NewStructureParser()
@@ -105,7 +107,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 			t.Logf("read file error: %v", err)
 			return err
 		}
-		parsed, err := parser.Parse(&types.CodeFile{
+		parsed, err := parser.Parse(ctx, &types.CodeFile{
 			Path:         walkCtx.RelativePath,
 			CodebasePath: codebasePath,
 			Content:      bytes,
@@ -134,7 +136,7 @@ func TestQueryBadgerDB(t *testing.T) {
 
 	// 1. 初始化存储
 	ctx := context.Background()
-	graph, err := codegraph.NewBadgerDBGraph(ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
 	defer graph.Close()
 
@@ -171,8 +173,7 @@ func TestDeleteBadgerDB(t *testing.T) {
 	start := time.Now()
 	projectPath := "go/kubernetes"
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
-	graph, err := codegraph.NewBadgerDBGraph(context.Background(),
-		codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	assert.NoError(t, err)
 	assert.NotPanics(t, func() {
 		err = graph.DeleteAll(context.Background())
@@ -185,7 +186,7 @@ func TestInspectBadgerDB(t *testing.T) {
 	codebasePath := filepath.Join(testProjectsBaseDir, projectPath)
 
 	// 初始化 BadgerDB
-	graph, err := codegraph.NewBadgerDBGraph(context.Background(), codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		t.Fatalf("Failed to initialize BadgerDB: %v", err)
 	}

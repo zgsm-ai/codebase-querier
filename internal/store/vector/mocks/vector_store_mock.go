@@ -65,7 +65,7 @@ func (mr *MockStoreMockRecorder) DeleteCodeChunks(ctx, chunks, options interface
 // Query mocks base method.
 func (m *MockStore) Query(ctx context.Context, query string, topK int, options vector.Options) ([]*types.SemanticFileItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryRelation", ctx, query, topK, options)
+	ret := m.ctrl.Call(m, "Query", ctx, query, topK, options)
 	ret0, _ := ret[0].([]*types.SemanticFileItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -74,7 +74,7 @@ func (m *MockStore) Query(ctx context.Context, query string, topK int, options v
 // Query indicates an expected call of Query.
 func (mr *MockStoreMockRecorder) Query(ctx, query, topK, options interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRelation", reflect.TypeOf((*MockStore)(nil).Query), ctx, query, topK, options)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockStore)(nil).Query), ctx, query, topK, options)
 }
 
 // UpsertCodeChunks mocks base method.

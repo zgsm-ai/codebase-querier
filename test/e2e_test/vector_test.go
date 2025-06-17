@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"path/filepath"
 	"testing"
 	"time"
@@ -59,11 +60,12 @@ func setup(syncId int32) error {
 		return errors.New("metadata file list is empty, cannot continue")
 	}
 
-	processor, err := job.NewEmbeddingProcessor(ctx, svcCtx, msg, syncFileModeMap)
+	processor, err := job.NewEmbeddingProcessor(svcCtx, msg, syncFileModeMap)
 	if err != nil {
 		return err
 	}
-	return processor.Process()
+	ctx = context.WithValue(ctx, tracer.Key, tracer.TaskTraceId(codebaseID))
+	return processor.Process(ctx)
 
 }
 

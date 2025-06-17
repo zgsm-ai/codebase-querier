@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"os"
 	"os/exec"
@@ -19,7 +20,7 @@ type CommandExecutor struct {
 	// build
 	BuildCmds          []*exec.Cmd
 	IndexCmds          []*exec.Cmd
-	indexFileLogWriter io.WriteCloser
+	indexFileLogWriter io.Writer
 }
 
 // newCommandExecutor creates a new CommandExecutor
@@ -39,15 +40,17 @@ func newCommandExecutor(ctx context.Context,
 	if err != nil {
 		logx.Errorf("failed to create index log writer: %v", err)
 	}
-	var logWriter io.WriteCloser
+	var logWriter io.Writer
 	if indexFileLogger != nil {
 		logWriter = indexFileLogger
+	} else {
+		logWriter = os.Stdout
 	}
 	return &CommandExecutor{
 		workDir:            workDir,
 		BuildCmds:          buildBuildCmds(buildTool, workDir, logWriter, placeHolders),
 		IndexCmds:          buildIndexCmds(indexTool, workDir, logWriter, placeHolders),
-		indexFileLogWriter: indexFileLogger,
+		indexFileLogWriter: logWriter,
 	}, nil
 }
 
@@ -111,17 +114,10 @@ func replacePlaceHolder(base string, placeHolders map[string]string) string {
 }
 
 // Execute executes a command string
-func (e *CommandExecutor) Execute() error {
+func (e *CommandExecutor) Execute(ctx context.Context) error {
 	start := time.Now()
-	defer func() {
-		if e.indexFileLogWriter != nil {
-			if err := e.indexFileLogWriter.Close(); err != nil {
-				logx.Errorf("failed to close index log writer: %v", err)
-			}
-		}
-	}()
 
-	logx.Debugf("[%s] start to execute index command", e.workDir)
+	tracer.WithTrace(ctx).Debugf("[%s] start to execute index command", e.workDir)
 	indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index commands", e.workDir)
 
 	var err error
@@ -129,11 +125,11 @@ func (e *CommandExecutor) Execute() error {
 	for _, cmd := range e.BuildCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute build command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			logx.Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
+			tracer.WithTrace(ctx).Errorf("[%s] build command execution failed: %v, err: %s", e.workDir, cmd, curErr)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed:%v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
-			logx.Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
+			tracer.WithTrace(ctx).Debugf("[%s] build command execution successfully: %v", e.workDir, cmd)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution successfully", e.workDir)
 		}
 	}
@@ -141,21 +137,29 @@ func (e *CommandExecutor) Execute() error {
 	for _, cmd := range e.IndexCmds {
 		indexLogInfo(e.indexFileLogWriter, "[%s] start to execute index command: %v", e.workDir, cmd)
 		if curErr := cmd.Run(); curErr != nil {
-			logx.Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
+			tracer.WithTrace(ctx).Errorf("[%s] index command execution failed: %v, err: %v", e.workDir, cmd, curErr)
 			indexLogInfo(e.indexFileLogWriter, "[%s] build command execution failed: %v", e.workDir, curErr)
 			err = errors.Join(err, curErr)
 		} else {
-			logx.Debugf("[%s] index command execution successfully: %v", e.workDir, cmd)
+			tracer.WithTrace(ctx).Debugf("[%s] index command execution successfully: %v", e.workDir, cmd)
 			indexLogInfo(e.indexFileLogWriter, "[%s] index command execution successfully", e.workDir)
 		}
 	}
 
-	logx.Debugf("[%s] index commands executed end, cost: %d ms", e.workDir, time.Since(start).Milliseconds())
+	tracer.WithTrace(ctx).Debugf("[%s] index commands executed end, cost: %d ms", e.workDir, time.Since(start).Milliseconds())
 	indexLogInfo(e.indexFileLogWriter,
 		"[%s] index commands executed end, cost: %d ms\n", e.workDir, time.Since(start).Milliseconds())
 	return err
 }
 
 func (e *CommandExecutor) Close() error {
-	return e.indexFileLogWriter.Close()
+	if e.indexFileLogWriter == nil {
+		logx.Errorf("index command file log write is nil ,not close.")
+	}
+	if writer, ok := e.indexFileLogWriter.(io.WriteCloser); ok {
+		if err := writer.Close(); err != nil {
+			logx.Errorf("failed to close index log writer: %v", err)
+		}
+	}
+	return nil
 }

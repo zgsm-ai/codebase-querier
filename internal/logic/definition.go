@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
 	"path/filepath"
 
@@ -70,17 +71,19 @@ func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.
 	}
 	codebasePath := codebase.Path
 	// todo concurrency control
-	graphStore, err := codegraph.NewBadgerDBGraph(l.ctx, codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
 	}
 	defer graphStore.Close()
-	nodes, err := graphStore.QueryDefinition(l.ctx, req)
+
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
+	nodes, err := graphStore.QueryDefinition(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	// 填充content，控制层数和节点数
-	if err = l.fillContent(l.ctx, nodes, codebasePath, definitionFillContentNodeLimit); err != nil {
+	if err = l.fillContent(ctx, nodes, codebasePath, definitionFillContentNodeLimit); err != nil {
 		logx.Errorf("fill definition query contents err:%v", err)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -32,6 +33,7 @@ func (l *CodebaseTreeLogic) CodebaseTree(req *types.CodebaseTreeRequest) (resp *
 	// 1. 从数据库查询 codebase 信息
 	clientCodebasePath := req.CodebasePath
 	clientId := req.ClientId
+
 	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
@@ -51,7 +53,9 @@ func (l *CodebaseTreeLogic) CodebaseTree(req *types.CodebaseTreeRequest) (resp *
 		MaxDepth: req.Depth,
 	}
 
-	nodes, err := store.Tree(l.ctx, codebasePath, req.SubDir, treeOpts)
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
+
+	nodes, err := store.Tree(ctx, codebasePath, req.SubDir, treeOpts)
 	if err != nil {
 		l.Logger.Errorf("failed to get directory tree: %v", err)
 		return nil, err

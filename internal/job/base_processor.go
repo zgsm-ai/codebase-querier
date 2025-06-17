@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"sync"
 	"time"
 
 	"github.com/panjf2000/ants/v2"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -18,10 +18,8 @@ import (
 
 // baseProcessor 包含所有处理器共有的字段和方法
 type baseProcessor struct {
-	ctx             context.Context
 	svcCtx          *svc.ServiceContext
 	msg             *types.CodebaseSyncMessage
-	logger          logx.Logger
 	syncFileModeMap map[string]string
 	taskHistoryId   int32
 	totalFileCnt    int32
@@ -31,7 +29,7 @@ type baseProcessor struct {
 }
 
 // initTaskHistory 初始化任务历史记录
-func (p *baseProcessor) initTaskHistory(taskType string) error {
+func (p *baseProcessor) initTaskHistory(ctx context.Context, taskType string) error {
 	taskHistory := &model.IndexHistory{
 		SyncID:       p.msg.SyncID,
 		CodebaseID:   p.msg.CodebaseID,
@@ -40,8 +38,8 @@ func (p *baseProcessor) initTaskHistory(taskType string) error {
 		Status:       types.TaskStatusPending,
 		StartTime:    utils.CurrentTime(),
 	}
-	if err := p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).Save(taskHistory); err != nil {
-		p.logger.Errorf("insert task history %v failed: %v", taskHistory, err)
+	if err := p.svcCtx.Querier.IndexHistory.WithContext(ctx).Save(taskHistory); err != nil {
+		tracer.WithTrace(ctx).Errorf("insert task history failed: %v, data:%v", err, taskHistory)
 		return errs.InsertDatabaseFailed
 	}
 	p.taskHistoryId = taskHistory.ID
@@ -49,7 +47,7 @@ func (p *baseProcessor) initTaskHistory(taskType string) error {
 }
 
 // updateTaskSuccess 更新任务状态为成功
-func (p *baseProcessor) updateTaskSuccess() error {
+func (p *baseProcessor) updateTaskSuccess(ctx context.Context) error {
 	progress := float64(1)
 	m := &model.IndexHistory{
 		ID:                p.taskHistoryId,
@@ -62,28 +60,28 @@ func (p *baseProcessor) updateTaskSuccess() error {
 		TotalIgnoreCount:  &p.ignoreFileCnt,
 	}
 
-	res, err := p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).
+	res, err := p.svcCtx.Querier.IndexHistory.WithContext(ctx).
 		Where(p.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
 		Updates(m)
 	if err != nil {
-		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
 		return fmt.Errorf("upate task success failed: %w", err)
 	}
 	if res.RowsAffected == 0 {
-		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
 		return fmt.Errorf("upate task success failed, codebaseId %d not found in database", p.msg.CodebaseID)
 	}
 	if res.Error != nil {
-		p.logger.Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
 		return fmt.Errorf("upate task success failed: %w", res.Error)
 	}
 	return nil
 }
 
 // handleIfTaskFailed 处理任务失败情况
-func (p *baseProcessor) handleIfTaskFailed(err error) bool {
+func (p *baseProcessor) handleIfTaskFailed(ctx context.Context, err error) bool {
 	if err != nil {
-		p.logger.Errorf("failed to process file, err: %v, file:%v ", err, p.msg)
+		tracer.WithTrace(ctx).Errorf("failed to process file, err: %v, file:%v ", err, p.msg)
 		if errors.Is(err, errs.InsertDatabaseFailed) {
 			return true
 		}
@@ -91,12 +89,12 @@ func (p *baseProcessor) handleIfTaskFailed(err error) bool {
 		if errors.Is(err, errs.RunTimeout) {
 			status = types.TaskStatusTimeout
 		}
-		_, err = p.svcCtx.Querier.IndexHistory.WithContext(p.ctx).
+		_, err = p.svcCtx.Querier.IndexHistory.WithContext(ctx).
 			Where(p.svcCtx.Querier.IndexHistory.ID.Eq(p.taskHistoryId)).
 			UpdateColumnSimple(p.svcCtx.Querier.IndexHistory.Status.Value(status),
 				p.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
 		if err != nil {
-			p.logger.Errorf("update task history %d failed: %v", p.msg.CodebaseID, err)
+			tracer.WithTrace(ctx).Errorf("update task history %d failed: %v", p.msg.CodebaseID, err)
 		}
 		return true
 	}
@@ -105,6 +103,7 @@ func (p *baseProcessor) handleIfTaskFailed(err error) bool {
 
 // processFilesConcurrently 并发处理文件
 func (p *baseProcessor) processFilesConcurrently(
+	ctx context.Context,
 	processFunc func(path string, op types.FileOp) error,
 	maxConcurrency int,
 ) error {
@@ -131,9 +130,9 @@ func (p *baseProcessor) processFilesConcurrently(
 	// 提交任务到工作池
 	for path, opStr := range p.syncFileModeMap {
 		select {
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			duration := time.Since(start)
-			p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+			tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 			return errs.RunTimeout
 		default:
 			wg.Add(1)
@@ -161,13 +160,13 @@ func (p *baseProcessor) processFilesConcurrently(
 
 	// 等待任务完成或上下文取消
 	select {
-	case <-p.ctx.Done():
+	case <-ctx.Done():
 		duration := time.Since(start)
-		p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 		return errs.RunTimeout
 	case <-done:
 		duration := time.Since(start)
-		p.logger.Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 		if len(runErrs) > 0 {
 			if len(runErrs) > 10 {
 				return fmt.Errorf("process files failed (showing last 10 errors): %w", errors.Join(runErrs[len(runErrs)-10:]...))

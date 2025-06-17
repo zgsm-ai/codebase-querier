@@ -125,18 +125,18 @@ func (mr *MockStoreMockRecorder) GetSyncFileListCollapse(ctx, codebasePath inter
 }
 
 // Init mocks base method.
-func (m *MockStore) Init(ctx context.Context, clientId, clientCodebasePath string) (*types.Codebase, error) {
+func (m *MockStore) Init(ctx context.Context, clientId, clientPath string) (*types.Codebase, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Init", ctx, clientId, clientCodebasePath)
+	ret := m.ctrl.Call(m, "Init", ctx, clientId, clientPath)
 	ret0, _ := ret[0].(*types.Codebase)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Init indicates an expected call of Init.
-func (mr *MockStoreMockRecorder) Init(ctx, clientId, clientCodebasePath interface{}) *gomock.Call {
+func (mr *MockStoreMockRecorder) Init(ctx, clientId, clientPath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockStore)(nil).Init), ctx, clientId, clientCodebasePath)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockStore)(nil).Init), ctx, clientId, clientPath)
 }
 
 // List mocks base method.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
 
@@ -28,20 +29,19 @@ type scipMetadata struct {
 type IndexParser struct {
 	codebaseStore codebase.Store
 	graphStore    codegraph.GraphStore
-	logger        logx.Logger
 }
 
 // NewIndexParser creates a new SCIP index generator
-func NewIndexParser(ctx context.Context, codebaseStore codebase.Store, graphStore codegraph.GraphStore) *IndexParser {
+func NewIndexParser(codebaseStore codebase.Store, graphStore codegraph.GraphStore) *IndexParser {
 	return &IndexParser{
 		codebaseStore: codebaseStore,
 		graphStore:    graphStore,
-		logger:        logx.WithContext(ctx),
 	}
 }
 
 // visitDocument handles a single SCIP document during streaming parse.
-func (i *IndexParser) visitDocument(metadata *scipMetadata, duplicateDocs map[string][]*scip.Document, pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
+func (i *IndexParser) visitDocument(ctx context.Context, metadata *scipMetadata,
+	duplicateDocs map[string][]*scip.Document, pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
 	return func(document *scip.Document) {
 		path := document.RelativePath
 		if count := metadata.DocCountByPath[path]; count > 1 {
@@ -60,7 +60,7 @@ func (i *IndexParser) visitDocument(metadata *scipMetadata, duplicateDocs map[st
 		}
 		doc, err := i.processDocument(document, metadata)
 		if err != nil {
-			i.logger.Errorf("failed to process document %s: %w", path, err)
+			tracer.WithTrace(ctx).Errorf("failed to process document %s: %w", path, err)
 			return
 		}
 		*pendingDocs = append(*pendingDocs, doc)
@@ -101,7 +101,7 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	if err != nil {
 		return fmt.Errorf("failed to collect metadata and symbols: %w", err)
 	}
-	i.logger.Debugf("parsed %s files cnt: %d", codebasePath, len(metadata.DocCountByPath))
+	tracer.WithTrace(ctx).Debugf("parsed %s files cnt: %d", codebasePath, len(metadata.DocCountByPath))
 
 	if _, err := file.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to reset file pointer: %w", err)
@@ -111,7 +111,7 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	processedDocs := make([]*codegraphpb.Document, 0, writeBatchSize)
 
 	visitor := scip.IndexVisitor{
-		VisitDocument: i.visitDocument(metadata, duplicateDocs, &processedDocs),
+		VisitDocument: i.visitDocument(ctx, metadata, duplicateDocs, &processedDocs),
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {

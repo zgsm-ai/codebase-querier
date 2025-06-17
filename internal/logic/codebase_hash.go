@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"gorm.io/gorm"
 
@@ -51,9 +52,9 @@ func (l *CodebaseHash) GetCodebaseHash(req *types.CodebaseHashRequest) (resp *ty
 	resp = &types.CodebaseHashResponseData{
 		CodebaseHash: make([]*types.CodebaseFileHashItem, 0),
 	}
-
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
 	// 使用 Walk 方法递归遍历目录树
-	err = l.svcCtx.CodebaseStore.Walk(l.ctx, codebasePath, "", func(walkCtx *codebasestore.WalkContext, reader io.ReadCloser) error {
+	err = l.svcCtx.CodebaseStore.Walk(ctx, codebasePath, "", func(walkCtx *codebasestore.WalkContext, reader io.ReadCloser) error {
 		if walkCtx == nil || reader == nil {
 			return nil
 		}

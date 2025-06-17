@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
 	"slices"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/wrapper"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -38,7 +38,6 @@ var _ Store = &minioCodebase{}
 type minioCodebase struct {
 	cfg    config.CodeBaseStoreConf
 	client wrapper.MinioClient
-	logger logx.Logger
 	mu     sync.RWMutex
 }
 
@@ -75,18 +74,18 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		metaFileList = append(metaFileList, metadataFile)
 		syncMetaData, err := m.Read(ctx, codebasePath, filepath.Join(types.SyncMedataDir, metadataFile), types.ReadOptions{})
 		if err != nil {
-			m.logger.Errorf("read metadata file %v failed: %v", metadataFile, err)
+			tracer.WithTrace(ctx).Errorf("read metadata file %v failed: %v", metadataFile, err)
 			continue
 		}
 		if syncMetaData == nil {
-			m.logger.Errorf("sync file %s metadata is empty", metadataFile)
+			tracer.WithTrace(ctx).Errorf("sync file %s metadata is empty", metadataFile)
 			continue
 		}
 		var syncMetaObj *types.SyncMetadataFile
 
 		err = json.Unmarshal(syncMetaData, &syncMetaObj)
 		if err != nil {
-			m.logger.Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
+			tracer.WithTrace(ctx).Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
 		}
 		files := syncMetaObj.FileList
 		for k, v := range files {
@@ -110,7 +109,7 @@ func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath 
 	return m.client.GetObject(ctx, m.cfg.Minio.Bucket, objectName, minio.GetObjectOptions{})
 }
 
-func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store, error) {
+func NewMinioCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
 	client, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKeyID, cfg.Minio.SecretAccessKey, ""),
 		Secure: cfg.Minio.UseSSL,
@@ -122,7 +121,6 @@ func NewMinioCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store,
 	return &minioCodebase{
 		cfg:    cfg,
 		client: wrapper.NewMinioClientWrapper(client),
-		logger: logx.WithContext(ctx),
 	}, nil
 }
 

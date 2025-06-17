@@ -31,6 +31,7 @@ type ServiceContext struct {
 	Cache           cache.Store[any]
 	redisClient     *redis.Client // 保存Redis客户端引用以便关闭
 	StructureParser *structure.Parser
+	serverContext   context.Context
 }
 
 // Close closes the shared Redis client and database connection
@@ -54,7 +55,8 @@ func (s *ServiceContext) Close() {
 func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, error) {
 	var err error
 	svcCtx := &ServiceContext{
-		Config: c,
+		Config:        c,
+		serverContext: ctx,
 	}
 	svcCtx.CodegraphConf = config.MustLoadCodegraphConfig(c.IndexTask.GraphTask.ConfFile)
 
@@ -76,7 +78,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	svcCtx.redisClient = client
 
 	// 创建各个组件，共用Redis客户端
-	messageQueue, err := mq.NewRedisMQ(ctx, client, c.MessageQueue.ConsumerGroup)
+	messageQueue, err := mq.NewRedisMQ(client, c.MessageQueue.ConsumerGroup)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +90,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 
 	cacheStore := cache.NewRedisStore[any](client)
 
-	codebaseStore, err := codebase.NewLocalCodebase(ctx, c.CodeBaseStore)
+	codebaseStore, err := codebase.NewLocalCodebase(c.CodeBaseStore)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +101,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	}
 	reranker := vector.NewReranker(c.VectorStore.Reranker)
 
-	vectorStore, err := vector.NewVectorStore(ctx, c.VectorStore, embedder, reranker)
+	vectorStore, err := vector.NewVectorStore(c.VectorStore, embedder, reranker)
 	if err != nil {
 		return nil, err
 	}

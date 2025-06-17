@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
 	"sort"
 	"time"
-
-	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 
@@ -56,7 +55,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		return err
 	}
 	defer executor.Close()
-	if err = executor.Execute(); err != nil {
+	if err = executor.Execute(ctx); err != nil {
 		return err
 	}
 
@@ -140,7 +139,7 @@ func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath
 	})
 
 	if err != nil && !errors.Is(err, maxFileReached) {
-		logx.Errorf("failed to analyze codebase: %v", err)
+		tracer.WithTrace(ctx).Errorf("failed to analyze codebase: %v", err)
 	}
 
 	// 5. 选择出现频率最高的语言

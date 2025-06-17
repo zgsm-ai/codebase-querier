@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"strings"
 )
@@ -43,7 +43,7 @@ func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.Co
 
 	embeds := make([]*CodeChunkEmbedding, 0, len(chunks))
 	batchSize := e.config.BatchSize
-	logx.Infof("start to embedding %d chunks for codebase:%s, batchSize: %d ", len(chunks), chunks[0].CodebasePath, batchSize)
+	tracer.WithTrace(ctx).Infof("start to embedding %d chunks for codebase:%s, batchSize: %d ", len(chunks), chunks[0].CodebasePath, batchSize)
 
 	for start := 0; start < len(chunks); start += batchSize {
 		end := start + batchSize
@@ -71,7 +71,7 @@ func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.Co
 			})
 		}
 	}
-	logx.Infof("embedding %d chunks for codebase:%s successfully", len(chunks), chunks[0].CodebasePath)
+	tracer.WithTrace(ctx).Infof("embedding %d chunks for codebase:%s successfully", len(chunks), chunks[0].CodebasePath)
 
 	return embeds, nil
 }
@@ -80,7 +80,7 @@ func (e *customEmbedder) EmbedQuery(ctx context.Context, query string) ([]float3
 	if e.config.StripNewLines {
 		query = strings.ReplaceAll(query, "\n", " ")
 	}
-	logx.Info("start to embed query")
+	tracer.WithTrace(ctx).Info("start to embed query")
 	vectors, err := e.doEmbeddings(ctx, [][]byte{[]byte(query)})
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (e *customEmbedder) EmbedQuery(ctx context.Context, query string) ([]float3
 	if len(vectors) == 0 {
 		return nil, ErrEmptyResponse
 	}
-	logx.Info("embed query successfully")
+	tracer.WithTrace(ctx).Info("embed query successfully")
 	return vectors[0], nil
 }
 

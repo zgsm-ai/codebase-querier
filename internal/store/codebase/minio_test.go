@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase/wrapper/mocks"
 
 	"github.com/golang/mock/gomock"
@@ -50,7 +49,6 @@ func setupTestMinioCodebase(t *testing.T) (*mocks.MockMinioClient, *minioCodebas
 	codebase := &minioCodebase{
 		cfg:    cfg,
 		client: mockClient,
-		logger: logx.WithContext(context.Background()),
 	}
 
 	// Set up default expectations for Init
@@ -128,7 +126,6 @@ func TestMinioCodebase_Init(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			got, err := codebase.Init(context.Background(), tt.clientId, tt.codebasePath)
@@ -192,7 +189,6 @@ func TestMinioCodebase_Add(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			err := codebase.Add(context.Background(), tt.codebasePath, strings.NewReader("test content"), tt.target)
@@ -255,7 +251,6 @@ func TestMinioCodebase_Delete(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			err := codebase.Delete(context.Background(), tt.codebasePath, tt.path)
@@ -333,7 +328,6 @@ func TestMinioCodebase_List(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			got, err := codebase.List(context.Background(), tt.codebasePath, tt.dir, tt.option)
@@ -418,7 +412,6 @@ func TestMinioCodebase_Tree(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			got, err := codebase.Tree(context.Background(), tt.codebasePath, tt.dir, tt.option)
@@ -479,7 +472,6 @@ func TestMinioCodebase_Walk(t *testing.T) {
 						Bucket: "test-bucket",
 					},
 				},
-				logger: logx.WithContext(context.Background()),
 			}
 
 			var paths []string

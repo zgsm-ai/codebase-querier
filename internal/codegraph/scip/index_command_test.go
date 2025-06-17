@@ -268,7 +268,7 @@ func TestCommandExecutor_Execute(t *testing.T) {
 				IndexCmds: buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
 			}
 			defer executor.Close()
-			err := executor.Execute()
+			err := executor.Execute(context.Background())
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {

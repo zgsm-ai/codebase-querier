@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zgsm-ai/codebase-indexer/internal/job"
 	"github.com/zgsm-ai/codebase-indexer/internal/response"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
 	"net/http"
@@ -35,11 +36,12 @@ func setup(syncId int32) error {
 		return errors.New("metadata file list is empty, cannot continue")
 	}
 
-	processor, err := job.NewEmbeddingProcessor(ctx, svcCtx, msg, syncFileModeMap)
+	processor, err := job.NewEmbeddingProcessor(svcCtx, msg, syncFileModeMap)
 	if err != nil {
 		return err
 	}
-	return processor.Process()
+	ctx = context.WithValue(ctx, tracer.Key, tracer.TaskTraceId(codebaseID))
+	return processor.Process(ctx)
 
 }
 

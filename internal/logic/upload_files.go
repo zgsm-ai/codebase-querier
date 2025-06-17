@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
 	"net/http"
 	"strings"
@@ -70,9 +71,10 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 	if err != nil {
 		return fmt.Errorf("failed to unzip file: %w", err)
 	}
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
 
 	// 查找待删除的文件，进行处理
-	fileModeMap, _, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(l.ctx, codebase.Path)
+	fileModeMap, _, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
 	if err != nil {
 		l.Logger.Errorf("get sync file list error: %v", err)
 		return err
@@ -86,7 +88,7 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 	}
 
 	if len(deleteList) > 0 {
-		err = l.svcCtx.CodebaseStore.BatchDelete(l.ctx, codebase.Path, deleteList)
+		err = l.svcCtx.CodebaseStore.BatchDelete(ctx, codebase.Path, deleteList)
 		if err != nil {
 			l.Logger.Errorf("delete files error: %v", err)
 			return err
@@ -101,7 +103,7 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 		PublishStatus: string(publishStatus),
 		PublishTime:   utils.CurrentTime(),
 	}
-	if err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).Save(syncHistory); err != nil {
+	if err = l.svcCtx.Querier.SyncHistory.WithContext(ctx).Save(syncHistory); err != nil {
 		l.Logger.Errorf("insert sync history %v error: %v", syncHistory, err)
 		return err
 	}
@@ -125,12 +127,12 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 		publishStatus = model.PublishStatusFailed
 	} else {
 		// 更新最新版本
-		err := l.svcCtx.Cache.AddVersion(l.ctx, types.SyncVersionKey(codebase.ID), int64(syncHistory.ID), time.Hour*24)
+		err := l.svcCtx.Cache.AddVersion(ctx, types.SyncVersionKey(codebase.ID), int64(syncHistory.ID), time.Hour*24)
 		if err != nil {
 			l.Logger.Errorf("set sync version error: %v", err)
 		}
 		// 发送消息
-		err = l.svcCtx.MessageQueue.Produce(l.ctx, l.svcCtx.Config.IndexTask.Topic, bytes, types.ProduceOptions{})
+		err = l.svcCtx.MessageQueue.Produce(ctx, l.svcCtx.Config.IndexTask.Topic, bytes, types.ProduceOptions{})
 		if err != nil {
 			l.Logger.Errorf("produce message error: %v", err)
 			publishStatus = model.PublishStatusFailed
@@ -144,7 +146,7 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 	syncHistory.PublishTime = utils.CurrentTime()
 	messageStr := string(bytes)
 	syncHistory.Message = &messageStr
-	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(l.ctx).
+	if _, err = l.svcCtx.Querier.SyncHistory.WithContext(ctx).
 		Where(l.svcCtx.Querier.SyncHistory.ID.Eq(syncHistory.ID)).
 		Updates(&syncHistory); err != nil {
 		l.Logger.Errorf("update sync history %v error: %v", syncHistory, err)

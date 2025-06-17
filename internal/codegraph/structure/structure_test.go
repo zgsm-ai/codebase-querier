@@ -1,6 +1,7 @@
 package structure
 
 import (
+	"context"
 	"testing"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -46,7 +47,7 @@ var TestVar = "test"
 	parser, err := NewStructureParser()
 	assert.NoError(t, err)
 	// 解析文件结构
-	structure, err := parser.Parse(&types.CodeFile{
+	structure, err := parser.Parse(context.Background(), &types.CodeFile{
 		Content: code,
 		Path:    "test.go",
 	}, ParseOptions{})
@@ -58,7 +59,7 @@ var TestVar = "test"
 	if len(structure.Definitions) == 0 {
 		t.Fatal("no definitions found")
 	}
-	assert.NotEmpty(t, structure.FilePath)
+	assert.NotEmpty(t, structure.Path)
 	assert.Equal(t, "go", structure.Language)
 
 	// 预期的位置信息 (tree-sitter 使用从0开始的行列号)

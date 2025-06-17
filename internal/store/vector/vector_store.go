@@ -24,7 +24,7 @@ type Options struct {
 	CodebaseName string
 }
 
-func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
+func NewVectorStore(cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Store, error) {
 	var vectorStoreImpl Store
 	var err error
 	switch cfg.Type {
@@ -32,7 +32,7 @@ func NewVectorStore(ctx context.Context, cfg config.VectorStoreConf, embedder Em
 		if cfg.Weaviate.Endpoint == types.EmptyString {
 			return nil, errors.New("vector conf weaviate is required for weaviate type")
 		}
-		vectorStoreImpl, err = New(ctx, cfg, embedder, reranker)
+		vectorStoreImpl, err = New(cfg, embedder, reranker)
 	default:
 		err = fmt.Errorf("unsupported vector type: %s", cfg.Type)
 	}

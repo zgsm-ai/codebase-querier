@@ -78,10 +78,10 @@ func (mr *MockStoreMockRecorder) Delete(ctx, key interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockStore) Get(ctx context.Context, key string) (*any, error) {
+func (m *MockStore) Get(ctx context.Context, key string) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, key)
-	ret0, _ := ret[0].(*any)
+	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -66,7 +66,7 @@ func TestTree(t *testing.T) {
 
 	svcCtx := api.InitSvcCtx(ctx, nil)
 
-	localCodebase, err := codebase.NewLocalCodebase(ctx, svcCtx.Config.CodeBaseStore)
+	localCodebase, err := codebase.NewLocalCodebase(svcCtx.Config.CodeBaseStore)
 	assert.NoError(t, err)
 	for _, tt := range testcases {
 		t.Run(tt.Name, func(t *testing.T) {

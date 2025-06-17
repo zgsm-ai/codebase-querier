@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
@@ -29,9 +29,8 @@ const (
 var _ Store = &localCodebase{}
 
 type localCodebase struct {
-	logger logx.Logger
-	cfg    config.CodeBaseStoreConf
-	mu     sync.RWMutex // 保护并发访问
+	cfg config.CodeBaseStoreConf
+	mu  sync.RWMutex // 保护并发访问
 }
 
 func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error) {
@@ -68,18 +67,18 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		metaFileList = append(metaFileList, metadataFile)
 		syncMetaData, err := l.Read(ctx, codebasePath, filepath.Join(types.SyncMedataDir, metadataFile), types.ReadOptions{})
 		if err != nil {
-			l.logger.Errorf("read metadata file %v failed: %v", metadataFile, err)
+			tracer.WithTrace(ctx).Errorf("read metadata file %v failed: %v", metadataFile, err)
 			continue
 		}
 		if syncMetaData == nil {
-			l.logger.Errorf("sync file %s metadata is empty", metadataFile)
+			tracer.WithTrace(ctx).Errorf("sync file %s metadata is empty", metadataFile)
 			continue
 		}
 		var syncMetaObj *types.SyncMetadataFile
 
 		err = json.Unmarshal(syncMetaData, &syncMetaObj)
 		if err != nil {
-			l.logger.Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
+			tracer.WithTrace(ctx).Errorf("failed to unmarshal metadata error: %v, raw: %s", err, syncMetaData)
 		}
 		files := syncMetaObj.FileList
 		for k, v := range files {
@@ -114,10 +113,9 @@ func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 	return os.RemoveAll(codebasePath)
 }
 
-func NewLocalCodebase(ctx context.Context, cfg config.CodeBaseStoreConf) (Store, error) {
+func NewLocalCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
 	return &localCodebase{
-		cfg:    cfg,
-		logger: logx.WithContext(ctx),
+		cfg: cfg,
 	}, nil
 }
 

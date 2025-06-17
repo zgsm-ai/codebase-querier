@@ -1,6 +1,7 @@
 package structure
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
@@ -26,7 +27,7 @@ func NewStructureParser() (*Parser, error) {
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s *Parser) Parse(codeFile *types.CodeFile, opts ParseOptions) (*codegraphpb.CodeStructure, error) {
+func (s *Parser) Parse(ctx context.Context, codeFile *types.CodeFile, opts ParseOptions) (*codegraphpb.CodeStructure, error) {
 	// Extract file extension
 	langConf, err := parser.GetLangConfigByFilePath(codeFile.Path)
 	if err != nil {

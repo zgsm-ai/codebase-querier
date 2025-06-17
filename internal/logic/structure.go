@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -41,11 +42,14 @@ func (l *StructureLogic) Structure(req *types.StructureRequest) (resp *types.Str
 	}
 
 	//TODO check param
-	bytes, err := l.svcCtx.CodebaseStore.Read(l.ctx, codebase.Path, filePath, types.ReadOptions{EndLine: maxReadLine})
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
+
+	bytes, err := l.svcCtx.CodebaseStore.Read(ctx, codebase.Path, filePath, types.ReadOptions{EndLine: maxReadLine})
 	if err != nil {
 		return nil, err
 	}
-	parsed, err := l.svcCtx.StructureParser.Parse(&types.CodeFile{
+
+	parsed, err := l.svcCtx.StructureParser.Parse(ctx, &types.CodeFile{
 		CodebasePath: codebase.Path,
 		Path:         filePath,
 		Content:      bytes,

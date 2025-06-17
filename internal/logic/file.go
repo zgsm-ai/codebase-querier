@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"gorm.io/gorm"
 
@@ -44,5 +45,6 @@ func (l *GetFileContentLogic) GetFileContent(req *types.FileContentRequest) ([]b
 	if utils.IsBlank(codebasePath) {
 		return nil, errors.New("codebase path is empty")
 	}
-	return l.svcCtx.CodebaseStore.Read(l.ctx, codebasePath, relativePath, types.ReadOptions{StartLine: req.StartLine, EndLine: req.EndLine})
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
+	return l.svcCtx.CodebaseStore.Read(ctx, codebasePath, relativePath, types.ReadOptions{StartLine: req.StartLine, EndLine: req.EndLine})
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/query"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/database/mocks"
@@ -44,10 +43,8 @@ func setupTestProcessor(t *testing.T) *testProcessor {
 	}
 
 	processor := &baseProcessor{
-		ctx:             context.Background(),
 		svcCtx:          svcCtx,
 		msg:             msg,
-		logger:          logx.WithContext(context.Background()),
 		syncFileModeMap: make(map[string]string),
 	}
 
@@ -148,7 +145,7 @@ func TestBaseProcessor_DatabaseOperations(t *testing.T) {
 				tp.mockDB.Mock.ExpectCommit()
 			},
 			run: func(tp *testProcessor) error {
-				return tp.initTaskHistory("test_task")
+				return tp.initTaskHistory(context.Background(), "test_task")
 			},
 			validate: func(t *testing.T, tp *testProcessor, err error) {
 				assert.NoError(t, err)
@@ -171,10 +168,10 @@ func TestBaseProcessor_DatabaseOperations(t *testing.T) {
 				tp.mockDB.Mock.ExpectCommit()
 			},
 			run: func(tp *testProcessor) error {
-				return tp.updateTaskSuccess()
+				return tp.updateTaskSuccess(context.Background())
 			},
 			validate: func(t *testing.T, tp *testProcessor, err error) {
-				tp.updateTaskSuccess()
+				tp.updateTaskSuccess(context.Background())
 				assert.NoError(t, tp.mockDB.Mock.ExpectationsWereMet())
 			},
 		},
@@ -276,7 +273,6 @@ func TestBaseProcessor_ProcessFilesConcurrently_Scenarios(t *testing.T) {
 			// 设置上下文和测试数据
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
-			tp.ctx = ctx
 			tp.syncFileModeMap = prepareFiles(tt.fileCount)
 
 			// 创建处理函数
@@ -284,7 +280,7 @@ func TestBaseProcessor_ProcessFilesConcurrently_Scenarios(t *testing.T) {
 
 			// 执行测试
 			start := time.Now()
-			err := tp.processFilesConcurrently(pf.handle, tt.maxConcurrency)
+			err := tp.processFilesConcurrently(ctx, pf.handle, tt.maxConcurrency)
 			duration := time.Since(start)
 
 			// 输出统计信息

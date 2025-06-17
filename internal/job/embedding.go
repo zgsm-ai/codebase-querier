@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -24,18 +24,16 @@ type embeddingProcessor struct {
 	baseProcessor
 }
 
-func NewEmbeddingProcessor(ctx context.Context,
+func NewEmbeddingProcessor(
 	svcCtx *svc.ServiceContext,
 	msg *types.CodebaseSyncMessage,
 	syncFileModeMap map[string]string,
 ) (Processor, error) {
 	return &embeddingProcessor{
 		baseProcessor: baseProcessor{
-			ctx:             ctx,
 			svcCtx:          svcCtx,
 			msg:             msg,
 			syncFileModeMap: syncFileModeMap,
-			logger:          logx.WithContext(ctx),
 		},
 	}, nil
 }
@@ -47,12 +45,12 @@ type fileProcessResult struct {
 	op     types.FileOp
 }
 
-func (t *embeddingProcessor) Process() error {
-	t.logger.Infof("start to execute embedding processor %+v", t.msg)
+func (t *embeddingProcessor) Process(ctx context.Context) error {
+	tracer.WithTrace(ctx).Infof("start to execute embedding task, msg: %+v", t.msg)
 	start := time.Now()
 
 	err := func(t *embeddingProcessor) error {
-		if err := t.initTaskHistory(taskTypeEmbedding); err != nil {
+		if err := t.initTaskHistory(ctx, taskTypeEmbedding); err != nil {
 			return err
 		}
 
@@ -70,12 +68,12 @@ func (t *embeddingProcessor) Process() error {
 			result.op = op
 
 			select {
-			case <-t.ctx.Done():
+			case <-ctx.Done():
 				return errs.RunTimeout
 			default:
 				switch op {
 				case types.FileOpAdd, types.FileOpModify:
-					chunks, err := t.splitFile(&types.SyncFile{Path: path})
+					chunks, err := t.splitFile(ctx, &types.SyncFile{Path: path})
 					if err != nil {
 						if parser.IsNotSupportedFileError(err) {
 							atomic.AddInt32(&t.ignoreFileCnt, 1)
@@ -96,27 +94,27 @@ func (t *embeddingProcessor) Process() error {
 					atomic.AddInt32(&t.successFileCnt, 1)
 
 				default:
-					return fmt.Errorf("unknown file op %s", op)
+					return fmt.Errorf("embedding task unknown file op %s", op)
 				}
 			}
 			return nil
 		}
 
 		// 使用基础结构的并发处理方法
-		if err := t.processFilesConcurrently(processFile, t.svcCtx.Config.IndexTask.EmbeddingTask.MaxConcurrency); err != nil {
+		if err := t.processFilesConcurrently(ctx, processFile, t.svcCtx.Config.IndexTask.EmbeddingTask.MaxConcurrency); err != nil {
 			return err
 		}
 
 		// 批量处理结果
 		if len(addChunks) > 0 {
-			err := t.svcCtx.VectorStore.UpsertCodeChunks(t.ctx, addChunks, vector.Options{
+			err := t.svcCtx.VectorStore.UpsertCodeChunks(ctx, addChunks, vector.Options{
 				CodebaseId:   t.msg.CodebaseID,
 				CodebasePath: t.msg.CodebasePath,
 				CodebaseName: t.msg.CodebaseName,
 				SyncId:       t.msg.SyncID,
 			})
 			if err != nil {
-				t.logger.Errorf("upsert code chunks failed: %v", err)
+				tracer.WithTrace(ctx).Errorf("embedding task upsert code chunks failed: %v", err)
 				t.failedFileCnt = t.successFileCnt
 				t.successFileCnt = 0
 				return err
@@ -133,29 +131,29 @@ func (t *embeddingProcessor) Process() error {
 					FilePath:     path,
 				})
 			}
-			err := t.svcCtx.VectorStore.DeleteCodeChunks(t.ctx, deleteChunks, vector.Options{})
+			err := t.svcCtx.VectorStore.DeleteCodeChunks(ctx, deleteChunks, vector.Options{})
 			if err != nil {
-				t.logger.Errorf("delete code chunks failed: %v", err)
+				tracer.WithTrace(ctx).Errorf("embedding task delete code chunks failed: %v", err)
 				t.failedFileCnt += int32(len(deleteFilePaths))
 				return err
 			}
 		}
 
-		t.updateTaskSuccess()
+		t.updateTaskSuccess(ctx)
 		return nil
 	}(t)
 
-	if t.handleIfTaskFailed(err) {
-		return errors.Errorf("embedding processor err:%v", err)
+	if t.handleIfTaskFailed(ctx, err) {
+		return errors.Errorf("embedding task failed to update status:%v", err)
 	}
 
-	t.logger.Infof("embedding processor end successfully, cost: %d ms, msg: %+v, total: %d, success: %d, failed: %d",
-		time.Since(start).Milliseconds(), t.msg, t.totalFileCnt, t.successFileCnt, t.failedFileCnt)
+	tracer.WithTrace(ctx).Infof("embedding task end successfully, cost: %d ms, total: %d, success: %d, failed: %d,msg:%+v",
+		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.msg)
 	return nil
 }
 
-func (t *embeddingProcessor) splitFile(syncFile *types.SyncFile) ([]*types.CodeChunk, error) {
-	file, err := t.svcCtx.CodebaseStore.Read(t.ctx, t.msg.CodebasePath, syncFile.Path, types.ReadOptions{})
+func (t *embeddingProcessor) splitFile(ctx context.Context, syncFile *types.SyncFile) ([]*types.CodeChunk, error) {
+	file, err := t.svcCtx.CodebaseStore.Read(ctx, t.msg.CodebasePath, syncFile.Path, types.ReadOptions{})
 	if err != nil {
 		return nil, err
 	}

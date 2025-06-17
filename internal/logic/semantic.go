@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"gorm.io/gorm"
 
@@ -50,8 +51,9 @@ func (l *SemanticLogic) SemanticSearch(req *types.SemanticSearchRequest) (resp *
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
 	}
-	// TODO  向量库隔离
-	documents, err := l.svcCtx.VectorStore.Query(l.ctx, req.Query, topK,
+	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
+
+	documents, err := l.svcCtx.VectorStore.Query(ctx, req.Query, topK,
 		vector.Options{CodebaseId: codebase.ID,
 			CodebasePath: codebase.Path, CodebaseName: codebase.Name})
 	if err != nil {

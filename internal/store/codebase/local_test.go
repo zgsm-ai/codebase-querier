@@ -29,7 +29,7 @@ func setupTestLocalCodebase(t *testing.T) (Store, string) {
 		},
 	}
 
-	codebase, err := NewLocalCodebase(context.Background(), cfg)
+	codebase, err := NewLocalCodebase(cfg)
 	assert.NoError(t, err)
 	path, err := codebase.Init(context.Background(), "test-client", "test-path")
 	if err != nil {
@@ -85,7 +85,7 @@ func TestLocalCodebase_Init(t *testing.T) {
 				},
 			}
 
-			codebase, err := NewLocalCodebase(context.Background(), cfg)
+			codebase, err := NewLocalCodebase(cfg)
 			assert.NoError(t, err)
 			got, err := codebase.Init(context.Background(), tt.clientId, tt.codebasePath)
 			if tt.wantErr {
