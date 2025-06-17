@@ -101,6 +101,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 				return
 			}
 			logx.Infof("cleaner clean codebase successfully: %s", cb.Path)
+			// TODO sync_history 表清理。（或者直接给表加个触发器）
 		}
 		logx.Infof("cleaner clean codebases end, cnt: %d", len(codebases))
 	})

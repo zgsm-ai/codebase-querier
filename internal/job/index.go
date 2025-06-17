@@ -11,7 +11,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -317,7 +316,7 @@ func (i *indexJob) taskCounterIncr(syncId int32) {
 
 // IsCurrentLatestVersion 判断消息是否是最新消息
 func (i *indexJob) IsCurrentLatestVersion(err error, syncMsg *types.CodebaseSyncMessage) bool {
-	latestVersion, err := i.svcCtx.Cache.GetLatestVersion(i.ctx, utils.FormatInt(int64(syncMsg.CodebaseID)))
+	latestVersion, err := i.svcCtx.Cache.GetLatestVersion(i.ctx, types.SyncVersionKey(syncMsg.CodebaseID))
 	if err != nil {
 		i.Logger.Errorf("index job GetLatestVersion err:%v", err)
 	}
