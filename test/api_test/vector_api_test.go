@@ -28,15 +28,24 @@ func setup(syncId int32) error {
 		SyncTime:     time.Now(),
 	}
 	// 本次同步的元数据列表
-	syncFileModeMap, _, err := svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, msg.CodebasePath)
+	syncFiles, err := svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, msg.CodebasePath)
 	if err != nil {
 		return err
 	}
-	if len(syncFileModeMap) == 0 {
+	if len(syncFiles.FileModelMap) == 0 {
 		return errors.New("metadata file list is empty, cannot continue")
 	}
 
-	processor, err := job.NewEmbeddingProcessor(svcCtx, msg, syncFileModeMap)
+	params := &job.IndexTaskParams{
+		CodebaseID:           msg.CodebaseID,
+		CodebasePath:         msg.CodebasePath,
+		CodebaseName:         msg.CodebaseName,
+		SyncMetaFiles:        &types.CollapseSyncMetaFile{},
+		EnableCodeGraphBuild: true,
+		EnableEmbeddingBuild: true,
+	}
+
+	processor, err := job.NewEmbeddingProcessor(svcCtx, params, syncFiles.FileModelMap)
 	if err != nil {
 		return err
 	}

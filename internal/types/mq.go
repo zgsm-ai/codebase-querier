@@ -26,5 +26,8 @@ type ConsumeOptions struct {
 	ReadTimeout time.Duration
 }
 
+type NackOptions struct {
+}
+
 type TopicOptions struct {
 }

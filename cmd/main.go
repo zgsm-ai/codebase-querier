@@ -34,11 +34,12 @@ func main() {
 
 	serverCtx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
+
 	svcCtx, err := svc.NewServiceContext(serverCtx, c)
+	defer svcCtx.Close()
 	if err != nil {
 		panic(err)
 	}
-	defer svcCtx.Close()
 
 	jobScheduler, err := job.NewScheduler(serverCtx, svcCtx)
 	if err != nil {

@@ -41,13 +41,13 @@ type minioCodebase struct {
 	mu     sync.RWMutex
 }
 
-func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error) {
+func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (*types.CollapseSyncMetaFile, error) {
 	exists, err := m.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if !exists {
-		return nil, nil, ErrCodebasePathNotExists
+		return nil, ErrCodebasePathNotExists
 	}
 	// filepath -> mode(add delete modify)
 	// 根据元数据获取代码文件列表
@@ -55,10 +55,10 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 	// 获取代码文件列表
 	list, err := m.List(ctx, codebasePath, types.SyncMedataDir, types.ListOptions{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(list) == 0 {
-		return nil, nil, errors.New("embeddingProcessor metadata dir is empty")
+		return nil, errors.New("embeddingProcessor metadata dir is empty")
 	}
 	//TODO collapse list to fileList
 	// 对目录下的文件按名字升序排序
@@ -67,7 +67,8 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 	for _, f := range list {
 		treeSet.Add(f.Name)
 	}
-
+	var fileModeMap map[string]string
+	var metaFileList []string
 	it := treeSet.Iterator()
 	for it.Next() {
 		metadataFile := it.Value().(string)
@@ -94,7 +95,8 @@ func (m *minioCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		}
 
 	}
-	return fileModeMap, metaFileList, nil
+	return &types.CollapseSyncMetaFile{CodebasePath: codebasePath,
+		FileModelMap: fileModeMap, MetaFilePaths: metaFileList}, nil
 }
 
 func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath string) (io.ReadSeekCloser, error) {
@@ -560,6 +562,10 @@ func (m *minioCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 }
 
 func (m *minioCodebase) BatchDelete(ctx context.Context, codebasePath string, paths []string) error {
+	if len(paths) == 0 {
+		return errors.New("batch delete paths cannot be empty")
+	}
+
 	objectsCh := make(chan minio.ObjectInfo)
 	go func() {
 		defer close(objectsCh)

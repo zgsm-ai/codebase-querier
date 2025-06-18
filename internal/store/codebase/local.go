@@ -33,25 +33,25 @@ type localCodebase struct {
 	mu  sync.RWMutex // 保护并发访问
 }
 
-func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error) {
+func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (*types.CollapseSyncMetaFile, error) {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if !exists {
-		return nil, nil, ErrCodebasePathNotExists
+		return nil, ErrCodebasePathNotExists
 	}
 	// filepath -> mode(add delete modify)
 	// 根据元数据获取代码文件列表
 	// 递归目录，进行处理，并发
 	// 获取代码文件列表
-	fileModeMap = make(map[string]string)
+	fileModeMap := make(map[string]string)
 	list, err := l.List(ctx, codebasePath, types.SyncMedataDir, types.ListOptions{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(list) == 0 {
-		return nil, nil, errors.New("embeddingProcessor metadata dir is empty")
+		return nil, errors.New("embeddingProcessor metadata dir is empty")
 	}
 	//TODO collapse list to fileList
 	// 对目录下的文件按名字升序排序
@@ -60,7 +60,7 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 	for _, f := range list {
 		treeSet.Add(f.Name)
 	}
-
+	var metaFileList []string
 	it := treeSet.Iterator()
 	for it.Next() {
 		metadataFile := it.Value().(string)
@@ -87,7 +87,8 @@ func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePat
 		}
 
 	}
-	return fileModeMap, metaFileList, nil
+	return &types.CollapseSyncMetaFile{CodebasePath: codebasePath,
+		FileModelMap: fileModeMap, MetaFilePaths: metaFileList}, nil
 
 }
 
@@ -693,6 +694,9 @@ func (l *localCodebase) BatchDelete(ctx context.Context, codebasePath string, pa
 	}
 	if !exists {
 		return ErrCodebasePathNotExists
+	}
+	if len(paths) == 0 {
+		return errors.New("batch delete paths cannot be empty")
 	}
 
 	var wg sync.WaitGroup

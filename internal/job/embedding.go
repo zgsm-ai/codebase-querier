@@ -16,23 +16,19 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-const (
-	taskTypeEmbedding = "embedding"
-)
-
 type embeddingProcessor struct {
 	baseProcessor
 }
 
 func NewEmbeddingProcessor(
 	svcCtx *svc.ServiceContext,
-	msg *types.CodebaseSyncMessage,
+	msg *IndexTaskParams,
 	syncFileModeMap map[string]string,
 ) (Processor, error) {
 	return &embeddingProcessor{
 		baseProcessor: baseProcessor{
 			svcCtx:          svcCtx,
-			msg:             msg,
+			params:          msg,
 			syncFileModeMap: syncFileModeMap,
 		},
 	}, nil
@@ -46,11 +42,11 @@ type fileProcessResult struct {
 }
 
 func (t *embeddingProcessor) Process(ctx context.Context) error {
-	tracer.WithTrace(ctx).Infof("start to execute embedding task, msg: %+v", t.msg)
+	tracer.WithTrace(ctx).Infof("start to execute embedding task, params: %+v", t.params)
 	start := time.Now()
 
 	err := func(t *embeddingProcessor) error {
-		if err := t.initTaskHistory(ctx, taskTypeEmbedding); err != nil {
+		if err := t.initTaskHistory(ctx, types.TaskTypeEmbedding); err != nil {
 			return err
 		}
 
@@ -110,17 +106,17 @@ func (t *embeddingProcessor) Process(ctx context.Context) error {
 			var deleteChunks []*types.CodeChunk
 			for path := range deleteFilePaths {
 				deleteChunks = append(deleteChunks, &types.CodeChunk{
-					CodebaseId:   t.msg.CodebaseID,
-					CodebasePath: t.msg.CodebasePath,
-					CodebaseName: t.msg.CodebaseName,
+					CodebaseId:   t.params.CodebaseID,
+					CodebasePath: t.params.CodebasePath,
+					CodebaseName: t.params.CodebaseName,
 					FilePath:     path,
 				})
 			}
 			err := t.svcCtx.VectorStore.DeleteCodeChunks(ctx, deleteChunks, vector.Options{
-				CodebaseId:   t.msg.CodebaseID,
-				CodebasePath: t.msg.CodebasePath,
-				CodebaseName: t.msg.CodebaseName,
-				SyncId:       t.msg.SyncID,
+				CodebaseId:   t.params.CodebaseID,
+				CodebasePath: t.params.CodebasePath,
+				CodebaseName: t.params.CodebaseName,
+				SyncId:       t.params.SyncID,
 			})
 			if err != nil {
 				tracer.WithTrace(ctx).Errorf("embedding task delete code chunks failed: %v", err)
@@ -132,10 +128,10 @@ func (t *embeddingProcessor) Process(ctx context.Context) error {
 		// 批量处理结果
 		if len(addChunks) > 0 {
 			err := t.svcCtx.VectorStore.UpsertCodeChunks(ctx, addChunks, vector.Options{
-				CodebaseId:   t.msg.CodebaseID,
-				CodebasePath: t.msg.CodebasePath,
-				CodebaseName: t.msg.CodebaseName,
-				SyncId:       t.msg.SyncID,
+				CodebaseId:   t.params.CodebaseID,
+				CodebasePath: t.params.CodebasePath,
+				CodebaseName: t.params.CodebaseName,
+				SyncId:       t.params.SyncID,
 			})
 			if err != nil {
 				tracer.WithTrace(ctx).Errorf("embedding task upsert code chunks failed: %v", err)
@@ -158,21 +154,21 @@ func (t *embeddingProcessor) Process(ctx context.Context) error {
 		return fmt.Errorf("embedding task failed to update status, err:%v", err)
 	}
 
-	tracer.WithTrace(ctx).Infof("embedding task end successfully, cost: %d ms, total: %d, success: %d, failed: %d,msg:%+v",
-		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.msg)
+	tracer.WithTrace(ctx).Infof("embedding task end successfully, cost: %d ms, total: %d, success: %d, failed: %d,params:%+v",
+		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.params)
 	return nil
 }
 
 func (t *embeddingProcessor) splitFile(ctx context.Context, syncFile *types.SyncFile) ([]*types.CodeChunk, error) {
-	file, err := t.svcCtx.CodebaseStore.Read(ctx, t.msg.CodebasePath, syncFile.Path, types.ReadOptions{})
+	file, err := t.svcCtx.CodebaseStore.Read(ctx, t.params.CodebasePath, syncFile.Path, types.ReadOptions{})
 	if err != nil {
 		return nil, err
 	}
 	// 切分文件
 	return t.svcCtx.CodeSplitter.Split(&types.CodeFile{
-		CodebaseId:   t.msg.CodebaseID,
-		CodebasePath: t.msg.CodebasePath,
-		CodebaseName: t.msg.CodebaseName,
+		CodebaseId:   t.params.CodebaseID,
+		CodebasePath: t.params.CodebasePath,
+		CodebaseName: t.params.CodebaseName,
 		Path:         syncFile.Path,
 		Content:      file,
 	})

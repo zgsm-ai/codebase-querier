@@ -3,8 +3,9 @@ package codebase
 import (
 	"context"
 	"errors"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
 // Store defines the interface for codebase storage operations
@@ -70,7 +71,7 @@ type Store interface {
 
 	DeleteAll(ctx context.Context, codebasePath string) error
 
-	GetSyncFileListCollapse(ctx context.Context, codebasePath string) (fileModeMap map[string]string, metaFileList []string, err error)
+	GetSyncFileListCollapse(ctx context.Context, codebasePath string) (file *types.CollapseSyncMetaFile, err error)
 }
 
 // WalkContext provides context information during directory traversal

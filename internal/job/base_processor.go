@@ -19,7 +19,7 @@ import (
 // baseProcessor 包含所有处理器共有的字段和方法
 type baseProcessor struct {
 	svcCtx          *svc.ServiceContext
-	msg             *types.CodebaseSyncMessage
+	params          *IndexTaskParams
 	syncFileModeMap map[string]string
 	taskHistoryId   int32
 	totalFileCnt    int32
@@ -31,9 +31,9 @@ type baseProcessor struct {
 // initTaskHistory 初始化任务历史记录
 func (p *baseProcessor) initTaskHistory(ctx context.Context, taskType string) error {
 	taskHistory := &model.IndexHistory{
-		SyncID:       p.msg.SyncID,
-		CodebaseID:   p.msg.CodebaseID,
-		CodebasePath: p.msg.CodebasePath,
+		SyncID:       p.params.SyncID,
+		CodebaseID:   p.params.CodebaseID,
+		CodebasePath: p.params.CodebasePath,
 		TaskType:     taskType,
 		Status:       types.TaskStatusPending,
 		StartTime:    utils.CurrentTime(),
@@ -64,15 +64,15 @@ func (p *baseProcessor) updateTaskSuccess(ctx context.Context) error {
 		Where(p.svcCtx.Querier.IndexHistory.ID.Eq(m.ID)).
 		Updates(m)
 	if err != nil {
-		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.params.CodebaseID, err, m)
 		return fmt.Errorf("upate task success failed: %w", err)
 	}
 	if res.RowsAffected == 0 {
-		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
-		return fmt.Errorf("upate task success failed, codebaseId %d not found in database", p.msg.CodebaseID)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.params.CodebaseID, err, m)
+		return fmt.Errorf("upate task success failed, codebaseId %d not found in database", p.params.CodebaseID)
 	}
 	if res.Error != nil {
-		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.msg.CodebaseID, err, m)
+		tracer.WithTrace(ctx).Errorf("update task history %d failed: %v, model:%v", p.params.CodebaseID, err, m)
 		return fmt.Errorf("upate task success failed: %w", res.Error)
 	}
 	return nil
@@ -81,7 +81,7 @@ func (p *baseProcessor) updateTaskSuccess(ctx context.Context) error {
 // handleIfTaskFailed 处理任务失败情况
 func (p *baseProcessor) handleIfTaskFailed(ctx context.Context, err error) bool {
 	if err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to process file, err: %v, file:%v ", err, p.msg)
+		tracer.WithTrace(ctx).Errorf("failed to process file, err: %v, file:%v ", err, p.params)
 		if errors.Is(err, errs.InsertDatabaseFailed) {
 			return true
 		}
@@ -94,7 +94,7 @@ func (p *baseProcessor) handleIfTaskFailed(ctx context.Context, err error) bool 
 			UpdateColumnSimple(p.svcCtx.Querier.IndexHistory.Status.Value(status),
 				p.svcCtx.Querier.IndexHistory.ErrorMessage.Value(err.Error()))
 		if err != nil {
-			tracer.WithTrace(ctx).Errorf("update task history %d failed: %v", p.msg.CodebaseID, err)
+			tracer.WithTrace(ctx).Errorf("update task history %d failed: %v", p.params.CodebaseID, err)
 		}
 		return true
 	}

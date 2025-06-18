@@ -553,7 +553,7 @@ func (b BadgerDBGraph) Delete(ctx context.Context, files []string) error {
 	var docKeys [][]byte
 	for _, v := range files {
 		if v == types.EmptyString {
-			tracer.WithTrace(ctx).Errorf("Delete docs, file path is empty")
+			tracer.WithTrace(ctx).Errorf("DeleteByCodebase docs, file path is empty")
 			continue
 		}
 		docKeys = append(docKeys, DocKey(v))
@@ -627,4 +627,34 @@ func (b BadgerDBGraph) refillDefinitionRange(ctx context.Context, nodes []*types
 		return errors.Join(errs...)
 	}
 	return nil
+}
+
+func (b BadgerDBGraph) DeleteByCodebase(ctx context.Context, codebaseId int32, codebasePath string) error {
+	return b.DeleteAll(ctx)
+}
+
+func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.CodeGraphSummary, error) {
+	var relationFileCount int
+	var definitionFileCount int
+	err := b.db.View(func(txn *badger.Txn) error {
+		iter := txn.NewIterator(badger.IteratorOptions{})
+		for iter.Rewind(); iter.Valid(); iter.Next() {
+			key := iter.Item().Key()
+			if IsDocKey(key) {
+				relationFileCount++
+			} else if IsStructKey(key) {
+				definitionFileCount++
+			} else {
+				tracer.WithTrace(ctx).Debugf("GetIndexSummary unknown key type:%s", string(key))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &types.CodeGraphSummary{
+		TotalRelationFiles:   relationFileCount,
+		TotalDefinitionFiles: definitionFileCount,
+	}, nil
 }

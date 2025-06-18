@@ -120,6 +120,10 @@ func (s syncHistory) replaceDB(db *gorm.DB) syncHistory {
 	return s
 }
 
+func (s syncHistory) FindLatest(ctx context.Context, codebaseId int32) (*model.SyncHistory, error) {
+	return s.WithContext(ctx).Where(s.CodebaseID.Eq(codebaseId)).Order(s.ID.Desc()).First()
+}
+
 type syncHistoryDo struct{ gen.DO }
 
 func (s syncHistoryDo) Debug() *syncHistoryDo {

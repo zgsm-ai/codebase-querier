@@ -42,9 +42,17 @@ func setupTestProcessor(t *testing.T) *testProcessor {
 		Querier: query.Use(mockDB.GormDB),
 	}
 
+	params := &IndexTaskParams{
+		CodebaseID:           msg.CodebaseID,
+		CodebasePath:         msg.CodebasePath,
+		CodebaseName:         msg.CodebaseName,
+		SyncMetaFiles:        &types.CollapseSyncMetaFile{},
+		EnableCodeGraphBuild: true,
+		EnableEmbeddingBuild: true,
+	}
 	processor := &baseProcessor{
 		svcCtx:          svcCtx,
-		msg:             msg,
+		params:          params,
 		syncFileModeMap: make(map[string]string),
 	}
 

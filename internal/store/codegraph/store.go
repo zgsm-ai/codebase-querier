@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"google.golang.org/protobuf/proto"
+	"strings"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
@@ -30,6 +31,8 @@ type GraphStore interface {
 	Close() error
 	DeleteAll(ctx context.Context) error
 	Delete(ctx context.Context, files []string) error
+	DeleteByCodebase(ctx context.Context, codebaseId int32, codebasePath string) error
+	GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.CodeGraphSummary, error)
 }
 
 // 键前缀
@@ -47,6 +50,14 @@ func DocKey(path string) []byte {
 // StructKey 键生成函数 unix path
 func StructKey(path string) []byte {
 	return []byte(fmt.Sprintf("%s%s", StructPrefix, utils.ToUnixPath(path)))
+}
+
+func IsDocKey(key []byte) bool {
+	return strings.HasPrefix(string(key), DocPrefix)
+}
+
+func IsStructKey(key []byte) bool {
+	return strings.HasPrefix(string(key), DocPrefix)
 }
 
 // SerializeDocument 序列化函数

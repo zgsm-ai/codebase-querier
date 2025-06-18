@@ -71,4 +71,29 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		},
 		rest.WithPrefix("/codebase-indexer"),
 	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodDelete,
+				Path:    "/api/v1/codebase",
+				Handler: deleteCodebaseHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/api/v1/index",
+				Handler: indexHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/index/summary",
+				Handler: summaryHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/index/task",
+				Handler: taskHandler(serverCtx),
+			},
+		},
+	)
 }

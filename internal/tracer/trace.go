@@ -24,6 +24,10 @@ func RequestTraceId(baseId int) string {
 	return fmt.Sprintf("req-%d@%s", baseId, strings.ReplaceAll(uuid.New().String(), "-", types.EmptyString))
 }
 
+func MsgTraceId(baseId string) string {
+	return fmt.Sprintf("msg-%s", baseId)
+}
+
 func TaskTraceId(baseId int) string {
 	return fmt.Sprintf("task-%d@%s", baseId, strings.ReplaceAll(uuid.New().String(), "-", types.EmptyString))
 }

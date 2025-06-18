@@ -164,35 +164,20 @@ func (r *redisMQ) Ack(ctx context.Context, stream, group string, id string) erro
 
 // Nack 实现MessageQueue接口的Nack方法
 // 在Streams实现中，通过重新将消息添加到流中使其可以被再次消费
-func (r *redisMQ) Nack(ctx context.Context, stream, group string, id string) error {
-	// 获取消息内容
-	messages, err := r.client.XRangeN(ctx, stream, id, id, 1).Result()
-	if err != nil {
-		return fmt.Errorf("failed to get message %s from stream %s: %w", id, stream, err)
-	}
+func (r *redisMQ) Nack(ctx context.Context, topic, consumerGroup string, msgId string, message []byte, opts types.NackOptions) error {
 
-	if len(messages) == 0 {
-		tracer.WithTrace(ctx).Errorf("message %s not found in stream %s", id, stream)
-		return nil
-	}
-
-	// 将消息重新添加到流中
-	_, err = r.client.XAdd(ctx, &redis.XAddArgs{
-		Stream: stream,
-		Values: messages[0].Values,
-	}).Result()
-
-	if err != nil {
-		return fmt.Errorf("failed to readd message to stream %s: %w", stream, err)
+	// 发布新消息
+	if err := r.Produce(ctx, topic, message, types.ProduceOptions{}); err != nil {
+		return fmt.Errorf("nack failed to readd message to stream %s: %w", topic, err)
 	}
 
 	// 确认原消息，避免重复
-	err = r.client.XAck(ctx, stream, group, id).Err()
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to ack original message %s: %v", id, err)
+	if err := r.client.XAck(ctx, topic, consumerGroup, msgId).Err(); err != nil {
+		tracer.WithTrace(ctx).Errorf("nack failed to ack original message %s: %v", msgId, err)
+		return err
 	}
 
-	tracer.WithTrace(ctx).Debugf("nacked message %s in stream %s, group %s. Message has been readded to stream.", id, stream, group)
+	tracer.WithTrace(ctx).Debugf("nacked message %s in stream %s, group %s successfully.", msgId, topic, consumerGroup)
 	return nil
 }
 

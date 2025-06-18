@@ -74,14 +74,14 @@ func (l *SyncFilesLogic) SyncFiles(req *types.FileUploadRequest, r *http.Request
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
 
 	// 查找待删除的文件，进行处理
-	fileModeMap, _, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
+	metaFiles, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
 	if err != nil {
 		l.Logger.Errorf("get sync file list error: %v", err)
 		return err
 	}
 
 	var deleteList []string
-	for f, m := range fileModeMap {
+	for f, m := range metaFiles.FileModelMap {
 		if m == types.FileOpDelete {
 			deleteList = append(deleteList, f)
 		}

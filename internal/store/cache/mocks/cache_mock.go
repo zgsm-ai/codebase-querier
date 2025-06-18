@@ -66,7 +66,7 @@ func (mr *MockStoreMockRecorder) CleanExpiredVersions(ctx, key interface{}) *gom
 // Delete mocks base method.
 func (m *MockStore) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret := m.ctrl.Call(m, "DeleteByCodebase", ctx, key)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -74,7 +74,7 @@ func (m *MockStore) Delete(ctx context.Context, key string) error {
 // Delete indicates an expected call of Delete.
 func (mr *MockStoreMockRecorder) Delete(ctx, key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStore)(nil).Delete), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByCodebase", reflect.TypeOf((*MockStore)(nil).Delete), ctx, key)
 }
 
 // Get mocks base method.

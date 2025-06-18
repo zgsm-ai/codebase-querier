@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"github.com/panjf2000/ants/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
@@ -32,6 +33,7 @@ type ServiceContext struct {
 	redisClient     *redis.Client // 保存Redis客户端引用以便关闭
 	StructureParser *structure.Parser
 	serverContext   context.Context
+	TaskPool        *ants.Pool
 }
 
 // Close closes the shared Redis client and database connection
@@ -47,8 +49,13 @@ func (s *ServiceContext) Close() {
 			errs = append(errs, err)
 		}
 	}
+	if s.TaskPool != nil {
+		s.TaskPool.Release()
+	}
 	if len(errs) > 0 {
 		logx.Errorf("service_context close err:%v", errs)
+	} else {
+		logx.Infof("service_context close successfully.")
 	}
 }
 
@@ -116,6 +123,18 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
+
+	// 初始化协程池
+	taskPool, err := ants.NewPool(svcCtx.Config.IndexTask.PoolSize, ants.WithOptions(
+		ants.Options{
+			MaxBlockingTasks: 1000, // max queue tasks, if queue is full, will block
+			Nonblocking:      false,
+		},
+	))
+	if err != nil {
+		return nil, err
+	}
+	svcCtx.TaskPool = taskPool
 
 	svcCtx.StructureParser = parser
 	svcCtx.CodebaseStore = codebaseStore

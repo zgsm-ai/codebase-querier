@@ -19,10 +19,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-const (
-	taskTypeCodegraph = "codegraph"
-)
-
 type codegraphProcessor struct {
 	baseProcessor
 	indexGenerator *scip.IndexGenerator
@@ -32,10 +28,10 @@ type codegraphProcessor struct {
 
 func NewCodegraphProcessor(
 	svcCtx *svc.ServiceContext,
-	msg *types.CodebaseSyncMessage,
+	params *IndexTaskParams,
 	syncFileModeMap map[string]string) (Processor, error) {
 
-	graphStore, err := graphstore.NewBadgerDBGraph(graphstore.WithPath(filepath.Join(msg.CodebasePath, types.CodebaseIndexDir)))
+	graphStore, err := graphstore.NewBadgerDBGraph(graphstore.WithPath(filepath.Join(params.CodebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +42,7 @@ func NewCodegraphProcessor(
 	return &codegraphProcessor{
 		baseProcessor: baseProcessor{
 			svcCtx:          svcCtx,
-			msg:             msg,
+			params:          params,
 			syncFileModeMap: syncFileModeMap,
 		},
 		indexGenerator: graphBuilder,
@@ -56,7 +52,7 @@ func NewCodegraphProcessor(
 }
 
 func (t *codegraphProcessor) Process(ctx context.Context) error {
-	tracer.WithTrace(ctx).Infof("start to execute codegraph task for msg: %+v", t.msg)
+	tracer.WithTrace(ctx).Infof("start to execute codegraph task for params: %+v", t.params)
 	defer t.graphStore.Close()
 	var wait sync.WaitGroup
 	// 启动一个协程去将所有文件的结构提取处理
@@ -71,7 +67,7 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 	err := func(t *codegraphProcessor) error {
 		wait.Add(1)
 		defer wait.Done()
-		if err := t.initTaskHistory(ctx, taskTypeCodegraph); err != nil {
+		if err := t.initTaskHistory(ctx, types.TaskTypeCodegraph); err != nil {
 			return err
 		}
 
@@ -79,13 +75,13 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 
 		// TODO scip是整个项目一起解析，后面看能否换成tree-sitter统一做
 		// 构建代码图
-		err := t.indexGenerator.Generate(ctx, t.msg.CodebasePath)
+		err := t.indexGenerator.Generate(ctx, t.params.CodebasePath)
 		if err != nil {
-			return fmt.Errorf("codegraph task failed to generate %s index file: %w", t.msg.CodebasePath, err)
+			return fmt.Errorf("codegraph task failed to generate %s index file: %w", t.params.CodebasePath, err)
 		}
 
 		// 解析并保存
-		if err = t.indexParser.ParseSCIPFile(ctx, t.msg.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
+		if err = t.indexParser.ParseSCIPFile(ctx, t.params.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
 			return fmt.Errorf("codegraph task failed to parse & save code graph: %w", err)
 		}
 
@@ -103,12 +99,12 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 		return fmt.Errorf("codegraph task failed to update status:%w", err)
 	}
 
-	tracer.WithTrace(ctx).Infof("codegraph processor end successfully, cost: %d ms, msg:%+v", time.Since(start).Milliseconds(), t.msg)
+	tracer.WithTrace(ctx).Infof("codegraph processor end successfully, cost: %d ms, params:%+v", time.Since(start).Milliseconds(), t.params)
 	return nil
 }
 
 func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
-	tracer.WithTrace(ctx).Infof("start to execute code structure task %v", t.msg)
+	tracer.WithTrace(ctx).Infof("start to execute code structure task %v", t.params)
 	start := time.Now()
 
 	t.totalFileCnt = int32(len(t.syncFileModeMap))
@@ -126,7 +122,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 		default:
 			switch op {
 			case types.FileOpAdd, types.FileOpModify:
-				content, err := t.svcCtx.CodebaseStore.Read(ctx, t.msg.CodebasePath, path, types.ReadOptions{})
+				content, err := t.svcCtx.CodebaseStore.Read(ctx, t.params.CodebasePath, path, types.ReadOptions{})
 				if err != nil {
 					atomic.AddInt32(&t.failedFileCnt, 1)
 					return fmt.Errorf("code structure task read file failed: %w", err)
@@ -140,7 +136,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 
 				parsedData, err := structureParser.Parse(ctx, &types.CodeFile{
 					Path:         path,
-					CodebasePath: t.msg.CodebasePath,
+					CodebasePath: t.params.CodebasePath,
 					Name:         filepath.Base(path),
 					Content:      content,
 				}, structure.ParseOptions{IncludeContent: false})
@@ -200,6 +196,6 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 		}
 	}
 
-	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d ms, total:%d, success:%d, failed:%d, msg: %+v,",
-		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.msg)
+	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d ms, total:%d, success:%d, failed:%d, params: %+v,",
+		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.params)
 }

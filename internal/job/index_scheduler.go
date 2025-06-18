@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/panjf2000/ants/v2"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
@@ -19,20 +18,20 @@ import (
 const indexNodeEnableVal = "1"
 const indexNodeEnv = "INDEX_NODE"
 const lockKeyPrefixFmt = "codebase_indexer:lock:%d"
-const distLockTimeout = time.Minute * 3
+const DistLockTimeout = time.Minute * 3
 const msgFailedThreshold = 10
 
-type indexJob struct {
-	svcCtx        *svc.ServiceContext
-	ctx           context.Context
-	enableFlag    bool
-	indexTaskPool *ants.Pool
+type IndexTaskScheduler struct {
+	svcCtx     *svc.ServiceContext
+	ctx        context.Context
+	enableFlag bool
+
 	messageQueue  mq.MessageQueue
 	consumerGroup string // 消费者组名称
 }
 
-func NewIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
-	s := &indexJob{
+func NewIndexTaskScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
+	s := &IndexTaskScheduler{
 		ctx:           serverCtx,
 		svcCtx:        svcCtx,
 		enableFlag:    os.Getenv(indexNodeEnv) == indexNodeEnableVal,
@@ -45,23 +44,10 @@ func NewIndexJob(serverCtx context.Context, svcCtx *svc.ServiceContext) (Job, er
 		return s, nil
 	}
 
-	// 初始化协程池
-	embeddingTaskPool, err := ants.NewPool(svcCtx.Config.IndexTask.PoolSize, ants.WithOptions(
-		ants.Options{
-			MaxBlockingTasks: 1, // max queue tasks, if queue is full, will block
-			Nonblocking:      false,
-		},
-	))
-	if err != nil {
-		return nil, err
-	}
-
-	s.indexTaskPool = embeddingTaskPool
-
 	return s, nil
 }
 
-func (i *indexJob) Start() {
+func (i *IndexTaskScheduler) Start() {
 	if !i.enableFlag {
 		logx.Infof("INDEX_NODE flag is %t, disable index job.", i.enableFlag)
 		return
@@ -83,7 +69,7 @@ func (i *indexJob) Start() {
 				continue
 			}
 			if err != nil {
-				logx.Errorf("consume index msg from mq error:%v", err)
+				logx.Errorf("consume index params from mq error:%v", err)
 				continue
 			}
 			// 处理消息
@@ -94,7 +80,7 @@ func (i *indexJob) Start() {
 }
 
 // processMessage 处理单条消息的全部流程
-func (i *indexJob) processMessage(ctx context.Context, msg *types.Message) {
+func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Message) {
 	syncMsg, err := parseSyncMessage(msg)
 	if err != nil {
 		tracer.WithTrace(ctx).Errorf("parse sync message failed. ack message, err:%v", err)
@@ -102,23 +88,24 @@ func (i *indexJob) processMessage(ctx context.Context, msg *types.Message) {
 		return
 	}
 	if syncMsg == nil {
-		tracer.WithTrace(ctx).Error("sync msg is nil after parsing with no error. ack message.")
+		tracer.WithTrace(ctx).Error("sync params is nil after parsing with no error. ack message.")
 		i.ackSilently(ctx, msg)
 		return
 	}
 
 	// 获取分布式锁， n分钟超时
-	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, indexJobKey(syncMsg.CodebaseID), distLockTimeout)
+	// 在任务中执行结束unlock
+	lockKey := IndexJobKey(syncMsg.CodebaseID)
+	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, DistLockTimeout)
 	if err != nil || !locked {
 		tracer.WithTrace(ctx).Debugf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
 		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body)
 		return
 	}
 
-	defer i.svcCtx.DistLock.Unlock(i.ctx, indexJobKey(syncMsg.CodebaseID))
-	tracer.WithTrace(ctx).Debugf("acquire lock successfully, start to process message %s", msg.ID)
+	tracer.WithTrace(ctx).Debugf("acquire lock successfully, start to process message %s, lockKey: %s", msg.ID, lockKey)
 
-	// 本次同步的元数据列表
+	// 元数据列表
 	medataFiles, err := i.svcCtx.CodebaseStore.GetSyncFileListCollapse(i.ctx, syncMsg.CodebasePath)
 	if err != nil {
 		tracer.WithTrace(ctx).Errorf("index job GetSyncFileListCollapse err:%w", err)
@@ -144,16 +131,16 @@ func (i *indexJob) processMessage(ctx context.Context, msg *types.Message) {
 
 	isEmbedTaskSuccess := syncMsg.IsEmbedTaskSuccess
 	isGraphTaskSuccess := syncMsg.IsGraphTaskSuccess
-	// 提交失败, nack; TODO处理失败，得看下怎么做，不行放在一个协程池里面处理， TODO wg.wait。
+	// 提交失败, nack; TODO处理失败，得看下怎么做，不行放在一个协程池里面处理，
 	if isEmbedTaskSuccess && isGraphTaskSuccess {
-		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because msg isEmbedTaskSuccess is %t, isGraphTaskSuccess is %t ",
+		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because params isEmbedTaskSuccess is %t, isGraphTaskSuccess is %t ",
 			isEmbedTaskSuccess, isGraphTaskSuccess)
 		i.ackSilently(ctx, msg)
 		return
 	}
 	// 失败次数
 	if syncMsg.FailedTimes >= msgFailedThreshold {
-		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because msg reached failed times limit: %d ",
+		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because params reached failed times limit: %d ",
 			msgFailedThreshold)
 		i.ackSilently(ctx, msg)
 		return
@@ -162,7 +149,7 @@ func (i *indexJob) processMessage(ctx context.Context, msg *types.Message) {
 	var submitErr error
 
 	// 嵌入+ 关系图 任务
-	submitErr = i.submitIndexTask(traceCtx, msg, syncMsg, medataFiles)
+	submitErr = i.submitIndexTask(traceCtx, lockKey, msg, syncMsg, medataFiles)
 	if submitErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to submit index task submit, submitErr: %v", submitErr)
 		// reproduce
@@ -173,7 +160,7 @@ func (i *indexJob) processMessage(ctx context.Context, msg *types.Message) {
 
 }
 
-func (i *indexJob) nackSilently(ctx context.Context, topic string, consumerGroup string, msgId string, body []byte) {
+func (i *IndexTaskScheduler) nackSilently(ctx context.Context, topic string, consumerGroup string, msgId string, body []byte) {
 	if ackErr := i.messageQueue.Nack(i.ctx, topic, consumerGroup, msgId, body, types.NackOptions{}); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to nack message %s from stream %s, group %s, err: %v", msgId, topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
@@ -181,7 +168,7 @@ func (i *indexJob) nackSilently(ctx context.Context, topic string, consumerGroup
 	tracer.WithTrace(ctx).Debugf("nack message %s successfully.", msgId)
 }
 
-func (i *indexJob) ackSilently(ctx context.Context, msg *types.Message) {
+func (i *IndexTaskScheduler) ackSilently(ctx context.Context, msg *types.Message) {
 	tracer.WithTrace(ctx).Debugf("start to ack message %s", msg.ID)
 	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to ack message %s from stream %s, group %s, err: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
@@ -189,19 +176,36 @@ func (i *indexJob) ackSilently(ctx context.Context, msg *types.Message) {
 	tracer.WithTrace(ctx).Debugf("ack message %s successfully.", msg.ID)
 }
 
-func (i *indexJob) submitIndexTask(ctx context.Context, msg *types.Message, syncMsg *types.CodebaseSyncMessage,
-	syncFiles *types.CollapseSyncMetaFile) error {
-	tracer.WithTrace(ctx).Infof("start to submit task for msg:%s", msg.ID)
-	return i.indexTaskPool.Submit(func() {
-		embedOk, graphOk := i.run(ctx, syncMsg, syncFiles)
+func (i *IndexTaskScheduler) Submit(ctx context.Context, taskRun func()) error {
+	return i.svcCtx.TaskPool.Submit(taskRun)
+}
+
+func (i *IndexTaskScheduler) submitIndexTask(ctx context.Context, lockKey string, msg *types.Message, syncMsg *types.CodebaseSyncMessage,
+	syncMetaFiles *types.CollapseSyncMetaFile) error {
+	tracer.WithTrace(ctx).Infof("start to submit task for params:%s", msg.ID)
+	taskRun := func() {
+		task := &IndexTask{
+			SvcCtx:  i.svcCtx,
+			LockKey: lockKey,
+			Params: &IndexTaskParams{
+				CodebaseID:           syncMsg.CodebaseID,
+				CodebasePath:         syncMsg.CodebasePath,
+				CodebaseName:         syncMsg.CodebaseName,
+				SyncMetaFiles:        syncMetaFiles,
+				EnableCodeGraphBuild: i.svcCtx.Config.IndexTask.GraphTask.Enabled,
+				EnableEmbeddingBuild: i.svcCtx.Config.IndexTask.EmbeddingTask.Enabled,
+			},
+		}
+
+		embedOk, graphOk := task.Run(ctx)
 		if embedOk && graphOk {
-			tracer.WithTrace(ctx).Infof("index task run successfully.")
+			tracer.WithTrace(ctx).Infof("index task Run successfully.")
 			return
 		}
 
 		syncMsg.FailedTimes++
 
-		tracer.WithTrace(ctx).Errorf("index task failed, embedOk:%t, graphOk: %t, failedTimes: %d reproduce msg.",
+		tracer.WithTrace(ctx).Errorf("index task failed, embedOk:%t, graphOk: %t, failedTimes: %d reproduce params.",
 			embedOk, graphOk, syncMsg.FailedTimes)
 
 		if embedOk {
@@ -214,85 +218,17 @@ func (i *indexJob) submitIndexTask(ctx context.Context, msg *types.Message, sync
 		// reproduce
 		bytes, err := json.Marshal(syncMsg)
 		if err != nil {
-			tracer.WithTrace(ctx).Errorf("index task failed, reproduce msg, marshal err:%v", err)
+			tracer.WithTrace(ctx).Errorf("index task failed, reproduce params, marshal err:%v", err)
 			return
 		}
 		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, bytes)
-	})
-}
-
-func (i *indexJob) run(ctx context.Context, syncMsg *types.CodebaseSyncMessage,
-	metaFiles *types.CollapseSyncMetaFile) (embedOk bool, graphOk bool) {
-
-	embedErr := i.runEmbeddingTask(ctx, syncMsg, metaFiles.FileModelMap)
-	if embedErr != nil {
-		tracer.WithTrace(ctx).Errorf("embedding task failed:%v", embedErr)
-	}
-	graphErr := i.runCodeGraphTask(ctx, syncMsg, metaFiles.FileModelMap)
-	if graphErr != nil {
-		tracer.WithTrace(ctx).Errorf("graph task failed:%v", graphErr)
 	}
 
-	embedOk, graphOk = embedErr == nil, graphErr == nil
-
-	if embedOk && graphOk {
-		i.cleanProcessedMetadataFile(ctx, metaFiles)
-	}
-	return
-}
-
-func (i *indexJob) runCodeGraphTask(ctx context.Context, syncMsg *types.CodebaseSyncMessage, syncFileModeMap map[string]string) error {
-	if !i.svcCtx.Config.IndexTask.GraphTask.Enabled {
-		tracer.WithTrace(ctx).Infof("codegraph task is disabled, not process msg")
-		return nil
-	}
-	codegraphTimeout, graphTimeoutCancel := context.WithTimeout(ctx, i.svcCtx.Config.IndexTask.GraphTask.Timeout)
-	defer graphTimeoutCancel()
-
-	gProcessor, err := NewCodegraphProcessor(i.svcCtx, syncMsg, syncFileModeMap)
-	if err != nil {
-		return fmt.Errorf("failed to create codegraph task processor for message %d, err: %w", syncMsg.SyncID, err)
-	}
-
-	if err = gProcessor.Process(codegraphTimeout); err != nil {
-		return fmt.Errorf("codegraph task failed, err:%w", err)
-	}
-	tracer.WithTrace(ctx).Infof("codegraph task successfully.")
-	return nil
-}
-
-func (i *indexJob) runEmbeddingTask(ctx context.Context, syncMsg *types.CodebaseSyncMessage, syncFileModeMap map[string]string) error {
-
-	if !i.svcCtx.Config.IndexTask.EmbeddingTask.Enabled {
-		tracer.WithTrace(ctx).Infof("embedding task is disabled, not process msg")
-		return nil
-	}
-
-	embeddingTimeout, embeddingTimeoutCancel := context.WithTimeout(ctx, i.svcCtx.Config.IndexTask.EmbeddingTask.Timeout)
-	defer embeddingTimeoutCancel()
-	eProcessor, err := NewEmbeddingProcessor(i.svcCtx, syncMsg, syncFileModeMap)
-	if err != nil {
-		return fmt.Errorf("failed to create embedding task processor for message: %d, err: %w", syncMsg.SyncID, err)
-	}
-	err = eProcessor.Process(embeddingTimeout)
-	if err != nil {
-		return fmt.Errorf("embedding task failed, err:%w", err)
-	}
-	tracer.WithTrace(ctx).Infof("embedding task successfully.")
-	return nil
-}
-
-func (i *indexJob) cleanProcessedMetadataFile(ctx context.Context, metaFiles *types.CollapseSyncMetaFile) {
-	tracer.WithTrace(ctx).Infof("start to clean sync meta file, codebasePath:%s, paths:%v", metaFiles.CodebasePath, metaFiles.MetaFilePaths)
-	// TODO 当调用链和嵌入任务都成功时，清理元数据文件。改为移动到另一个隐藏文件夹中，每天定时清理，便于排查问题。
-	if err := i.svcCtx.CodebaseStore.BatchDelete(i.ctx, metaFiles.CodebasePath, metaFiles.MetaFilePaths); err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to delete codebase %s metadata : %v, err: %v", metaFiles.CodebasePath, metaFiles.MetaFilePaths, err)
-	}
-	tracer.WithTrace(ctx).Infof("clean %s sync meta files successfully.", metaFiles.CodebasePath)
+	return i.Submit(ctx, taskRun)
 }
 
 // IsCurrentLatestVersion 判断消息是否是最新消息
-func (i *indexJob) IsCurrentLatestVersion(ctx context.Context, syncMsg *types.CodebaseSyncMessage) bool {
+func (i *IndexTaskScheduler) IsCurrentLatestVersion(ctx context.Context, syncMsg *types.CodebaseSyncMessage) bool {
 	latestVersion, err := i.svcCtx.Cache.GetLatestVersion(i.ctx, types.SyncVersionKey(syncMsg.CodebaseID))
 	if err != nil {
 		tracer.WithTrace(ctx).Errorf("index job GetLatestVersion for sync %d err:%v", syncMsg.SyncID, err)
@@ -316,14 +252,10 @@ func parseSyncMessage(m *types.Message) (*types.CodebaseSyncMessage, error) {
 	return &msg, nil
 }
 
-func (i *indexJob) Close() {
-	if i.indexTaskPool != nil {
-		i.indexTaskPool.Release()
-	}
-
-	logx.Info("indexJob closed successfully.")
+func (i *IndexTaskScheduler) Close() {
+	logx.Info("IndexTaskScheduler closed successfully.")
 }
 
-func indexJobKey(codebaseId int32) string {
+func IndexJobKey(codebaseId int32) string {
 	return fmt.Sprintf(lockKeyPrefixFmt, codebaseId)
 }

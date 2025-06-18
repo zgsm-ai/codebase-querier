@@ -17,18 +17,18 @@ import (
 const cleanLockKey = "codebase_indexer:cleaner:lock"
 const lockTimeout = time.Second * 120
 
-type cleaner struct {
+type Cleaner struct {
 	svcCtx *svc.ServiceContext
 	ctx    context.Context
 	cron   *cron.Cron
 }
 
-func (c *cleaner) Close() {
+func (c *Cleaner) Close() {
 	//TODO implement me
 	// panic("implement me")
 }
 
-func (c *cleaner) Start() {
+func (c *Cleaner) Start() {
 	c.cron.Start() // 启动 Cron
 	logx.Infof("cleaner job started")
 }
@@ -110,7 +110,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cleaner{
+	return &Cleaner{
 		svcCtx: svcCtx,
 		ctx:    ctx,
 		cron:   cr,

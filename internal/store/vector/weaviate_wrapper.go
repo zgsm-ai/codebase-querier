@@ -5,10 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 
 	"github.com/weaviate/weaviate/entities/vectorindex/dynamic"
 
@@ -24,7 +25,6 @@ import (
 )
 
 type weaviateWrapper struct {
-	ctx       context.Context
 	reranker  Reranker
 	embedder  Embedder
 	client    *goweaviate.Client
@@ -64,12 +64,52 @@ func New(cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Stor
 	return store, nil
 }
 
+func (r *weaviateWrapper) GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.EmbeddingSummary, error) {
+	tenantName, err := r.generateTenantName(codebasePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tenant name: %w", err)
+	}
+
+	// Define GraphQL fields using proper Field type
+	fields := []graphql.Field{
+		{Name: "meta", Fields: []graphql.Field{
+			{Name: "count"},
+		}},
+		{Name: "groupedBy", Fields: []graphql.Field{
+			{Name: "path"},
+			{Name: "value"},
+		}},
+	}
+
+	codebaseFilter := filters.Where().WithPath([]string{MetadataCodebaseId}).
+		WithOperator(filters.Equal).WithValueInt(int64(codebaseId))
+
+	res, err := r.client.GraphQL().Aggregate().
+		WithClassName(r.className).
+		WithFields(fields...).
+		WithWhere(codebaseFilter).
+		WithGroupBy(MetadataFilePath).
+		WithTenant(tenantName).
+		Do(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index summary: %w", err)
+	}
+
+	summary, err := r.unmarshalSummarySearchResponse(res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal summary response: %w", err)
+	}
+
+	return summary, nil
+}
+
 func (r *weaviateWrapper) DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) error {
 	if len(chunks) == 0 {
 		return nil // Nothing to delete
 	}
 
-	tenant, err := r.generateTenantName(chunks[0].CodebasePath)
+	tenant, err := r.generateTenantName(options.CodebasePath)
 	if err != nil {
 		return err
 	}
@@ -101,9 +141,9 @@ func (r *weaviateWrapper) DeleteCodeChunks(ctx context.Context, chunks []*types.
 	do, err := r.client.Batch().ObjectsBatchDeleter().
 		WithTenant(tenant).WithWhere(
 		combinedFilter,
-	).WithClassName(r.className).Do(r.ctx)
+	).WithClassName(r.className).Do(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to send delete chunks request:%w", err)
+		return fmt.Errorf("failed to send delete chunks err:%w", err)
 	}
 	return CheckBatchDeleteErrors(do)
 }
@@ -160,7 +200,7 @@ func (r *weaviateWrapper) SimilaritySearch(ctx context.Context, query string, nu
 		return nil, fmt.Errorf("query weaviate failed: %w", err)
 	}
 
-	items, err := r.unmarshalResponse(res)
+	items, err := r.unmarshalSimilarSearchResponse(res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -168,7 +208,7 @@ func (r *weaviateWrapper) SimilaritySearch(ctx context.Context, query string, nu
 	return items, nil
 }
 
-func (r *weaviateWrapper) unmarshalResponse(res *models.GraphQLResponse) ([]*types.SemanticFileItem, error) {
+func (r *weaviateWrapper) unmarshalSimilarSearchResponse(res *models.GraphQLResponse) ([]*types.SemanticFileItem, error) {
 	// Get the data for our class
 	data, ok := res.Data["Get"].(map[string]interface{})
 	if !ok {
@@ -222,6 +262,25 @@ func getFloatValue(obj map[string]interface{}, key string) float64 {
 }
 
 func (r *weaviateWrapper) Close() {
+}
+
+func (r *weaviateWrapper) DeleteByCodebase(ctx context.Context, codebaseId int32, codebasePath string) error {
+
+	tenant, err := r.generateTenantName(codebasePath)
+	if err != nil {
+		return err
+	}
+	codebaseFilter := filters.Where().WithPath([]string{MetadataCodebaseId}).
+		WithOperator(filters.Equal).WithValueInt(int64(codebaseId))
+
+	do, err := r.client.Batch().ObjectsBatchDeleter().
+		WithTenant(tenant).WithWhere(
+		codebaseFilter,
+	).WithClassName(r.className).Do(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to send delete codebase chunks, err:%w", err)
+	}
+	return CheckBatchDeleteErrors(do)
 }
 
 func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.CodeChunk, options Options) error {
@@ -344,4 +403,63 @@ func (r *weaviateWrapper) generateTenantName(codebasePath string) (string, error
 	}
 	hash := md5.Sum([]byte(codebasePath))   // 计算 MD5 哈希
 	return hex.EncodeToString(hash[:]), nil // 转为32位十六进制字符串
+}
+
+func (r *weaviateWrapper) unmarshalSummarySearchResponse(res *models.GraphQLResponse) (*types.EmbeddingSummary, error) {
+	// 检查响应是否为空
+	if res == nil || res.Data == nil {
+		return nil, fmt.Errorf("received empty response from Weaviate")
+	}
+
+	// 获取 Aggregate 字段
+	data, ok := res.Data["Aggregate"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'Aggregate' field not found or has wrong type")
+	}
+
+	// 获取类名对应的数据
+	results, ok := data[r.className].([]interface{})
+	if !ok || len(results) == 0 {
+		return nil, fmt.Errorf("invalid response format: class data not found or has wrong type")
+	}
+
+	result := results[0].(map[string]interface{})
+
+	// 获取 meta 字段
+	meta, ok := result["meta"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'meta' field not found or has wrong type")
+	}
+
+	// 获取总数
+	count, ok := meta["count"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'count' field not found or has wrong type")
+	}
+
+	// 获取 groupedBy 字段
+	groupedBy, ok := result["groupedBy"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'groupedBy' field not found or has wrong type")
+	}
+
+	// 统计不同文件的数量
+	fileSet := make(map[string]struct{})
+	for _, group := range groupedBy {
+		groupMap, ok := group.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		value, ok := groupMap["value"].(string)
+		if !ok {
+			continue
+		}
+		fileSet[value] = struct{}{}
+	}
+
+	return &types.EmbeddingSummary{
+		Status:      "success",
+		TotalFiles:  len(fileSet),
+		TotalChunks: int(count),
+	}, nil
 }

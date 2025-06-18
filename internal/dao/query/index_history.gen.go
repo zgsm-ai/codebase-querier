@@ -6,7 +6,6 @@ package query
 
 import (
 	"context"
-
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -392,4 +391,10 @@ func (i indexHistoryDo) Delete(models ...*model.IndexHistory) (result gen.Result
 func (i *indexHistoryDo) withDO(do gen.Dao) *indexHistoryDo {
 	i.DO = *do.(*gen.DO)
 	return i
+}
+
+func(i *indexHistory) GetLatestTaskHistory(ctx context.Context, codebaseId int32, taskType string) (*model.IndexHistory, error) {
+	return  i.WithContext(ctx).Where(i.CodebaseID.Eq(codebaseId),
+		i.TaskType.Eq(taskType)).
+		Order(i.UpdatedAt.Desc()).First()
 }

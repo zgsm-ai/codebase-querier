@@ -81,7 +81,7 @@ func (mr *MockGraphStoreMockRecorder) Close() *gomock.Call {
 // Delete mocks base method.
 func (m *MockGraphStore) Delete(ctx context.Context, files []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, files)
+	ret := m.ctrl.Call(m, "DeleteByCodebase", ctx, files)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -89,7 +89,7 @@ func (m *MockGraphStore) Delete(ctx context.Context, files []string) error {
 // Delete indicates an expected call of Delete.
 func (mr *MockGraphStoreMockRecorder) Delete(ctx, files interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGraphStore)(nil).Delete), ctx, files)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByCodebase", reflect.TypeOf((*MockGraphStore)(nil).Delete), ctx, files)
 }
 
 // DeleteAll mocks base method.

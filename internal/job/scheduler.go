@@ -6,7 +6,7 @@ import (
 )
 
 type Scheduler struct {
-	jobs []Job
+	Jobs []Job
 }
 
 func NewScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (*Scheduler, error) {
@@ -14,7 +14,7 @@ func NewScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (*Sched
 	if err != nil {
 		return nil, err
 	}
-	indexJob, err := NewIndexJob(serverCtx, svcCtx)
+	indexJob, err := NewIndexTaskScheduler(serverCtx, svcCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -23,18 +23,18 @@ func NewScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext) (*Sched
 		indexJob,
 	}
 	return &Scheduler{
-		jobs: jobs,
+		Jobs: jobs,
 	}, nil
 }
 
 func (s *Scheduler) Schedule() {
-	for _, job := range s.jobs {
+	for _, job := range s.Jobs {
 		go job.Start()
 	}
 }
 
 func (s *Scheduler) Close() {
-	for _, job := range s.jobs {
+	for _, job := range s.Jobs {
 		if job == nil {
 			continue
 		}

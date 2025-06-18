@@ -12,23 +12,22 @@ type CodebaseHashResponseData struct {
 }
 
 type FileContentRequest struct {
-	ClientId    string `form:"clientId"`                      // 用户机器ID
-	CodebasePath string `form:"codebasePath"`                   // 项目绝对路径
-	FilePath    string `form:"filePath"`                      // 文件相对路径
-	StartLine   int    `form:"startLine,optional,default=1"`  // 开始行（默认1）
-	EndLine     int    `form:"endLine,optional,default=100"` // 结束行（默认100，-1=全部）
+	ClientId     string `form:"clientId"`                     // 用户机器ID
+	CodebasePath string `form:"codebasePath"`                 // 项目绝对路径
+	FilePath     string `form:"filePath"`                     // 文件相对路径
+	StartLine    int    `form:"startLine,optional,default=1"` // 开始行（默认1）
+	EndLine      int    `form:"endLine,optional,default=100"` // 结束行（默认100，-1=全部）
 }
 
 type FileUploadRequest struct {
 	ClientId      string `form:"clientId"`               // 客户ID
-	CodebasePath   string `form:"codebasePath"`            // 项目路径
-	CodebaseName   string `form:"codebaseName"`            // 项目名称
+	CodebasePath  string `form:"codebasePath"`           // 项目路径
+	CodebaseName  string `form:"codebaseName"`           // 项目名称
 	ExtraMetadata string `form:"extraMetadata,optional"` // 额外元数据（JSON字符串）
 }
 
-
 type CodebaseHashRequest struct {
-	ClientId    string `form:"clientId"`    // 客户ID
+	ClientId     string `form:"clientId"`     // 客户ID
 	CodebasePath string `form:"codebasePath"` // 项目路径
 }
 
@@ -37,17 +36,16 @@ type CodebaseFileHashItem struct {
 	Hash string `json:"hash"` // 文件哈希值
 }
 
-
 type RelationRequest struct {
-	ClientId       string `form:"clientId"`                     // 用户机器ID
-	CodebasePath    string `form:"codebasePath"`                  // 项目绝对路径
-	FilePath       string `form:"filePath"`                     // 文件相对路径
-	StartLine      int    `form:"startLine"`                    // 开始行
-	StartColumn    int    `form:"startColumn"`                  // 开始列
-	EndLine        int    `form:"endLine"`                      // 结束行
-	EndColumn      int    `form:"endColumn"`                    // 结束列
-	SymbolName     string `form:"symbolName,optional"`          // 符号名（可选）
-	IncludeContent int    `form:"includeContent,default=0"`     // 是否返回代码内容（1=是，0=否，默认0）
+	ClientId       string `form:"clientId"`                    // 用户机器ID
+	CodebasePath   string `form:"codebasePath"`                // 项目绝对路径
+	FilePath       string `form:"filePath"`                    // 文件相对路径
+	StartLine      int    `form:"startLine"`                   // 开始行
+	StartColumn    int    `form:"startColumn"`                 // 开始列
+	EndLine        int    `form:"endLine"`                     // 结束行
+	EndColumn      int    `form:"endColumn"`                   // 结束列
+	SymbolName     string `form:"symbolName,optional"`         // 符号名（可选）
+	IncludeContent int    `form:"includeContent,default=0"`    // 是否返回代码内容（1=是，0=否，默认0）
 	MaxLayer       int    `form:"maxLayer,optional,default=1"` // 最大层级数（默认1）
 }
 
@@ -62,43 +60,41 @@ type SemanticFileItem struct {
 }
 
 type SemanticSearchRequest struct {
-	ClientId    string `form:"clientId"`                 // 用户机器ID（如MAC地址）
-	CodebasePath string `form:"codebasePath"`              // 项目绝对路径
-	Query       string `form:"query"`                    // 查询内容
-	TopK        int    `form:"topK,optional,default=10"` // 结果返回数量（默认10）
+	ClientId     string `form:"clientId"`                 // 用户机器ID（如MAC地址）
+	CodebasePath string `form:"codebasePath"`             // 项目绝对路径
+	Query        string `form:"query"`                    // 查询内容
+	TopK         int    `form:"topK,optional,default=10"` // 结果返回数量（默认10）
 }
 
 type SemanticSearchResponseData struct {
 	List []*SemanticFileItem `json:"list"` // 检索结果列表
 }
 
-
 type CodebaseTreeRequest struct {
-	ClientId     string `form:"clientId"`     // 用户机器ID
-	CodebasePath string `form:"codebasePath"` // 项目绝对路径
-	SubDir       string `form:"subDir,optional"`       // 文件相对路径
+	ClientId     string `form:"clientId"`        // 用户机器ID
+	CodebasePath string `form:"codebasePath"`    // 项目绝对路径
+	SubDir       string `form:"subDir,optional"` // 文件相对路径
 	Depth        int    `form:"depth,optional,default=5"`
 	IncludeFiles int    `form:"includeFiles,optional,default=1"`
 }
 
 type CodebaseTreeResponseData struct {
-	CodebaseId    int32        `json:"codebaseId"`
-	Name          string        `json:"name"`
-	RootPath      string        `json:"rootPath"`
-	TotalFiles    int          `json:"totalFiles"`
-	TotalSize     int64        `json:"totalSize"`
-	DirectoryTree []*TreeNode    `json:"directoryTree"`
+	CodebaseId    int32       `json:"codebaseId"`
+	Name          string      `json:"name"`
+	RootPath      string      `json:"rootPath"`
+	TotalFiles    int         `json:"totalFiles"`
+	TotalSize     int64       `json:"totalSize"`
+	DirectoryTree []*TreeNode `json:"directoryTree"`
 }
-
 
 // ListOption 定义List方法的可选参数
 type ListOption func(*ListOptions)
 
 // ListOptions 包含List方法的可选参数
 type ListOptions struct {
-	Recursive      bool          // 是否递归列出子目录
-	Limit          int          // 返回结果数量限制
-	Offset         int          // 结果偏移量
+	Recursive      bool           // 是否递归列出子目录
+	Limit          int            // 返回结果数量限制
+	Offset         int            // 结果偏移量
 	ExcludePattern *regexp.Regexp // 排除文件的正则表达式
 	IncludePattern *regexp.Regexp // 包含文件的正则表达式
 }
@@ -108,7 +104,7 @@ type TreeOption func(*TreeOptions)
 
 // TreeOptions 包含Tree方法的可选参数
 type TreeOptions struct {
-	MaxDepth       int           // 最大递归深度
+	MaxDepth       int            // 最大递归深度
 	ExcludePattern *regexp.Regexp // 排除文件的正则表达式
 	IncludePattern *regexp.Regexp // 包含文件的正则表达式
 }
@@ -117,7 +113,6 @@ type ReadOptions struct {
 	StartLine int
 	EndLine   int
 }
-
 
 type StructreItem struct {
 	Name     string   `json:"name"`     // 节点名字
@@ -136,7 +131,6 @@ type StructureResponseData struct {
 	List []*StructreItem `json:"list"` // 关系树列表
 }
 
-
 type DefinitionNode struct {
 	Name     string   `json:"name"`     // 节点名
 	Content  string   `json:"content"`  // 代码内容
@@ -146,13 +140,63 @@ type DefinitionNode struct {
 }
 
 type DefinitionRequest struct {
-	ClientId     string `form:"clientId"`     // 用户机器ID
-	CodebasePath string `form:"codebasePath"` // 项目绝对路径
-	FilePath     string `form:"filePath"`     // 文件相对路径
-	StartLine    int    `form:"startLine"`    // 开始行
-	EndLine      int    `form:"endLine"`      // 结束行
+	ClientId     string `form:"clientId"`             // 用户机器ID
+	CodebasePath string `form:"codebasePath"`         // 项目绝对路径
+	FilePath     string `form:"filePath,optional"`    // 文件相对路径
+	StartLine    int    `form:"startLine,optional"`   // 开始行
+	EndLine      int    `form:"endLine,optional"`     // 结束行
+	codeSnippet  string `json:"codeSnippet,optional"` // 代码片段
 }
 
 type DefinitionResponseData struct {
 	List []*DefinitionNode `json:"list"` // 关系树列表
+}
+
+type DeleteCodebaseRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID（如MAC地址）
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+}
+
+type DeleteCodebaseResponseData struct {
+}
+
+type DeleteIndexRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID（如MAC地址）
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+	IndexType    string `form:"taskType,options=embedding|codegraph|all"`
+}
+
+type DeleteIndexResponseData struct {
+}
+
+type EmbeddingSummary struct {
+	Status      string `json:"status"`
+	TotalFiles  int    `json:"totalFiles"`
+	TotalChunks int    `json:"totalChunks"`
+}
+type CodeGraphSummary struct {
+	Status               string `json:"status"`
+	TotalRelationFiles   int    `json:"totalRelationFiles"`
+	TotalDefinitionFiles int    `json:"totalDefinitionFiles"`
+}
+
+type IndexSummaryRequest struct {
+	ClientId     string `form:"clientId"`     // 用户机器ID（如MAC地址）
+	CodebasePath string `form:"codebasePath"` // 项目绝对路径
+}
+
+type IndexSummaryResonseData struct {
+	TotalFiles int
+	Embedding  EmbeddingSummary `json:"embedding"`
+	CodeGraph  CodeGraphSummary `json:"codegraph"`
+}
+
+type IndexTaskRequest struct {
+	ClientId     string `json:"clientId"`     // 用户机器ID（如MAC地址）
+	CodebasePath string `json:"codebasePath"` // 项目绝对路径
+	IndexType    string `json:"indexType,options=embedding|codegraph|all"`
+}
+
+type IndexTaskResponseData struct {
+	TaskId int `json:"taskId"`
 }

@@ -22,7 +22,7 @@ func TestIndexJobRun(t *testing.T) {
 	serviceContext := api.InitSvcCtx(ctx, nil)
 	ctx, cancelFunc := context.WithTimeout(ctx, time.Minute*5)
 	defer cancelFunc()
-	indexJob, err := job.NewIndexJob(ctx, serviceContext)
+	indexJob, err := job.NewIndexTaskScheduler(ctx, serviceContext)
 	assert.NoError(t, err)
 	// 先执行 upload 上传文件， INDEX_NODE 环境变量设置为0，确保主程序不会执行
 	assert.NoError(t, err)

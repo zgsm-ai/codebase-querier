@@ -55,9 +55,10 @@ type DefinitionNode {
 type DefinitionRequest {
 	clientId     string `form:"clientId"` // 用户机器ID
 	codebasePath string `form:"codebasePath"` // 项目绝对路径
-	filePath     string `form:"filePath"` // 文件相对路径
-	startLine    int    `form:"startLine"` // 开始行
-	endLine      int    `form:"endLine"` // 结束行
+	filePath     string `form:"filePath,optional"` // 文件相对路径
+	startLine    int    `form:"startLine,optional"` // 开始行
+	endLine      int    `form:"endLine,optional"` // 结束行
+	codeSnippet string `json:"codeSnippet,optional"`       // 代码内容
 }
 
 type DefinitionResponseData {
@@ -129,8 +130,8 @@ type (
 		isDir    bool        `json:"isDir,omitempty"` // 是否为目录
 		path     string      `json:"path"`
 		size     int64       `json:"size,omitempty"` // 仅文件有大小
-		Name     string      `json:"language"` // 节点名称
-		ModTime  string      `json:"modTime,omitempty"` // 修改时间（可选）
+		language string      `json:"language"` // 节点名称
+		modTime  string      `json:"modTime,omitempty"` // 修改时间（可选）
 		children []*TreeNode `json:"children,omitempty"`
 	}
 )
@@ -203,5 +204,67 @@ type SemanticResponseData {
 service codebaseindexer {
 	@handler semanticSearch
 	get /api/v1/search/semantic (SemanticRequest) returns (SemanticResponseData)
+}
+
+type IndexSummaryRequest {
+	clientId     string `form:"clientId"` // 用户机器ID（如MAC地址）
+	codebasePath string `form:"codebasePath"` // 项目绝对路径
+}
+
+type EmbeddingSummary {
+	status      string `json:"status"`
+	totalFiles  int    `json:"totalFiles"`
+	totalChunks int    `json:"totalChunks"`
+}
+
+type CodeGraphSummary {
+	status               string `json:"status"`
+	totalRelationFiles   int    `json:"totalRelationFiles"`
+	totalDefinitionFiles int    `json:"totalDefinitionFiles"`
+}
+
+type IndexSummaryResonseData {
+	totalFiles int
+	embedding  EmbeddingSummary `json:"embedding"`
+	codegraph      CodeGraphSummary     `json:"codegraph"`
+}
+
+type IndexTaskRequest {
+	clientId     string `json:"clientId"` // 用户机器ID（如MAC地址）
+	codebasePath string `json:"codebasePath"` // 项目绝对路径
+	indexType    string `json:"indexType,options=embedding|codegraph|all"`
+}
+
+type IndexTaskResponseData {
+	taskId int `json:"taskId"`
+}
+
+type DeleteIndexRequest {
+	clientId     string `form:"clientId"` // 用户机器ID（如MAC地址）
+	codebasePath string `form:"codebasePath"` // 项目绝对路径
+	indexType    string `form:"taskType,options=embedding|codegraph|all"`
+}
+
+type DeleteIndexResponseData {}
+
+type DeleteCodebaseRequest {
+	clientId     string `form:"clientId"` // 用户机器ID（如MAC地址）
+	codebasePath string `form:"codebasePath"` // 项目绝对路径
+}
+
+type DeleteCodebaseResponseData {}
+
+service codebaseindexer {
+	@handler summary
+	get /api/v1/index/summary (IndexSummaryRequest) returns (IndexSummaryResonseData)
+
+	@handler task
+	post /api/v1/index/task (IndexTaskRequest) returns (IndexTaskResponseData)
+
+	@handler index
+	delete /api/v1/index (DeleteIndexRequest) returns (DeleteIndexResponseData)
+
+	@handler delete_codebase
+	delete /api/v1/codebase (DeleteCodebaseRequest) returns (DeleteCodebaseResponseData)
 }
 
