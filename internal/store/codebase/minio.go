@@ -147,13 +147,13 @@ func (m *minioCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 }
 
 // Init 初始化一个新的代码库
-func (m *minioCodebase) Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error) {
-	if clientId == "" || clientCodebasePath == "" {
-		return nil, errors.New("clientId and clientCodebasePath cannot be empty")
+func (m *minioCodebase) Init(ctx context.Context, clientId string, clientPath string) (*types.Codebase, error) {
+	if clientId == "" || clientPath == "" {
+		return nil, errors.New("clientId and clientPath cannot be empty")
 	}
 
 	// 生成唯一的路径
-	codebasePath, err := generateCodebasePath(m.cfg.Minio.Bucket, clientId, clientCodebasePath)
+	codebasePath, err := generateCodebasePath(m.cfg.Minio.Bucket, clientId, clientPath)
 	if err != nil {
 		return nil, err
 	}

@@ -45,11 +45,11 @@ func (l *SemanticLogic) SemanticSearch(req *types.SemanticSearchRequest) (resp *
 		return nil, errs.NewInvalidParamErr(paramQuery, req.Query)
 	}
 	clientId := req.ClientId
-	clientCodebasePath := req.CodebasePath
+	clientPath := req.CodebasePath
 
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientPath: %s", clientId, clientPath))
 	}
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
 

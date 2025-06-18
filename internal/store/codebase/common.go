@@ -30,8 +30,8 @@ func generateUniquePath(clientId, codebasePath string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func generateCodebasePath(basePath, clientId, clientCodebasePath string) (string, error) {
-	return filepath.Join(basePath, generateUniquePath(clientId, clientCodebasePath), filepathSlash), nil
+func generateCodebasePath(basePath, clientId, clientPath string) (string, error) {
+	return filepath.Join(basePath, generateUniquePath(clientId, clientPath), filepathSlash), nil
 }
 
 type ZipOptions struct {
