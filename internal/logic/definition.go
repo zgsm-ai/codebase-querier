@@ -61,10 +61,10 @@ func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.
 	}
 
 	clientId := req.ClientId
-	clientCodebasePath := req.CodebasePath
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	clientPath := req.CodebasePath
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientPath: %s", clientId, clientPath))
 	}
 	if err != nil {
 		return nil, err

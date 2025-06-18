@@ -102,6 +102,8 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			}
 			logx.Infof("cleaner clean codebase successfully: %s", cb.Path)
 			// TODO sync_history 表清理。（或者直接给表加个触发器）
+
+			// TODO 元数据文件定时清理，每天将昨天的清理掉，避免有些任务索引没构建成功，导致任务一直失败。
 		}
 		logx.Infof("cleaner clean codebases end, cnt: %d", len(codebases))
 	})

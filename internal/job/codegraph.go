@@ -81,16 +81,18 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 		// 构建代码图
 		err := t.indexGenerator.Generate(ctx, t.msg.CodebasePath)
 		if err != nil {
-			return fmt.Errorf("failed to generate %s  index file: %w", t.msg.CodebasePath, err)
+			return fmt.Errorf("codegraph task failed to generate %s index file: %w", t.msg.CodebasePath, err)
 		}
 
 		// 解析并保存
 		if err = t.indexParser.ParseSCIPFile(ctx, t.msg.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
-			return fmt.Errorf("failed to save code graph: %w", err)
+			return fmt.Errorf("codegraph task failed to parse & save code graph: %w", err)
 		}
 
 		// 更新任务状态为成功
-		t.updateTaskSuccess(ctx)
+		if err = t.updateTaskSuccess(ctx); err != nil {
+			tracer.WithTrace(ctx).Errorf("codegraph task failed to update status success , err:%v", err)
+		}
 
 		return nil
 	}(t)
@@ -103,13 +105,6 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 
 	tracer.WithTrace(ctx).Infof("codegraph processor end successfully, cost: %d ms, msg:%+v", time.Since(start).Milliseconds(), t.msg)
 	return nil
-}
-
-type fileStructureResult struct {
-	data *codegraphpb.CodeStructure
-	err  error
-	path string
-	op   types.FileOp
 }
 
 func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
@@ -205,6 +200,6 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 		}
 	}
 
-	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d s, total:%d, success:%d, failed:%d,  msg: %+v,",
-		time.Since(start).Seconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.msg)
+	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d ms, total:%d, success:%d, failed:%d, msg: %+v,",
+		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.msg)
 }

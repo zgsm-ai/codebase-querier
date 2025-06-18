@@ -31,12 +31,12 @@ func NewCodebaseTreeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Code
 
 func (l *CodebaseTreeLogic) CodebaseTree(req *types.CodebaseTreeRequest) (resp *types.CodebaseTreeResponseData, err error) {
 	// 1. 从数据库查询 codebase 信息
-	clientCodebasePath := req.CodebasePath
+	clientPath := req.CodebasePath
 	clientId := req.ClientId
 
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientPath: %s", clientId, clientPath))
 	}
 	if err != nil {
 		return nil, err

@@ -32,11 +32,11 @@ func NewGetFileContentLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 func (l *GetFileContentLogic) GetFileContent(req *types.FileContentRequest) ([]byte, error) {
 	// 读取文件
 	relativePath := req.FilePath
-	clientCodebasePath := req.CodebasePath
+	clientPath := req.CodebasePath
 	clientId := req.ClientId
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientPath: %s", clientId, clientPath))
 	}
 	if err != nil {
 		return nil, err

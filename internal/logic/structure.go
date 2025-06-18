@@ -33,12 +33,12 @@ func NewStructureLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Structu
 
 func (l *StructureLogic) Structure(req *types.StructureRequest) (resp *types.StructureResponseData, err error) {
 	clientId := req.ClientId
-	clientCodebasePath := req.CodebasePath
+	clientPath := req.CodebasePath
 	filePath := req.FilePath
 
-	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientCodebasePath)
+	codebase, err := l.svcCtx.Querier.Codebase.FindByClientIdAndPath(l.ctx, clientId, clientPath)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientCodebasePath: %s", clientId, clientCodebasePath))
+		return nil, errs.NewRecordNotFoundErr(types.NameCodeBase, fmt.Sprintf("client_id: %s, clientPath: %s", clientId, clientPath))
 	}
 
 	//TODO check param

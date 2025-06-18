@@ -120,9 +120,9 @@ func NewLocalCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
 }
 
 // Init 初始化一个新的代码库
-func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebasePath string) (*types.Codebase, error) {
-	if clientId == types.EmptyString || clientCodebasePath == types.EmptyString {
-		return nil, errors.New("clientId and clientCodebasePath cannot be empty")
+func (l *localCodebase) Init(ctx context.Context, clientId string, clientPath string) (*types.Codebase, error) {
+	if clientId == types.EmptyString || clientPath == types.EmptyString {
+		return nil, errors.New("clientId and clientPath cannot be empty")
 	}
 
 	if l.cfg.Local.BasePath == types.EmptyString {
@@ -130,7 +130,7 @@ func (l *localCodebase) Init(ctx context.Context, clientId string, clientCodebas
 	}
 
 	// 生成唯一的路径
-	uniquePath, err := generateCodebasePath(l.cfg.Local.BasePath, clientId, clientCodebasePath)
+	uniquePath, err := generateCodebasePath(l.cfg.Local.BasePath, clientId, clientPath)
 	if err != nil {
 		return nil, err
 	}

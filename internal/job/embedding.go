@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
@@ -9,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
@@ -104,6 +104,30 @@ func (t *embeddingProcessor) Process(ctx context.Context) error {
 		if err := t.processFilesConcurrently(ctx, processFile, t.svcCtx.Config.IndexTask.EmbeddingTask.MaxConcurrency); err != nil {
 			return err
 		}
+		var saveErrs []error
+		// 先删除，再写入
+		if len(deleteFilePaths) > 0 {
+			var deleteChunks []*types.CodeChunk
+			for path := range deleteFilePaths {
+				deleteChunks = append(deleteChunks, &types.CodeChunk{
+					CodebaseId:   t.msg.CodebaseID,
+					CodebasePath: t.msg.CodebasePath,
+					CodebaseName: t.msg.CodebaseName,
+					FilePath:     path,
+				})
+			}
+			err := t.svcCtx.VectorStore.DeleteCodeChunks(ctx, deleteChunks, vector.Options{
+				CodebaseId:   t.msg.CodebaseID,
+				CodebasePath: t.msg.CodebasePath,
+				CodebaseName: t.msg.CodebaseName,
+				SyncId:       t.msg.SyncID,
+			})
+			if err != nil {
+				tracer.WithTrace(ctx).Errorf("embedding task delete code chunks failed: %v", err)
+				t.failedFileCnt += int32(len(deleteFilePaths))
+				saveErrs = append(saveErrs, err)
+			}
+		}
 
 		// 批量处理结果
 		if len(addChunks) > 0 {
@@ -117,34 +141,21 @@ func (t *embeddingProcessor) Process(ctx context.Context) error {
 				tracer.WithTrace(ctx).Errorf("embedding task upsert code chunks failed: %v", err)
 				t.failedFileCnt = t.successFileCnt
 				t.successFileCnt = 0
-				return err
+				saveErrs = append(saveErrs, err)
 			}
 		}
-
-		if len(deleteFilePaths) > 0 {
-			var deleteChunks []*types.CodeChunk
-			for path := range deleteFilePaths {
-				deleteChunks = append(deleteChunks, &types.CodeChunk{
-					CodebaseId:   t.msg.CodebaseID,
-					CodebasePath: t.msg.CodebasePath,
-					CodebaseName: t.msg.CodebaseName,
-					FilePath:     path,
-				})
-			}
-			err := t.svcCtx.VectorStore.DeleteCodeChunks(ctx, deleteChunks, vector.Options{})
-			if err != nil {
-				tracer.WithTrace(ctx).Errorf("embedding task delete code chunks failed: %v", err)
-				t.failedFileCnt += int32(len(deleteFilePaths))
-				return err
-			}
+		if len(saveErrs) > 0 {
+			return errors.Join(saveErrs...)
 		}
-
-		t.updateTaskSuccess(ctx)
+		// update task status
+		if err := t.updateTaskSuccess(ctx); err != nil {
+			tracer.WithTrace(ctx).Errorf("embedding task update status success error:%v", err)
+		}
 		return nil
 	}(t)
 
 	if t.handleIfTaskFailed(ctx, err) {
-		return errors.Errorf("embedding task failed to update status:%v", err)
+		return fmt.Errorf("embedding task failed to update status, err:%v", err)
 	}
 
 	tracer.WithTrace(ctx).Infof("embedding task end successfully, cost: %d ms, total: %d, success: %d, failed: %d,msg:%+v",
