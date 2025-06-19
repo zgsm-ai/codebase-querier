@@ -21,12 +21,12 @@ type IndexHistory struct {
 	TotalSuccessCount *int32     `gorm:"column:total_success_count;comment:Total success number of files" json:"total_success_count"`                          // Total success number of files
 	TotalFailCount    *int32     `gorm:"column:total_fail_count;comment:Total fail number of files" json:"total_fail_count"`                                   // Total fail number of files
 	TotalIgnoreCount  *int32     `gorm:"column:total_ignore_count;comment:Total ignore number of files" json:"total_ignore_count"`                             // Total ignore number of files
-	TaskType          string     `gorm:"column:task_type;not null;comment:Task type: vector, relation" json:"task_type"`                                       // Task type: vector, relation
-	Status            string     `gorm:"column:status;not null;comment:Task status: pending, running, success, failed" json:"status"`                          // Task status: pending, running, success, failed
-	Progress          *float64   `gorm:"column:progress;comment:Task progress (floating point number between 0 and 1)" json:"progress"`                        // Task progress (floating point number between 0 and 1)
+	TaskType          string     `gorm:"column:task_type;not null;comment:SubmitTask type: vector, relation" json:"task_type"`                                       // SubmitTask type: vector, relation
+	Status            string     `gorm:"column:status;not null;comment:SubmitTask status: pending, running, success, failed" json:"status"`                          // SubmitTask status: pending, running, success, failed
+	Progress          *float64   `gorm:"column:progress;comment:SubmitTask progress (floating point number between 0 and 1)" json:"progress"`                        // SubmitTask progress (floating point number between 0 and 1)
 	ErrorMessage      *string    `gorm:"column:error_message;comment:Error message if the task failed" json:"error_message"`                                   // Error message if the task failed
-	StartTime         *time.Time `gorm:"column:start_time;comment:Task start time" json:"start_time"`                                                          // Task start time
-	EndTime           *time.Time `gorm:"column:end_time;comment:Task end time" json:"end_time"`                                                                // Task end time
+	StartTime         *time.Time `gorm:"column:start_time;comment:SubmitTask start time" json:"start_time"`                                                          // SubmitTask start time
+	EndTime           *time.Time `gorm:"column:end_time;comment:SubmitTask end time" json:"end_time"`                                                                // SubmitTask end time
 	CreatedAt         time.Time  `gorm:"column:created_at;not null;default:CURRENT_TIMESTAMP;comment:Time when the record was created" json:"created_at"`      // Time when the record was created
 	UpdatedAt         time.Time  `gorm:"column:updated_at;not null;default:CURRENT_TIMESTAMP;comment:Time when the record was last updated" json:"updated_at"` // Time when the record was last updated
 }

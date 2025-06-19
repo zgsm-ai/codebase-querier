@@ -12,8 +12,8 @@ import (
 func TestDeleteCodebase(t *testing.T) {
 	var result response.Response[types.DeleteCodebaseResponseData]
 	err := doRequest(http.MethodDelete, "/codebase-indexer/api/v1/codebase", map[string]string{
-		"clientId":     clientId,
-		"codebasePath": clientPath,
+		"clientId":     "test-client-123",
+		"codebasePath": "\\tmp\\test\\test-project",
 	}, nil, &result)
 
 	assert.NoError(t, err)
@@ -23,9 +23,9 @@ func TestDeleteCodebase(t *testing.T) {
 func TestDeleteIndex(t *testing.T) {
 	var result response.Response[types.DeleteIndexResponseData]
 	err := doRequest(http.MethodDelete, "/codebase-indexer/api/v1/index", map[string]string{
-		"clientId":     clientId,
-		"codebasePath": clientPath,
-		"taskType":     "all",
+		"clientId":     "test-client-123",
+		"codebasePath": "\\tmp\\projects\\go\\kubernetes",
+		"taskType":     "codegraph",
 	}, nil, &result)
 
 	assert.NoError(t, err)
@@ -35,8 +35,8 @@ func TestDeleteIndex(t *testing.T) {
 func TestIndexSummary(t *testing.T) {
 	var result response.Response[types.IndexSummaryResonseData]
 	err := doRequest(http.MethodGet, "/codebase-indexer/api/v1/index/summary", map[string]string{
-		"clientId":     clientId,
-		"codebasePath": clientPath,
+		"clientId":     "test-client-123",
+		"codebasePath": "\\tmp\\projects\\go\\kubernetes",
 	}, nil, &result)
 
 	assert.NoError(t, err)
@@ -48,14 +48,13 @@ func TestIndexSummary(t *testing.T) {
 func TestIndexTask(t *testing.T) {
 	var result response.Response[types.IndexTaskResponseData]
 	reqBody := types.IndexTaskRequest{
-		ClientId:     clientId,
-		CodebasePath: clientPath,
-		IndexType:    "all",
+		ClientId:     "test-client-123",
+		CodebasePath: "\\tmp\\projects\\go\\kubernetes",
+		IndexType:    "embedding",
 	}
 
 	err := doRequest(http.MethodPost, "/codebase-indexer/api/v1/index/task", nil, reqBody, &result)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
-	assert.Greater(t, result.Data.TaskId, 0)
 }

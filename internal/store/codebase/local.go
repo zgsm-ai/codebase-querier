@@ -33,6 +33,15 @@ type localCodebase struct {
 	mu  sync.RWMutex // 保护并发访问
 }
 
+func NewLocalCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
+	if cfg.Local.BasePath == types.EmptyString {
+		return nil, errors.New("local base path cannot be empty")
+	}
+	return &localCodebase{
+		cfg: cfg,
+	}, nil
+}
+
 func (l *localCodebase) GetSyncFileListCollapse(ctx context.Context, codebasePath string) (*types.CollapseSyncMetaFile, error) {
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
@@ -104,6 +113,14 @@ func (l *localCodebase) Open(ctx context.Context, codebasePath string, filePath 
 }
 
 func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
+	if codebasePath == types.EmptyString {
+		return errors.New("codebasePath cannot be empty")
+	}
+
+	if !strings.HasPrefix(codebasePath, l.cfg.Local.BasePath) || codebasePath == "*" {
+		return fmt.Errorf("illegal codebasePath:%s", codebasePath)
+	}
+	tracer.WithTrace(ctx).Infof("start to delete codebasePath [%s]", codebasePath)
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
 		return err
@@ -111,13 +128,9 @@ func (l *localCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 	if !exists {
 		return ErrCodebasePathNotExists
 	}
-	return os.RemoveAll(codebasePath)
-}
-
-func NewLocalCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
-	return &localCodebase{
-		cfg: cfg,
-	}, nil
+	err = os.RemoveAll(codebasePath)
+	tracer.WithTrace(ctx).Infof("delete codebasePath [%s] successfully", codebasePath)
+	return err
 }
 
 // Init 初始化一个新的代码库

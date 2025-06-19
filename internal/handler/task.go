@@ -19,7 +19,7 @@ func taskHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := logic.NewTaskLogic(r.Context(), svcCtx)
-		resp, err := l.Task(&req)
+		resp, err := l.SubmitTask(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {

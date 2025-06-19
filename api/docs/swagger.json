@@ -632,6 +632,12 @@
                   "description": "项目绝对路径",
                   "type": "string"
                 },
+                "fileMap": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
                 "indexType": {
                   "type": "string",
                   "enum": [
@@ -1087,7 +1093,7 @@
       }
     }
   },
-  "x-date": "2025-06-19 10:05:29",
+  "x-date": "2025-06-19 16:29:48",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

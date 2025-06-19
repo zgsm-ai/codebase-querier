@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-redsync/redsync/v4"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
@@ -96,7 +97,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	// 获取分布式锁， n分钟超时
 	// 在任务中执行结束unlock
 	lockKey := IndexJobKey(syncMsg.CodebaseID)
-	locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, DistLockTimeout)
+	mux, locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, DistLockTimeout)
 	if err != nil || !locked {
 		tracer.WithTrace(ctx).Debugf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
 		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body)
@@ -149,7 +150,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	var submitErr error
 
 	// 嵌入+ 关系图 任务
-	submitErr = i.submitIndexTask(traceCtx, lockKey, msg, syncMsg, medataFiles)
+	submitErr = i.submitIndexTask(traceCtx, mux, msg, syncMsg, medataFiles)
 	if submitErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to submit index task submit, submitErr: %v", submitErr)
 		// reproduce
@@ -180,13 +181,13 @@ func (i *IndexTaskScheduler) Submit(ctx context.Context, taskRun func()) error {
 	return i.svcCtx.TaskPool.Submit(taskRun)
 }
 
-func (i *IndexTaskScheduler) submitIndexTask(ctx context.Context, lockKey string, msg *types.Message, syncMsg *types.CodebaseSyncMessage,
+func (i *IndexTaskScheduler) submitIndexTask(ctx context.Context, lockMux *redsync.Mutex, msg *types.Message, syncMsg *types.CodebaseSyncMessage,
 	syncMetaFiles *types.CollapseSyncMetaFile) error {
 	tracer.WithTrace(ctx).Infof("start to submit task for params:%s", msg.ID)
 	taskRun := func() {
 		task := &IndexTask{
 			SvcCtx:  i.svcCtx,
-			LockKey: lockKey,
+			LockMux: lockMux,
 			Params: &IndexTaskParams{
 				CodebaseID:           syncMsg.CodebaseID,
 				CodebasePath:         syncMsg.CodebasePath,

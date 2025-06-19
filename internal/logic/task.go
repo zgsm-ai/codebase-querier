@@ -30,7 +30,7 @@ func NewTaskLogic(ctx context.Context, svcCtx *svc.ServiceContext) *TaskLogic {
 	}
 }
 
-func (l *TaskLogic) Task(req *types.IndexTaskRequest) (resp *types.IndexTaskResponseData, err error) {
+func (l *TaskLogic) SubmitTask(req *types.IndexTaskRequest) (resp *types.IndexTaskResponseData, err error) {
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 	indexType := req.IndexType
@@ -55,22 +55,36 @@ func (l *TaskLogic) Task(req *types.IndexTaskRequest) (resp *types.IndexTaskResp
 	// 获取同步锁，避免重复处理
 	// 获取分布式锁， n分钟超时
 	lockKey := job.IndexJobKey(codebase.ID)
-	locked, err := l.svcCtx.DistLock.TryLock(ctx, lockKey, job.DistLockTimeout)
+	mux, locked, err := l.svcCtx.DistLock.TryLock(ctx, lockKey, job.DistLockTimeout)
 	if err != nil || !locked {
-		return nil, fmt.Errorf("failed to acquire lock to sumit index task, err:%w", err)
+		return nil, fmt.Errorf("failed to acquire lock %s to sumit index task, err:%w", lockKey, err)
 	}
 
-	tracer.WithTrace(ctx).Infof("acquire lock successfully, start to submit index task.")
+	tracer.WithTrace(ctx).Infof("acquire lock %s successfully, start to submit index task.", lockKey)
 
 	// 元数据列表
-	medataFiles, err := l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("index job GetSyncFileListCollapse err:%w", err)
-		return
-	}
+	var medataFiles *types.CollapseSyncMetaFile
+	if len(req.FileMap) > 0 {
+		tracer.WithTrace(ctx).Infof("index task submit with file map, len %d, use it.", len(req.FileMap))
+		medataFiles = &types.CollapseSyncMetaFile{
+			CodebasePath:  codebase.Path,
+			FileModelMap:  make(map[string]string),
+			MetaFilePaths: make([]string, 0),
+		}
+		for k, v := range req.FileMap {
+			medataFiles.FileModelMap[k] = v
+		}
+	} else {
+		tracer.WithTrace(ctx).Infof("index task submit without file map, find them from codebase store.")
+		medataFiles, err = l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
+		if err != nil {
+			tracer.WithTrace(ctx).Errorf("failed to get sync file list err:%w", err)
+			return nil, err
+		}
 
-	if medataFiles == nil || len(medataFiles.FileModelMap) == 0 {
-		return nil, errors.New("sync file list is nil, cannot submit index task")
+		if medataFiles == nil || len(medataFiles.FileModelMap) == 0 {
+			return nil, errors.New("sync file list is nil, cannot submit index task")
+		}
 	}
 
 	var enableEmbeddingBuild, enableCodeGraphBuild bool
@@ -87,7 +101,7 @@ func (l *TaskLogic) Task(req *types.IndexTaskRequest) (resp *types.IndexTaskResp
 	}
 	task := &job.IndexTask{
 		SvcCtx:  l.svcCtx,
-		LockKey: lockKey,
+		LockMux: mux,
 		Params: &job.IndexTaskParams{
 			SyncID:               latestSync.ID,
 			CodebaseID:           codebase.ID,
@@ -100,9 +114,12 @@ func (l *TaskLogic) Task(req *types.IndexTaskRequest) (resp *types.IndexTaskResp
 	}
 
 	err = l.svcCtx.TaskPool.Submit(func() {
-		tracer.WithTrace(ctx).Infof("start to run index task.")
-		embedOk, graphOk := task.Run(ctx)
-		tracer.WithTrace(ctx).Infof("index task run end, embedding success? %t, codegraph success? %t.", embedOk, graphOk)
+		taskTimeout, cancelFunc := context.WithTimeout(context.Background(), l.svcCtx.Config.IndexTask.GraphTask.Timeout)
+		traceCtx := context.WithValue(taskTimeout, tracer.Key, tracer.TaskTraceId(int(codebase.ID)))
+		defer cancelFunc()
+		tracer.WithTrace(traceCtx).Infof("start to run index task.")
+		embedOk, graphOk := task.Run(traceCtx)
+		tracer.WithTrace(traceCtx).Infof("index task run end, embedding success? %t, codegraph success? %t.", embedOk, graphOk)
 	})
 
 	if err != nil {

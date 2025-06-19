@@ -112,6 +112,9 @@ func (m *minioCodebase) Open(ctx context.Context, codebasePath string, filePath 
 }
 
 func NewMinioCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
+	if cfg.Minio.Bucket == types.EmptyString {
+		return nil, errors.New("minio bucket cannot be empty")
+	}
 	client, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKeyID, cfg.Minio.SecretAccessKey, ""),
 		Secure: cfg.Minio.UseSSL,
@@ -127,6 +130,14 @@ func NewMinioCodebase(cfg config.CodeBaseStoreConf) (Store, error) {
 }
 
 func (m *minioCodebase) DeleteAll(ctx context.Context, codebasePath string) error {
+	if codebasePath == types.EmptyString {
+		return errors.New("codebasePath cannot be empty")
+	}
+
+	if codebasePath == "*" {
+		return fmt.Errorf("illegal codebasePath:%s", codebasePath)
+	}
+	tracer.WithTrace(ctx).Infof("start to delete codebasePath [%s]", codebasePath)
 	objectsCh := make(chan minio.ObjectInfo)
 	go func() {
 		defer close(objectsCh)
@@ -145,6 +156,7 @@ func (m *minioCodebase) DeleteAll(ctx context.Context, codebasePath string) erro
 	if len(errs) > 0 {
 		return fmt.Errorf("batch delete errors: %v", errs)
 	}
+	tracer.WithTrace(ctx).Infof("delete codebasePath [%s] successfully", codebasePath)
 	return nil
 }
 

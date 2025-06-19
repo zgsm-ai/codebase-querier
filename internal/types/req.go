@@ -195,6 +195,7 @@ type IndexTaskRequest struct {
 	ClientId     string `json:"clientId"`     // 用户机器ID（如MAC地址）
 	CodebasePath string `json:"codebasePath"` // 项目绝对路径
 	IndexType    string `json:"indexType,options=embedding|codegraph|all"`
+	FileMap      map[string]string `json:"fileMap,optional"`
 }
 
 type IndexTaskResponseData struct {

@@ -516,11 +516,13 @@ func (b BadgerDBGraph) Close() error {
 func (b BadgerDBGraph) DeleteAll(ctx context.Context) error {
 	// 删除所有数据
 	if err := b.db.DropAll(); err != nil {
-		return err
+		return fmt.Errorf("codegraph delete all indexes error:%w", err)
 	}
-
+	if err := b.db.RunValueLogGC(0.1); err != nil {
+		tracer.WithTrace(ctx).Errorf("codegraph failed to run value log GC, err:%v", err)
+	}
 	// 执行一次gc
-	return b.db.RunValueLogGC(0.1)
+	return nil
 }
 
 func (b BadgerDBGraph) DB() *badger.DB {

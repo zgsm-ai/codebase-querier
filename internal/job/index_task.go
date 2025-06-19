@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"github.com/go-redsync/redsync/v4"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -10,7 +11,7 @@ import (
 
 type IndexTask struct {
 	SvcCtx  *svc.ServiceContext
-	LockKey string
+	LockMux *redsync.Mutex
 	Params  *IndexTaskParams
 }
 
@@ -27,8 +28,8 @@ type IndexTaskParams struct {
 func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool) {
 	// 解锁
 	defer func() {
-		if err := i.SvcCtx.DistLock.Unlock(ctx, i.LockKey); err != nil {
-			tracer.WithTrace(ctx).Errorf("index task unlock failed, key %s, err:%v", i.LockKey, err)
+		if err := i.SvcCtx.DistLock.Unlock(ctx, i.LockMux); err != nil {
+			tracer.WithTrace(ctx).Errorf("index task unlock failed, key %s, err:%v", i.LockMux.Name(), err)
 		}
 	}()
 
@@ -91,6 +92,10 @@ func (i *IndexTask) buildEmbedding(ctx context.Context) error {
 }
 
 func (i *IndexTask) cleanProcessedMetadataFile(ctx context.Context) {
+	if len(i.Params.SyncMetaFiles.MetaFilePaths) == 0 {
+		tracer.WithTrace(ctx).Infof("sync meta file list is empty, not clean.")
+		return
+	}
 	tracer.WithTrace(ctx).Infof("start to clean sync meta file, codebasePath:%s, paths:%v", i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths)
 	// TODO 当调用链和嵌入任务都成功时，清理元数据文件。改为移动到另一个隐藏文件夹中，每天定时清理，便于排查问题。
 	if err := i.SvcCtx.CodebaseStore.BatchDelete(ctx, i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths); err != nil {

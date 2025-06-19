@@ -39,7 +39,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 	// 添加任务（参数：Cron 表达式, 要执行的函数）
 	_, err := cr.AddFunc(svcCtx.Config.Cleaner.Cron, func() {
 		// aquice lock
-		locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimeout)
+		mux, locked, err := svcCtx.DistLock.TryLock(ctx, cleanLockKey, lockTimeout)
 		if err != nil {
 			logx.Errorf("cleaner try lock error: %v", err)
 			return
@@ -49,7 +49,7 @@ func NewCleaner(ctx context.Context, svcCtx *svc.ServiceContext) (Job, error) {
 			return
 		}
 		defer func(DistLock redisstore.DistributedLock, ctx context.Context, key string) {
-			err := DistLock.Unlock(ctx, key)
+			err := DistLock.Unlock(ctx, mux)
 			if err != nil {
 				logx.Errorf("cleaner unlock %s error: %v", cleanLockKey, err)
 			}

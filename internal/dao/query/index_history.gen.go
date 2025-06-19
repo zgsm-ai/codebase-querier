@@ -62,12 +62,12 @@ type indexHistory struct {
 	TotalSuccessCount field.Int32   // Total success number of files
 	TotalFailCount    field.Int32   // Total fail number of files
 	TotalIgnoreCount  field.Int32   // Total ignore number of files
-	TaskType          field.String  // Task type: vector, relation
-	Status            field.String  // Task status: pending, running, success, failed
-	Progress          field.Float64 // Task progress (floating point number between 0 and 1)
+	TaskType          field.String  // SubmitTask type: vector, relation
+	Status            field.String  // SubmitTask status: pending, running, success, failed
+	Progress          field.Float64 // SubmitTask progress (floating point number between 0 and 1)
 	ErrorMessage      field.String  // Error message if the task failed
-	StartTime         field.Time    // Task start time
-	EndTime           field.Time    // Task end time
+	StartTime         field.Time    // SubmitTask start time
+	EndTime           field.Time    // SubmitTask end time
 	CreatedAt         field.Time    // Time when the record was created
 	UpdatedAt         field.Time    // Time when the record was last updated
 
