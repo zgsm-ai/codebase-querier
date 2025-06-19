@@ -176,8 +176,8 @@ type EmbeddingSummary struct {
 }
 type CodeGraphSummary struct {
 	Status               string `json:"status"`
-	TotalRelationFiles   int    `json:"totalRelationFiles"`
-	TotalDefinitionFiles int    `json:"totalDefinitionFiles"`
+	TotalFiles           int    `json:"totalFiles"`
+	TotalDefinitionFiles int    `json:"-"`
 }
 
 type IndexSummaryRequest struct {

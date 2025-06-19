@@ -82,7 +82,7 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (resp *types.Inde
 
 	if codegraphIndexTask != nil {
 		codegraphStatus = convertStatus(codegraphIndexTask.Status)
-	} else if codegraphSummary.TotalRelationFiles > 0 {
+	} else if codegraphSummary.TotalFiles > 0 {
 		codegraphStatus = types.TaskStatusSuccess
 	}
 
@@ -94,9 +94,8 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (resp *types.Inde
 			TotalChunks: embeddingSummary.TotalChunks,
 		},
 		CodeGraph: types.CodeGraphSummary{
-			Status:               codegraphStatus,
-			TotalRelationFiles:   codegraphSummary.TotalRelationFiles,
-			TotalDefinitionFiles: codegraphSummary.TotalDefinitionFiles,
+			Status:     codegraphStatus,
+			TotalFiles: codegraphSummary.TotalFiles,
 		},
 	}
 

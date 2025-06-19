@@ -654,7 +654,7 @@ func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, co
 		return nil, err
 	}
 	return &types.CodeGraphSummary{
-		TotalRelationFiles:   relationFileCount,
+		TotalFiles:           relationFileCount,
 		TotalDefinitionFiles: definitionFileCount,
 	}, nil
 }
