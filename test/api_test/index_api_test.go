@@ -50,7 +50,7 @@ func TestIndexTask(t *testing.T) {
 	reqBody := types.IndexTaskRequest{
 		ClientId:     "test-client-123",
 		CodebasePath: "\\tmp\\projects\\go\\kubernetes",
-		IndexType:    "embedding",
+		IndexType:    "codegraph",
 	}
 
 	err := doRequest(http.MethodPost, "/codebase-indexer/api/v1/index/task", nil, reqBody, &result)

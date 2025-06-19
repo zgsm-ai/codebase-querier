@@ -37,7 +37,9 @@ data:
       AutoMigrate:
         enable: true    
     IndexTask:
-      Topic: "codebase_indexer_sync"
+      PoolSize: 50
+      LockTimeout: 300s
+      Topic: "codebase_indexer:mq:sync"
       EmbeddingTask:
         PoolSize: 10
         MaxConcurrency: 10
@@ -99,7 +101,8 @@ data:
       Rotation: daily # split by day or size
 
   codegraph.yaml: |
-    log_dir: "/tmp/logs"
+    log_dir: "/app/logs/index"
+    retention_days: 7
     languages:
       - name: typescript
         detection_files: ["tsconfig.json"]

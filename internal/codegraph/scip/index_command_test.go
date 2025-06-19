@@ -68,8 +68,7 @@ func TestNewCommandExecutor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			executor, err := newCommandExecutor(ctx, tt.workDir, tt.indexTool, tt.buildTool, "", tt.placeHolders)
+			executor, err := newCommandExecutor(tt.workDir, tt.indexTool, tt.buildTool, nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)

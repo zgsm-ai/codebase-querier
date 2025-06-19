@@ -21,6 +21,7 @@ Database:
 IndexTask:
   Topic: "codebase_indexer:mq:sync"
   PoolSize: 20
+  LockTimeout: 300s
   EmbeddingTask:
     MaxConcurrency: 10
     Timeout: 120s

@@ -97,7 +97,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	// 获取分布式锁， n分钟超时
 	// 在任务中执行结束unlock
 	lockKey := IndexJobKey(syncMsg.CodebaseID)
-	mux, locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, DistLockTimeout)
+	mux, locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, i.svcCtx.Config.IndexTask.LockTimeout)
 	if err != nil || !locked {
 		tracer.WithTrace(ctx).Debugf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
 		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body)

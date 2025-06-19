@@ -5,6 +5,7 @@ import "time"
 type IndexTaskConf struct {
 	Topic         string
 	PoolSize      int
+	LockTimeout   time.Duration `json:",default=300s"`
 	EmbeddingTask EmbeddingTaskConf
 	GraphTask     GraphTaskConf
 }

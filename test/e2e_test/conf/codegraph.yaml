@@ -1,4 +1,5 @@
 log_dir: "/tmp/logs"
+retention_days: 1
 variables:
   __image__: "zgsm/scip-base:latest"
 languages:

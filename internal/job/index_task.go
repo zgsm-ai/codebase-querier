@@ -26,6 +26,7 @@ type IndexTaskParams struct {
 }
 
 func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool) {
+	tracer.WithTrace(ctx).Infof("start to run index task.")
 	// 解锁
 	defer func() {
 		if err := i.SvcCtx.DistLock.Unlock(ctx, i.LockMux); err != nil {
@@ -47,6 +48,7 @@ func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool
 	if embedTaskOk && graphTaskOk {
 		i.cleanProcessedMetadataFile(ctx)
 	}
+	tracer.WithTrace(ctx).Infof("index task run end.")
 	return
 }
 

@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
 	"sort"
 	"time"
-
-	"github.com/zgsm-ai/codebase-indexer/internal/config"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -32,11 +31,13 @@ var maxFileReached = errors.New("max files reached")
 type IndexGenerator struct {
 	codebaseStore codebase.Store
 	config        *config.CodegraphConfig
+	cmdLogger     *tracer.CmdLogger
 }
 
 // NewIndexGenerator creates a new SCIP index generator
-func NewIndexGenerator(config *config.CodegraphConfig, codebaseStore codebase.Store) *IndexGenerator {
+func NewIndexGenerator(cmdLogger *tracer.CmdLogger, config *config.CodegraphConfig, codebaseStore codebase.Store) *IndexGenerator {
 	return &IndexGenerator{
+		cmdLogger:     cmdLogger,
 		config:        config,
 		codebaseStore: codebaseStore,
 	}
@@ -49,7 +50,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 		return fmt.Errorf("failed to create codebase index directory: %w", err)
 	}
 
-	executor, err := g.InitCommandExecutor(ctx, codebasePath)
+	executor, err := g.InitCommandExecutor(ctx, g.cmdLogger, codebasePath)
 	if err != nil {
 		return err
 	}
@@ -61,11 +62,18 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 	return nil
 }
 
-func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, codebasePath string) (*CommandExecutor, error) {
+func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, cmdLogger *tracer.CmdLogger, codebasePath string) (*CommandExecutor, error) {
+	start := time.Now()
 	index, build, err := g.DetectLanguageAndTool(ctx, codebasePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scip_generator failed to detect [%s] launguage index tool, err: %w", codebasePath, err)
 	}
+	buildToolName := types.EmptyString
+	if build != nil {
+		buildToolName = build.Name
+	}
+	tracer.WithTrace(ctx).Infof("scip_generator detect language successfully, cost %d ms. [%s] index tool is [%s], build tool is [%s]",
+		time.Since(start).Milliseconds(), index.Name, buildToolName)
 
 	placeHolders := map[string]string{
 		placeholderSourcePath: codebasePath,
@@ -77,18 +85,11 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, codebasePath s
 		}
 	}
 
-	return newCommandExecutor(ctx,
-		codebasePath,
-		index,
-		build,
-		g.config.LogDir,
-		placeHolders)
+	return newCommandExecutor(cmdLogger, codebasePath, index, build, placeHolders)
 }
 
 // DetectLanguageAndTool detects the language and tool for a repository
 func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
-	startTime := time.Now()
-	defer tracer.WithTrace(ctx).Infof("scip_generator detect language cost %d ms", time.Since(startTime).Milliseconds())
 	// 通过Walk统计文件频率
 	languageStats := make(map[string]int)
 	analyzedFiles := 0

@@ -55,7 +55,7 @@ func (l *TaskLogic) SubmitTask(req *types.IndexTaskRequest) (resp *types.IndexTa
 	// 获取同步锁，避免重复处理
 	// 获取分布式锁， n分钟超时
 	lockKey := job.IndexJobKey(codebase.ID)
-	mux, locked, err := l.svcCtx.DistLock.TryLock(ctx, lockKey, job.DistLockTimeout)
+	mux, locked, err := l.svcCtx.DistLock.TryLock(ctx, lockKey, l.svcCtx.Config.IndexTask.LockTimeout)
 	if err != nil || !locked {
 		return nil, fmt.Errorf("failed to acquire lock %s to sumit index task, err:%w", lockKey, err)
 	}
@@ -117,9 +117,7 @@ func (l *TaskLogic) SubmitTask(req *types.IndexTaskRequest) (resp *types.IndexTa
 		taskTimeout, cancelFunc := context.WithTimeout(context.Background(), l.svcCtx.Config.IndexTask.GraphTask.Timeout)
 		traceCtx := context.WithValue(taskTimeout, tracer.Key, tracer.TaskTraceId(int(codebase.ID)))
 		defer cancelFunc()
-		tracer.WithTrace(traceCtx).Infof("start to run index task.")
-		embedOk, graphOk := task.Run(traceCtx)
-		tracer.WithTrace(traceCtx).Infof("index task run end, embedding success? %t, codegraph success? %t.", embedOk, graphOk)
+		task.Run(traceCtx)
 	})
 
 	if err != nil {

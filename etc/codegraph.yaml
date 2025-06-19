@@ -1,4 +1,5 @@
-log_dir: "/tmp/logs"
+log_dir: "/app/logs/index"
+retention_days: 7
 languages:
   - name: typescript
     detection_files: ["tsconfig.json"]

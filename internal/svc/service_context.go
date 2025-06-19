@@ -15,6 +15,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/store/mq"
 	redisstore "github.com/zgsm-ai/codebase-indexer/internal/store/redis"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/vector"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
 )
 
@@ -34,6 +35,7 @@ type ServiceContext struct {
 	StructureParser *structure.Parser
 	serverContext   context.Context
 	TaskPool        *ants.Pool
+	CmdLogger       *tracer.CmdLogger
 }
 
 // Close closes the shared Redis client and database connection
@@ -52,6 +54,9 @@ func (s *ServiceContext) Close() {
 	if s.TaskPool != nil {
 		s.TaskPool.Release()
 	}
+	if s.CmdLogger != nil {
+		s.CmdLogger.Close()
+	}
 	if len(errs) > 0 {
 		logx.Errorf("service_context close err:%v", errs)
 	} else {
@@ -66,6 +71,15 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 		serverContext: ctx,
 	}
 	svcCtx.CodegraphConf = config.MustLoadCodegraphConfig(c.IndexTask.GraphTask.ConfFile)
+
+	// 初始化cmd日志
+	cmdLogger, err := tracer.NewCmdLogger(svcCtx.CodegraphConf.LogDir, svcCtx.CodegraphConf.RetentionDays)
+	if err != nil {
+		return nil, err
+	}
+	svcCtx.CmdLogger = cmdLogger
+	// daily clean and rotate
+	cmdLogger.StartRotateBackground()
 
 	// 初始化数据库连接
 	db, err := database.New(c.Database)

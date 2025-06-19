@@ -36,7 +36,7 @@ func NewCodegraphProcessor(
 		return nil, err
 	}
 
-	graphBuilder := scip.NewIndexGenerator(svcCtx.CodegraphConf, svcCtx.CodebaseStore)
+	graphBuilder := scip.NewIndexGenerator(svcCtx.CmdLogger, svcCtx.CodegraphConf, svcCtx.CodebaseStore)
 	graphParser := scip.NewIndexParser(svcCtx.CodebaseStore, graphStore)
 
 	return &codegraphProcessor{

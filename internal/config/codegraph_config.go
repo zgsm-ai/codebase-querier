@@ -8,9 +8,10 @@ import (
 
 // CodegraphConfig represents the SCIP configuration
 type CodegraphConfig struct {
-	LogDir    string            `yaml:"log_dir"`
-	Variables map[string]string `yaml:"variables"`
-	Languages []*LanguageConfig `yaml:"languages"`
+	LogDir        string            `yaml:"log_dir"`
+	RetentionDays int               `yaml:"retention_days"`
+	Variables     map[string]string `yaml:"variables"`
+	Languages     []*LanguageConfig `yaml:"languages"`
 }
 
 // LanguageConfig represents a language configuration
