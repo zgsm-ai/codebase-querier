@@ -67,6 +67,7 @@ func New(cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Stor
 }
 
 func (r *weaviateWrapper) GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.EmbeddingSummary, error) {
+	start := time.Now()
 	tenantName, err := r.generateTenantName(codebasePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tenant name: %w", err)
@@ -102,7 +103,8 @@ func (r *weaviateWrapper) GetIndexSummary(ctx context.Context, codebaseId int32,
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal summary response: %w", err)
 	}
-
+	tracer.WithTrace(ctx).Infof("embedding getIndexSummary end, cost %d ms on total %d files %d chunks",
+		time.Since(start).Milliseconds(), summary.TotalFiles, summary.TotalChunks)
 	return summary, nil
 }
 
@@ -408,6 +410,13 @@ func (r *weaviateWrapper) generateTenantName(codebasePath string) (string, error
 }
 
 func (r *weaviateWrapper) unmarshalSummarySearchResponse(res *models.GraphQLResponse) (*types.EmbeddingSummary, error) {
+	if len(res.Errors) > 0 {
+		var errMsg string
+		for _, e := range res.Errors {
+			errMsg += e.Message
+		}
+		return nil, fmt.Errorf("failed to get embedding summary: %s", errMsg)
+	}
 	// 检查响应是否为空
 	if res == nil || res.Data == nil {
 		return nil, fmt.Errorf("received empty response from Weaviate")

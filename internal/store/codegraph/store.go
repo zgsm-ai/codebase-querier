@@ -57,7 +57,7 @@ func IsDocKey(key []byte) bool {
 }
 
 func IsStructKey(key []byte) bool {
-	return strings.HasPrefix(string(key), DocPrefix)
+	return strings.HasPrefix(string(key), StructPrefix)
 }
 
 // SerializeDocument 序列化函数

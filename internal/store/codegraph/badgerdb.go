@@ -634,10 +634,12 @@ func (b BadgerDBGraph) DeleteByCodebase(ctx context.Context, codebaseId int32, c
 }
 
 func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.CodeGraphSummary, error) {
+	start := time.Now()
 	var relationFileCount int
 	var definitionFileCount int
 	err := b.db.View(func(txn *badger.Txn) error {
 		iter := txn.NewIterator(badger.IteratorOptions{})
+		defer iter.Close()
 		for iter.Rewind(); iter.Valid(); iter.Next() {
 			key := iter.Item().Key()
 			if IsDocKey(key) {
@@ -653,6 +655,8 @@ func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, co
 	if err != nil {
 		return nil, err
 	}
+	tracer.WithTrace(ctx).Infof("codegraph getIndexSummary end, cost %d ms on total %d relation files, %d definition files",
+		time.Since(start).Milliseconds(), relationFileCount, definitionFileCount)
 	return &types.CodeGraphSummary{
 		TotalFiles:           relationFileCount,
 		TotalDefinitionFiles: definitionFileCount,

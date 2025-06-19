@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/dao/model"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"gorm.io/gorm"
@@ -31,7 +34,7 @@ func NewSummaryLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SummaryLo
 	}
 }
 
-func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (resp *types.IndexSummaryResonseData, err error) {
+func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (*types.IndexSummaryResonseData, error) {
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 
@@ -46,34 +49,100 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (resp *types.Inde
 
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
 
-	// 获取向量索引状态
-	embeddingSummary, err := l.svcCtx.VectorStore.GetIndexSummary(ctx, codebase.ID, codebase.Path)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		wg                 sync.WaitGroup
+		embeddingSummary   *types.EmbeddingSummary
+		codegraphSummary   *types.CodeGraphSummary
+		embeddingIndexTask *model.IndexHistory
+		codegraphIndexTask *model.IndexHistory
+	)
 
-	// 获取图索引状态
-	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebase.Path, types.CodebaseIndexDir)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open graph store, err:%w", err)
-	}
-	defer graphStore.Close()
+	// 定义超时时间
+	timeout := 5 * time.Second
 
-	codegraphSummary, err := graphStore.GetIndexSummary(ctx, codebase.ID, codebase.Path)
-	if err != nil {
-		return nil, err
-	}
+	// 获取向量索引状态（带超时控制）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel() // 避免资源泄漏
 
-	// 获取文件总数
+		var err error
+		embeddingSummary, err = l.svcCtx.VectorStore.GetIndexSummary(timeoutCtx, codebase.ID, codebase.Path)
+		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				tracer.WithTrace(ctx).Errorf("embedding summary query timed out after %v", timeoutCtx)
+			} else {
+				tracer.WithTrace(ctx).Errorf("failed to get embedding summary, err:%v", err)
+			}
+			return
+		}
+	}()
+
+	// 获取图索引状态（带超时控制）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel() // 避免资源泄漏
+		graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebase.Path, types.CodebaseIndexDir)))
+		if err != nil {
+			tracer.WithTrace(ctx).Errorf("failed to open graph store, err:%w", err)
+			return
+		}
+		defer graphStore.Close()
+
+		codegraphSummary, err = graphStore.GetIndexSummary(timeoutCtx, codebase.ID, codebase.Path)
+		if err != nil {
+			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				tracer.WithTrace(timeoutCtx).Errorf("codegraph summary query timed out after %v", timeout)
+			} else {
+				tracer.WithTrace(timeoutCtx).Errorf("failed to get codegraph summary, err:%v", err)
+			}
+			return
+		}
+	}()
+
+	// 获取最新的embedding索引任务（带超时控制）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel() // 避免资源泄漏
+		embeddingIndexTask, err = l.svcCtx.Querier.IndexHistory.GetLatestTaskHistory(timeoutCtx, codebase.ID, types.TaskTypeEmbedding)
+		if err != nil {
+			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				tracer.WithTrace(timeoutCtx).Errorf("embedding index task query timed out after %v", timeout)
+			} else {
+				tracer.WithTrace(timeoutCtx).Errorf("failed to get latest embedding index task, err:%v", err)
+			}
+		}
+	}()
+
+	// 获取最新的codegraph索引任务（带超时控制）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel() // 避免资源泄漏
+
+		var err error
+		codegraphIndexTask, err = l.svcCtx.Querier.IndexHistory.GetLatestTaskHistory(timeoutCtx, codebase.ID, types.TaskTypeCodegraph)
+		if err != nil {
+			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				tracer.WithTrace(timeoutCtx).Errorf("codegraph index task query timed out after %v", timeout)
+			} else {
+				tracer.WithTrace(timeoutCtx).Errorf("failed to get latest codegraph index task, err:%v", err)
+			}
+		}
+	}()
+
+	// 等待所有协程完成
+	wg.Wait()
+
+	// 处理结果（保持不变）
 	codegraphStatus, embeddingStatus := types.TaskStatusPending, types.TaskStatusPending
-	embeddingIndexTask, err := l.svcCtx.Querier.IndexHistory.GetLatestTaskHistory(ctx, codebase.ID, types.TaskTypeEmbedding)
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to get latest codegraph index task, err:%v", err)
-	}
-	codegraphIndexTask, err := l.svcCtx.Querier.IndexHistory.GetLatestTaskHistory(ctx, codebase.ID, types.TaskTypeCodegraph)
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to get latest codegraph index task, err:%v", err)
-	}
+
 	if embeddingIndexTask != nil {
 		embeddingStatus = convertStatus(embeddingIndexTask.Status)
 	} else if embeddingSummary.TotalChunks > 0 {
@@ -86,17 +155,21 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (resp *types.Inde
 		codegraphStatus = types.TaskStatusSuccess
 	}
 
-	resp = &types.IndexSummaryResonseData{
+	resp := &types.IndexSummaryResonseData{
 		TotalFiles: int(codebase.FileCount),
 		Embedding: types.EmbeddingSummary{
-			Status:      embeddingStatus,
-			TotalFiles:  embeddingSummary.TotalFiles,
-			TotalChunks: embeddingSummary.TotalChunks,
+			Status: embeddingStatus,
 		},
 		CodeGraph: types.CodeGraphSummary{
-			Status:     codegraphStatus,
-			TotalFiles: codegraphSummary.TotalFiles,
+			Status: codegraphStatus,
 		},
+	}
+	if embeddingSummary != nil {
+		resp.Embedding.TotalChunks = embeddingSummary.TotalChunks
+		resp.Embedding.TotalFiles = embeddingSummary.TotalFiles
+	}
+	if codegraphSummary != nil {
+		resp.CodeGraph.TotalFiles = codegraphSummary.TotalFiles
 	}
 
 	return resp, nil
