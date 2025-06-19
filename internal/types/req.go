@@ -171,11 +171,13 @@ type DeleteIndexResponseData struct {
 
 type EmbeddingSummary struct {
 	Status      string `json:"status"`
+	LastIndexAt string `json:"lastSyncAt"`
 	TotalFiles  int    `json:"totalFiles"`
 	TotalChunks int    `json:"totalChunks"`
 }
 type CodeGraphSummary struct {
 	Status               string `json:"status"`
+	LastIndexAt          string `json:"lastSyncAt"`
 	TotalFiles           int    `json:"totalFiles"`
 	TotalDefinitionFiles int    `json:"-"`
 }
@@ -187,14 +189,15 @@ type IndexSummaryRequest struct {
 
 type IndexSummaryResonseData struct {
 	TotalFiles int
+	LastSyncAt string           `json:"lastSyncAt"`
 	Embedding  EmbeddingSummary `json:"embedding"`
 	CodeGraph  CodeGraphSummary `json:"codegraph"`
 }
 
 type IndexTaskRequest struct {
-	ClientId     string `json:"clientId"`     // 用户机器ID（如MAC地址）
-	CodebasePath string `json:"codebasePath"` // 项目绝对路径
-	IndexType    string `json:"indexType,options=embedding|codegraph|all"`
+	ClientId     string            `json:"clientId"`     // 用户机器ID（如MAC地址）
+	CodebasePath string            `json:"codebasePath"` // 项目绝对路径
+	IndexType    string            `json:"indexType,options=embedding|codegraph|all"`
 	FileMap      map[string]string `json:"fileMap,optional"`
 }
 

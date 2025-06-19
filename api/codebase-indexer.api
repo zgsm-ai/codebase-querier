@@ -213,17 +213,20 @@ type IndexSummaryRequest {
 
 type EmbeddingSummary {
 	status      string `json:"status"`
+	lastIndexAt string `json:"lastSyncAt"`
 	totalFiles  int    `json:"totalFiles"`
 	totalChunks int    `json:"totalChunks"`
 }
 
 type CodeGraphSummary {
 	status     string `json:"status"`
+	lastIndexAt string `json:"lastSyncAt"`
 	totalFiles int    `json:"totalFiles"`
 }
 
 type IndexSummaryResonseData {
 	totalFiles int
+    lastSyncAt string `json:"lastSyncAt"`
 	embedding  EmbeddingSummary `json:"embedding"`
 	codegraph  CodeGraphSummary `json:"codegraph"`
 }
