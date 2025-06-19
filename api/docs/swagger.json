@@ -559,9 +559,13 @@
                   "type": "object",
                   "required": [
                     "status",
+                    "lastSyncAt",
                     "totalFiles"
                   ],
                   "properties": {
+                    "lastSyncAt": {
+                      "type": "string"
+                    },
                     "status": {
                       "type": "string"
                     },
@@ -574,10 +578,14 @@
                   "type": "object",
                   "required": [
                     "status",
+                    "lastSyncAt",
                     "totalFiles",
                     "totalChunks"
                   ],
                   "properties": {
+                    "lastSyncAt": {
+                      "type": "string"
+                    },
                     "status": {
                       "type": "string"
                     },
@@ -588,6 +596,9 @@
                       "type": "integer"
                     }
                   }
+                },
+                "lastSyncAt": {
+                  "type": "string"
                 },
                 "totalFiles": {
                   "type": "integer"
@@ -1093,7 +1104,7 @@
       }
     }
   },
-  "x-date": "2025-06-19 16:29:48",
+  "x-date": "2025-06-19 19:55:50",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",
