@@ -45,7 +45,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		//{
 		//	Name:     "typescript",
 		//	Language: "typescript",
-		//	Project:  "vue-next",
+		//	CodebasePath:  "vue-next",
 		//	wantErr:  nil,
 		//},
 		{
@@ -57,7 +57,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		//{
 		//	Name:     "go",
 		//	Language: "go",
-		//	Project:  "kubernetes",
+		//	CodebasePath:  "kubernetes",
 		//	wantErr:  nil,
 		//},
 		{
@@ -146,7 +146,7 @@ func TestCodegraphConfig(t *testing.T) {
 		//{
 		//	Name:     "typescript",
 		//	Language: "typescript",
-		//	Project:  "vue-next",
+		//	CodebasePath:  "vue-next",
 		//	wantErr:  nil,
 		//},
 		{
@@ -158,7 +158,7 @@ func TestCodegraphConfig(t *testing.T) {
 		//{
 		//	Name:     "go",
 		//	Language: "go",
-		//	Project:  "kubernetes",
+		//	CodebasePath:  "kubernetes",
 		//	wantErr:  nil,
 		//},
 		{

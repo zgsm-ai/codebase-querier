@@ -22,9 +22,8 @@ const (
 	placeholderOutputPath = "__outputPath__"
 	indexFileName         = "index.scip"
 	// 基础限制
-	defaultMaxFiles   = 100             // 默认最大文件数
-	minFilesToAnalyze = 20              // 最少需要分析的文件数
-	maxAnalysisTime   = 2 * time.Second // 最大分析时间
+	defaultMaxFiles   = 500 // 默认最大文件数
+	minFilesToAnalyze = 50  // 最少需要分析的文件数
 )
 
 var maxFileReached = errors.New("max files reached")
@@ -63,7 +62,7 @@ func (g *IndexGenerator) Generate(ctx context.Context, codebasePath string) erro
 }
 
 func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, codebasePath string) (*CommandExecutor, error) {
-	index, build, err := g.detectLanguageAndTool(ctx, codebasePath)
+	index, build, err := g.DetectLanguageAndTool(ctx, codebasePath)
 	if err != nil {
 		return nil, err
 	}
@@ -86,19 +85,15 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, codebasePath s
 		placeHolders)
 }
 
-// detectLanguageAndTool detects the language and tool for a repository
-func (c *IndexGenerator) detectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
-
+// DetectLanguageAndTool detects the language and tool for a repository
+func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
+	startTime := time.Now()
+	defer tracer.WithTrace(ctx).Infof("scip_generator detect language cost %d ms", time.Since(startTime).Milliseconds())
 	// 通过Walk统计文件频率
 	languageStats := make(map[string]int)
 	analyzedFiles := 0
-	startTime := time.Now()
 
 	err := c.codebaseStore.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
-		// 检查是否超时
-		if time.Since(startTime) > maxAnalysisTime {
-			return maxFileReached
-		}
 
 		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
 		if analyzedFiles >= minFilesToAnalyze {

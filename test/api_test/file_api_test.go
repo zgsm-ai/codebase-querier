@@ -429,7 +429,7 @@ func TestProjectTree(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify response structure
-	assert.NotEmpty(t, result, "Project tree should not be empty")
+	assert.NotEmpty(t, result, "CodebasePath tree should not be empty")
 
 	// Helper function to find node by name
 	var findNode func([]*types.TreeNode, string) *types.TreeNode
