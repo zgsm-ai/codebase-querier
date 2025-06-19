@@ -1,5 +1,5 @@
-log_dir: "/tmp/logs"
-retention_days: 1
+log_dir: "/app/logs/index"
+retention_days: 7
 variables:
   __image__: "zgsm/scip-base:latest"
 languages:
