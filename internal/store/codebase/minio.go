@@ -478,26 +478,48 @@ func (m *minioCodebase) Read(ctx context.Context, codebasePath string, filePath 
 		option.StartLine = 1
 	}
 
-	// 创建scanner来读取行
-	scanner := bufio.NewScanner(object)
+	// 创建reader来读取文件
+	reader := bufio.NewReader(object)
 	var lines []string
 	lineNum := 1
 
 	// 读取行
-	for scanner.Scan() {
+	for {
+		// 读取一行，允许超过默认缓冲区大小
+		line, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to read object content: %w", err)
+		}
+
+		// 处理可能被截断的行
+		var lineBuffer []byte
+		lineBuffer = append(lineBuffer, line...)
+		for isPrefix {
+			line, isPrefix, err = reader.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("failed to read object content: %w", err)
+			}
+			lineBuffer = append(lineBuffer, line...)
+		}
+
+		// 转换为字符串
+		lineStr := string(lineBuffer)
+
 		// 如果当前行号大于等于StartLine，则添加到结果中
 		if lineNum >= option.StartLine {
 			// 如果EndLine > 0 且当前行号大于EndLine，则退出
 			if option.EndLine > 0 && lineNum > option.EndLine {
 				break
 			}
-			lines = append(lines, scanner.Text())
+			lines = append(lines, lineStr)
 		}
 		lineNum++
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan object content: %w", err)
 	}
 
 	// 将结果转换为字节数组

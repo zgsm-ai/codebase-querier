@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/test/api_test"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 const currentBasePath = "G:\\projects\\codebase-indexer"
@@ -74,6 +75,33 @@ func TestTree(t *testing.T) {
 			assert.ErrorIs(t, err, tt.wantErr)
 			tt.assertResult(t, tree)
 		})
+	}
+
+}
+
+func TestReadFile(t *testing.T) {
+	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second*60)
+	defer cancelFunc()
+	svcCtx := api.InitSvcCtx(context.Background(), nil)
+	localCodebase, err := codebase.NewLocalCodebase(svcCtx.Config.CodeBaseStore)
+	assert.NoError(t, err)
+	testcases := []struct {
+		Name         string
+		codebasePath string
+		filePath     string
+		wantErr      error
+	}{
+		{
+			Name:         "big file",
+			codebasePath: "G:\\codebase-store\\7ec27814b60376c6fba936bf1fcaf430f8a84c37eb8f093f91e5664fd26c3160\\.shenma_sync",
+			filePath:     "1749903492799",
+			wantErr:      nil,
+		},
+	}
+	for _, tt := range testcases {
+		read, err := localCodebase.Read(timeout, tt.codebasePath, tt.filePath, types.ReadOptions{})
+		assert.NoError(t, err)
+		assert.True(t, len(read) > 0)
 	}
 
 }
