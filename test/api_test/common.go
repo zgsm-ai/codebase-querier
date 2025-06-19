@@ -2,16 +2,21 @@ package api
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/zgsm-ai/codebase-indexer/internal/response"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
@@ -214,4 +219,69 @@ func createTestZip(opts zipOptions) (string, error) {
 	}
 	fmt.Printf("zip file created: %s, cost: %dms\n", zipPath, time.Now().UnixMilli()-start.UnixMilli())
 	return zipPath, nil
+}
+
+// doRequest 发送HTTP请求并解析响应
+func doRequest[T any](method, path string, params map[string]string, body interface{}, result *response.Response[T]) error {
+	// 构建请求URL
+	var reqURL string
+	if strings.Contains(path, "?") {
+		reqURL = fmt.Sprintf("%s%s", baseURL, path)
+	} else {
+		reqURL = fmt.Sprintf("%s%s", baseURL, path)
+		if params != nil {
+			query := url.Values{}
+			for k, v := range params {
+				query.Add(k, v)
+			}
+			reqURL = fmt.Sprintf("%s?%s", reqURL, query.Encode())
+		}
+	}
+
+	var reqBody io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal request body failed: %w", err)
+		}
+		reqBody = bytes.NewBuffer(jsonData)
+	}
+
+	// 创建请求
+	req, err := http.NewRequest(method, reqURL, reqBody)
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// 发送请求
+	client := &http.Client{
+		Timeout: time.Second * 30,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("do request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response body failed: %w", err)
+	}
+
+	// 检查状态码
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("request failed with status code: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	// 解析响应
+	if err := json.Unmarshal(respBody, result); err != nil {
+		return fmt.Errorf("unmarshal response body failed: %w", err)
+	}
+
+	return nil
 }

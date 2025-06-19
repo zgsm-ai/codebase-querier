@@ -35,10 +35,7 @@ type rerankerRequest struct {
 
 type rerankerResponse struct {
 	Model string `json:"model"`
-	Usage struct {
-		TotalTokens  int `json:"total_tokens"`
-		PromptTokens int `json:"prompt_tokens"`
-	} `json:"usage"`
+
 	Results []struct {
 		Index    int `json:"index"`
 		Document struct {
@@ -46,6 +43,10 @@ type rerankerResponse struct {
 		} `json:"document"`
 		RelevanceScore float32 `json:"relevance_score"`
 	} `json:"results"`
+	Usage struct {
+		TotalTokens  int `json:"total_tokens"`
+		PromptTokens int `json:"prompt_tokens"`
+	} `json:"usage"`
 }
 
 // request

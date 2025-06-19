@@ -95,5 +95,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: taskHandler(serverCtx),
 			},
 		},
+		rest.WithPrefix("/codebase-indexer"),
 	)
 }

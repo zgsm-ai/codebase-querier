@@ -5,7 +5,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
+	api "github.com/zgsm-ai/codebase-indexer/test/api_test"
 	"path/filepath"
 	"testing"
 	"time"
@@ -28,13 +30,13 @@ const basePath = "/projects/codebase-indexer"
 var c config.Config
 var svcCtx *svc.ServiceContext
 
-var syncFileModeMap map[string]string
-
 var clientId = "test-client-123"
 var clientPath = "/tmp/test/test-project"
 
-const codebasePath = "\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f52249a98afbe95b824f815917" // your local repo path
+const codebasePath = "G:\\codebase-store\\11a8180b9a4b034c153f6ce8c48316f2498843f52249a98afbe95b824f815917" // your local repo path
 const codebaseID = 2
+
+var file *types.CollapseSyncMetaFile
 
 func setup(syncId int32) error {
 	msg := &types.CodebaseSyncMessage{
@@ -52,15 +54,22 @@ func setup(syncId int32) error {
 		return err
 	}
 	// 本次同步的元数据列表
-	syncFileModeMap, _, err = svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, msg.CodebasePath)
+	file, err = svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, msg.CodebasePath)
 	if err != nil {
 		return err
 	}
-	if len(syncFileModeMap) == 0 {
+	if len(file.FileModelMap) == 0 {
 		return errors.New("metadata file list is empty, cannot continue")
 	}
-
-	processor, err := job.NewEmbeddingProcessor(svcCtx, msg, syncFileModeMap)
+	params := &job.IndexTaskParams{
+		CodebaseID:           msg.CodebaseID,
+		CodebasePath:         msg.CodebasePath,
+		CodebaseName:         msg.CodebaseName,
+		SyncMetaFiles:        file,
+		EnableCodeGraphBuild: true,
+		EnableEmbeddingBuild: true,
+	}
+	processor, err := job.NewEmbeddingProcessor(svcCtx, params, file.FileModelMap)
 	if err != nil {
 		return err
 	}
@@ -128,6 +137,7 @@ func TestDeleteEmbeddings(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
+
 		// assert 查询向量数据库内容
 		client, err := goweaviate.NewClient(goweaviate.Config{
 			Host:       c.VectorStore.Weaviate.Endpoint,
@@ -171,7 +181,7 @@ func TestDeleteEmbeddings(t *testing.T) {
 		assert.True(t, len(m) > 0)
 
 		var filePaths []string
-		for k := range syncFileModeMap {
+		for k := range file.FileModelMap {
 			filePaths = append(filePaths, k)
 		}
 
@@ -209,4 +219,23 @@ func generateTenantName(codebasePath string) (string, error) {
 	}
 	hash := md5.Sum([]byte(codebasePath))   // 计算 MD5 哈希
 	return hex.EncodeToString(hash[:]), nil // 转为32位十六进制字符串
+}
+
+func TestEmbeddingIndexSummary(t *testing.T) {
+	assert.NotPanics(t, func() {
+		ctx := context.Background()
+		syncId := int32(time.Now().Unix())
+		err := setup(syncId)
+		if err != nil {
+			panic(err)
+		}
+		logx.DisableStat()
+		serviceContext := api.InitSvcCtx(ctx, nil)
+		summary, err := serviceContext.VectorStore.GetIndexSummary(ctx, codebaseID, codebasePath)
+
+		assert.NoError(t, err)
+		assert.True(t, summary.TotalFiles > 0)
+		assert.True(t, summary.TotalChunks > 0)
+
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ func New(cfg config.VectorStoreConf, embedder Embedder, reranker Reranker) (Stor
 		Host:       cfg.Weaviate.Endpoint,
 		Scheme:     schemeHttp,
 		AuthConfig: authConf,
+		Timeout:    cfg.Weaviate.Timeout,
 	})
 
 	if err != nil {
@@ -420,46 +422,32 @@ func (r *weaviateWrapper) unmarshalSummarySearchResponse(res *models.GraphQLResp
 	// 获取类名对应的数据
 	results, ok := data[r.className].([]interface{})
 	if !ok || len(results) == 0 {
-		return nil, fmt.Errorf("invalid response format: class data not found or has wrong type")
+		return nil, fmt.Errorf("invalid response format: class data not found or has wrong type：%s", reflect.TypeOf(results).String())
 	}
-
-	result := results[0].(map[string]interface{})
-
-	// 获取 meta 字段
-	meta, ok := result["meta"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response format: 'meta' field not found or has wrong type")
-	}
-
-	// 获取总数
-	count, ok := meta["count"].(float64)
-	if !ok {
-		return nil, fmt.Errorf("invalid response format: 'count' field not found or has wrong type")
-	}
-
-	// 获取 groupedBy 字段
-	groupedBy, ok := result["groupedBy"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response format: 'groupedBy' field not found or has wrong type")
-	}
-
-	// 统计不同文件的数量
-	fileSet := make(map[string]struct{})
-	for _, group := range groupedBy {
-		groupMap, ok := group.(map[string]interface{})
+	var totalChunks, totalFiles int
+	for _, v := range results {
+		// 获取 meta 字段
+		result, ok := v.(map[string]interface{})
 		if !ok {
-			continue
+			return nil, fmt.Errorf("invaid response format, result has wrong type: %s", reflect.TypeOf(result).String())
 		}
-		value, ok := groupMap["value"].(string)
+		meta, ok := result["meta"].(map[string]interface{})
 		if !ok {
-			continue
+			return nil, fmt.Errorf("invalid response format: 'meta' field not found or has wrong type:%s", reflect.TypeOf(meta).String())
 		}
-		fileSet[value] = struct{}{}
+
+		// 获取总数
+		count, ok := meta["count"].(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid response format: 'count' field not found or has wrong type:%s", reflect.TypeOf(count).String())
+		}
+		totalChunks += int(count)
+		totalFiles++
+
 	}
 
 	return &types.EmbeddingSummary{
-		Status:      "success",
-		TotalFiles:  len(fileSet),
-		TotalChunks: int(count),
+		TotalFiles:  totalFiles,
+		TotalChunks: totalChunks,
 	}, nil
 }

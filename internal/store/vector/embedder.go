@@ -2,40 +2,44 @@ package vector
 
 import (
 	"context"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
+	"strings"
+
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"strings"
 )
 
+// Embedder defines the interface for embedding operations
 type Embedder interface {
+	// EmbedCodeChunks creates embeddings for multiple code chunks
 	EmbedCodeChunks(ctx context.Context, chunks []*types.CodeChunk) ([]*CodeChunkEmbedding, error)
+	// EmbedQuery creates an embedding for a single query string
 	EmbedQuery(ctx context.Context, query string) ([]float32, error)
 }
 
+// CodeChunkEmbedding represents a code chunk with its embedding vector
 type CodeChunkEmbedding struct {
 	*types.CodeChunk
 	Embedding []float32
 }
 
+// customEmbedder implements the Embedder interface
 type customEmbedder struct {
-	config           config.EmbedderConf
-	embeddingService *openai.EmbeddingService
+	config          config.EmbedderConf
+	embeddingClient EmbeddingClient
 }
 
+// NewEmbedder creates a new instance of Embedder
 func NewEmbedder(cfg config.EmbedderConf) (Embedder, error) {
-
-	embeddingService := openai.NewEmbeddingService(option.WithBaseURL(cfg.APIBase), option.WithAPIKey(cfg.APIKey))
+	embeddingClient := NewEmbeddingClient(cfg)
 
 	return &customEmbedder{
-		embeddingService: &embeddingService,
-		config:           cfg,
+		embeddingClient: embeddingClient,
+		config:          cfg,
 	}, nil
-
 }
 
+// EmbedCodeChunks implements the Embedder interface
 func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.CodeChunk) ([]*CodeChunkEmbedding, error) {
 	if len(chunks) == 0 {
 		return []*CodeChunkEmbedding{}, nil
@@ -76,6 +80,7 @@ func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.Co
 	return embeds, nil
 }
 
+// EmbedQuery implements the Embedder interface
 func (e *customEmbedder) EmbedQuery(ctx context.Context, query string) ([]float32, error) {
 	if e.config.StripNewLines {
 		query = strings.ReplaceAll(query, "\n", " ")
@@ -92,37 +97,25 @@ func (e *customEmbedder) EmbedQuery(ctx context.Context, query string) ([]float3
 	return vectors[0], nil
 }
 
+// doEmbeddings performs the actual embedding operation
 func (e *customEmbedder) doEmbeddings(ctx context.Context, textsByte [][]byte) ([][]float32, error) {
 	texts := make([]string, len(textsByte))
 	for i, b := range textsByte {
 		texts[i] = string(b)
 	}
 
-	// 批量处理
-	params := openai.EmbeddingNewParams{
-		Input: openai.EmbeddingNewParamsInputUnion{
-			OfArrayOfStrings: texts,
-		},
-		Model:          e.config.Model,
-		EncodingFormat: openai.EmbeddingNewParamsEncodingFormatFloat,
-	}
-
-	res, err := e.embeddingService.New(ctx, params,
-		option.WithMaxRetries(e.config.MaxRetries),
-		option.WithRequestTimeout(e.config.Timeout),
-	)
-
+	embeddings, err := e.embeddingClient.CreateEmbeddings(ctx, texts, e.config.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	vectors := make([][]float32, len(textsByte), len(textsByte))
-	for _, d := range res.Data {
-		transferredVector := make([]float32, 0, 768) //768维
-		for _, v := range d.Embedding {
+	vectors := make([][]float32, len(textsByte))
+	for i, embedding := range embeddings {
+		transferredVector := make([]float32, 0, 768) // 768维
+		for _, v := range embedding {
 			transferredVector = append(transferredVector, float32(v))
 		}
-		vectors[d.Index] = transferredVector
+		vectors[i] = transferredVector
 	}
 	return vectors, nil
 }

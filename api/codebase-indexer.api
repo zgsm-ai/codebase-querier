@@ -58,7 +58,7 @@ type DefinitionRequest {
 	filePath     string `form:"filePath,optional"` // 文件相对路径
 	startLine    int    `form:"startLine,optional"` // 开始行
 	endLine      int    `form:"endLine,optional"` // 结束行
-	codeSnippet string `json:"codeSnippet,optional"`       // 代码内容
+	codeSnippet  string `json:"codeSnippet,optional"` // 代码内容
 }
 
 type DefinitionResponseData {
@@ -218,14 +218,14 @@ type EmbeddingSummary {
 }
 
 type CodeGraphSummary {
-	status               string `json:"status"`
-	totalFiles  int    `json:"totalFiles"`
+	status     string `json:"status"`
+	totalFiles int    `json:"totalFiles"`
 }
 
 type IndexSummaryResonseData {
 	totalFiles int
 	embedding  EmbeddingSummary `json:"embedding"`
-	codegraph      CodeGraphSummary     `json:"codegraph"`
+	codegraph  CodeGraphSummary `json:"codegraph"`
 }
 
 type IndexTaskRequest {
@@ -253,6 +253,9 @@ type DeleteCodebaseRequest {
 
 type DeleteCodebaseResponseData {}
 
+@server (
+	prefix: /codebase-indexer
+)
 service codebaseindexer {
 	@handler summary
 	get /api/v1/index/summary (IndexSummaryRequest) returns (IndexSummaryResonseData)

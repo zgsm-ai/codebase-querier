@@ -16,9 +16,10 @@ type VectorStoreConf struct {
 
 // WeaviateConf Weaviate向量数据库配置
 type WeaviateConf struct {
-	Endpoint     string // HTTP端点
-	APIKey       string `json:",optional"`   // API密钥
-	BatchSize    int    `json:",default=10"` // 批处理大小
+	Endpoint     string        // HTTP端点
+	APIKey       string        `json:",optional"`    // API密钥
+	BatchSize    int           `json:",default=10"`  // 批处理大小
+	Timeout      time.Duration `json:",default=10s"` // 超时时间
 	ClassName    string
 	MaxDocuments int `json:",default=10"`
 }

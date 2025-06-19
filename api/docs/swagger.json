@@ -14,7 +14,7 @@
   },
   "basePath": "/",
   "paths": {
-    "/api/v1/codebase": {
+    "/codebase-indexer/api/v1/codebase": {
       "delete": {
         "consumes": [
           "application/x-www-form-urlencoded"
@@ -48,192 +48,6 @@
             "description": "",
             "schema": {
               "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/index": {
-      "delete": {
-        "consumes": [
-          "application/x-www-form-urlencoded"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "https"
-        ],
-        "summary": "index",
-        "operationId": "index",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "用户机器ID（如MAC地址）",
-            "name": "clientId",
-            "in": "formData",
-            "required": true
-          },
-          {
-            "type": "string",
-            "description": "项目绝对路径",
-            "name": "codebasePath",
-            "in": "formData",
-            "required": true
-          },
-          {
-            "enum": [
-              "embedding",
-              "codegraph",
-              "all"
-            ],
-            "type": "string",
-            "name": "taskType",
-            "in": "formData",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/index/summary": {
-      "get": {
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "https"
-        ],
-        "summary": "summary",
-        "operationId": "summary",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "用户机器ID（如MAC地址）",
-            "name": "clientId",
-            "in": "query",
-            "required": true
-          },
-          {
-            "type": "string",
-            "description": "项目绝对路径",
-            "name": "codebasePath",
-            "in": "query",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "codegraph": {
-                  "type": "object",
-                  "required": [
-                    "status",
-                    "totalFiles"
-                  ],
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    },
-                    "totalFiles": {
-                      "type": "integer"
-                    }
-                  }
-                },
-                "embedding": {
-                  "type": "object",
-                  "required": [
-                    "status",
-                    "totalFiles",
-                    "totalChunks"
-                  ],
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    },
-                    "totalChunks": {
-                      "type": "integer"
-                    },
-                    "totalFiles": {
-                      "type": "integer"
-                    }
-                  }
-                },
-                "totalFiles": {
-                  "type": "integer"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/index/task": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "https"
-        ],
-        "summary": "task",
-        "operationId": "task",
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "required": [
-                "clientId",
-                "codebasePath",
-                "indexType"
-              ],
-              "properties": {
-                "clientId": {
-                  "description": "用户机器ID（如MAC地址）",
-                  "type": "string"
-                },
-                "codebasePath": {
-                  "description": "项目绝对路径",
-                  "type": "string"
-                },
-                "indexType": {
-                  "type": "string",
-                  "enum": [
-                    "embedding",
-                    "codegraph",
-                    "all"
-                  ]
-                }
-              }
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "taskId": {
-                  "type": "integer"
-                }
-              }
             }
           }
         }
@@ -655,6 +469,192 @@
           "200": {
             "description": "",
             "schema": {}
+          }
+        }
+      }
+    },
+    "/codebase-indexer/api/v1/index": {
+      "delete": {
+        "consumes": [
+          "application/x-www-form-urlencoded"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "index",
+        "operationId": "index",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "用户机器ID（如MAC地址）",
+            "name": "clientId",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "项目绝对路径",
+            "name": "codebasePath",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "enum": [
+              "embedding",
+              "codegraph",
+              "all"
+            ],
+            "type": "string",
+            "name": "taskType",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/codebase-indexer/api/v1/index/summary": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "summary",
+        "operationId": "summary",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "用户机器ID（如MAC地址）",
+            "name": "clientId",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "项目绝对路径",
+            "name": "codebasePath",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "codegraph": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "totalFiles"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "totalFiles": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "embedding": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "totalFiles",
+                    "totalChunks"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "totalChunks": {
+                      "type": "integer"
+                    },
+                    "totalFiles": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "totalFiles": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/codebase-indexer/api/v1/index/task": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "task",
+        "operationId": "task",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "clientId",
+                "codebasePath",
+                "indexType"
+              ],
+              "properties": {
+                "clientId": {
+                  "description": "用户机器ID（如MAC地址）",
+                  "type": "string"
+                },
+                "codebasePath": {
+                  "description": "项目绝对路径",
+                  "type": "string"
+                },
+                "indexType": {
+                  "type": "string",
+                  "enum": [
+                    "embedding",
+                    "codegraph",
+                    "all"
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "integer"
+                }
+              }
+            }
           }
         }
       }
@@ -1087,7 +1087,7 @@
       }
     }
   },
-  "x-date": "2025-06-19 09:14:58",
+  "x-date": "2025-06-19 10:05:29",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

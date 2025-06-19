@@ -145,7 +145,7 @@ type DefinitionRequest struct {
 	FilePath     string `form:"filePath,optional"`    // 文件相对路径
 	StartLine    int    `form:"startLine,optional"`   // 开始行
 	EndLine      int    `form:"endLine,optional"`     // 结束行
-	codeSnippet  string `json:"codeSnippet,optional"` // 代码片段
+	CodeSnippet  string `json:"codeSnippet,optional"` // 代码片段
 }
 
 type DefinitionResponseData struct {
