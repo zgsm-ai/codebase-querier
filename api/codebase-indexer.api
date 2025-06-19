@@ -219,8 +219,7 @@ type EmbeddingSummary {
 
 type CodeGraphSummary {
 	status               string `json:"status"`
-	totalRelationFiles   int    `json:"totalRelationFiles"`
-	totalDefinitionFiles int    `json:"totalDefinitionFiles"`
+	totalFiles  int    `json:"totalFiles"`
 }
 
 type IndexSummaryResonseData {
