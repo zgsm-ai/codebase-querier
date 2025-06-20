@@ -37,7 +37,7 @@ func NewIndexTaskScheduler(serverCtx context.Context, svcCtx *svc.ServiceContext
 		svcCtx:        svcCtx,
 		enableFlag:    os.Getenv(indexNodeEnv) == indexNodeEnableVal,
 		messageQueue:  svcCtx.MessageQueue,
-		consumerGroup: svcCtx.Config.MessageQueue.ConsumerGroup,
+		consumerGroup: svcCtx.Config.IndexTask.ConsumerGroup,
 	}
 
 	if !s.enableFlag {
@@ -65,7 +65,9 @@ func (i *IndexTaskScheduler) Start() {
 
 		default:
 			// 消费消息队列
-			msg, err := i.messageQueue.Consume(i.ctx, i.svcCtx.Config.IndexTask.Topic, types.ConsumeOptions{})
+			msg, err := i.messageQueue.Consume(i.ctx, i.svcCtx.Config.IndexTask.Topic,
+				i.svcCtx.Config.IndexTask.ConsumerGroup,
+				types.ConsumeOptions{})
 			if errors.Is(err, errs.ReadTimeout) {
 				continue
 			}

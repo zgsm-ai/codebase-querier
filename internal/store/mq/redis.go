@@ -16,20 +16,15 @@ import (
 
 // redisMQ Redis消息队列实现（基于原生redis/go-redis/v9 和 Streams）
 type redisMQ struct {
-	client        *redis.Client // 原生Redis客户端
-	consumerGroup string        // 消费者组名称
+	client *redis.Client // 原生Redis客户端
 }
 
 // NewRedisMQ 创建Redis消息队列实例
 // consumerGroup 参数指定消费者组的名称
-func NewRedisMQ(client *redis.Client, consumerGroup string) (MessageQueue, error) {
+func NewRedisMQ(client *redis.Client) (MessageQueue, error) {
 	// 可以在这里检查或创建消费者组，但为了简化，我们在Consume中按需创建
-	if consumerGroup == "" {
-		return nil, errors.New("consumerGroup cannot be empty")
-	}
 	return &redisMQ{
-		client:        client,
-		consumerGroup: consumerGroup,
+		client: client,
 	}, nil
 }
 func (r *redisMQ) CreateTopic(ctx context.Context, topic string, opts types.TopicOptions) error {
@@ -70,13 +65,16 @@ func (r *redisMQ) Produce(ctx context.Context, topic string, message []byte, opt
 // Consume 实现MessageQueue接口的Subscribe方法
 // 使用 XReadGroup 命令从 Streams 消费者组中读取消息
 // 并使用 XAck 确认消息
-func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeOptions) (*types.Message, error) {
+func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup string, opts types.ConsumeOptions) (*types.Message, error) {
+	if consumerGroup == types.EmptyString {
+		return nil, fmt.Errorf("consumerGroup cannot be empty")
+	}
 	// 确保消费者组存在，如果不存在则创建
 	// 使用 MKSTREAM 选项可以在 Stream 不存在时同时创建 Stream
-	err := r.client.XGroupCreateMkStream(ctx, topic, r.consumerGroup, "0").Err()
+	err := r.client.XGroupCreateMkStream(ctx, topic, consumerGroup, "0").Err()
 	if err != nil && !errors.Is(err, redis.Nil) && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		// 忽略 BUSYGROUP 错误，表示组已存在
-		return nil, fmt.Errorf("failed to create consumer group %s for stream %s: %w", r.consumerGroup, topic, err)
+		return nil, fmt.Errorf("failed to create consumer group %s for stream %s: %w", consumerGroup, topic, err)
 	}
 
 	// 使用 XReadGroup 从消费者组读取消息
@@ -84,7 +82,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeO
 	// Count 设置每次最多读取一条消息
 	// Block 设置阻塞时间，与 opts.ReadTimeout 对应
 	streams, err := r.client.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    r.consumerGroup,
+		Group:    consumerGroup,
 		Consumer: "consumer-" + r.client.ClientID(ctx).String(), // 使用客户端ID作为消费者名称
 		Streams:  []string{topic, ">"},
 		Count:    1,
@@ -97,7 +95,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeO
 			// 超时或无消息
 			return nil, errs.ReadTimeout
 		}
-		return nil, fmt.Errorf("failed to XReadGroup from stream %s, group %s: %w", topic, r.consumerGroup, err)
+		return nil, fmt.Errorf("failed to XReadGroup from stream %s, group %s: %w", topic, consumerGroup, err)
 	}
 
 	// 检查是否读取到消息
@@ -113,7 +111,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeO
 	if !ok {
 		// TODO: Handle malformed message - maybe move to a dead-letter stream?
 		// For now, we continue without acknowledging.
-		tracer.WithTrace(ctx).Errorf("received message %s with invalid body format from stream %s, group %s: %v", msg.ID, topic, r.consumerGroup, msg.Values["body"])
+		tracer.WithTrace(ctx).Errorf("received message %s with invalid body format from stream %s, group %s: %v", msg.ID, topic, consumerGroup, msg.Values["body"])
 		return nil, fmt.Errorf("received message %s with invalid body format", msg.ID)
 	}
 
@@ -121,7 +119,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeO
 	timestampVal, ok := msg.Values["timestamp"].(string)
 	if !ok {
 		// 如果时间戳字段不存在或格式错误，记录错误并使用当前时间
-		tracer.WithTrace(ctx).Errorf("received message %s without valid timestamp field from stream %s, group %s", msg.ID, topic, r.consumerGroup)
+		tracer.WithTrace(ctx).Errorf("received message %s without valid timestamp field from stream %s, group %s", msg.ID, topic, consumerGroup)
 		// 继续处理消息，Timestamp 使用当前时间
 		return &types.Message{
 			ID:        msg.ID,
@@ -134,7 +132,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, opts types.ConsumeO
 	nanoTimestamp, err := strconv.ParseInt(timestampVal, 10, 64)
 	if err != nil {
 		// 如果时间戳解析失败，记录错误并使用当前时间
-		tracer.WithTrace(ctx).Errorf("Failed to parse timestamp for message %s from stream %s, group %s: %v", msg.ID, topic, r.consumerGroup, err)
+		tracer.WithTrace(ctx).Errorf("Failed to parse timestamp for message %s from stream %s, group %s: %v", msg.ID, topic, consumerGroup, err)
 		// 继续处理消息，Timestamp 使用当前时间
 		return &types.Message{
 			ID:        msg.ID,
@@ -183,15 +181,15 @@ func (r *redisMQ) Nack(ctx context.Context, topic, consumerGroup string, msgId s
 
 // ReclaimPendingMessages 可以用于处理消费者崩溃后未 ACK 的消息
 // 通常需要在消费者启动时调用，或者通过一个独立的监控进程来处理
-func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, stream string, idleTime time.Duration, count int) ([]*types.Message, error) {
+func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, topic string, consumerGroup string, idleTime time.Duration, count int) ([]*types.Message, error) {
 	// 查找处于 Pending 상태且超时未处理的消息
 	// 使用 XPENDING 命令获取 Pending 消息的详细信息
 	// 注意：XPENDING 不直接返回消息体，需要通过 XCLAIM 或 XAUTOCLAIM 获取
 
 	// 转移这些 Pending 消息的所有权给当前消费者实例，并获取消息体
 	claimedStreams, _, err := r.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
-		Stream:   stream,
-		Group:    r.consumerGroup,
+		Stream:   topic,
+		Group:    consumerGroup,
 		MinIdle:  idleTime, // 使用 MinIdle 字段
 		Start:    "0-0",    // 从 Streams 的开始位置查找
 		Count:    int64(count),
@@ -199,7 +197,7 @@ func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, stream string, idl
 	}).Result()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to XAutoClaim messages for stream %s, group %s: %w", stream, r.consumerGroup, err)
+		return nil, fmt.Errorf("failed to XAutoClaim messages for stream %s, group %s: %w", topic, consumerGroup, err)
 	}
 
 	var messages []*types.Message
@@ -214,18 +212,18 @@ func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, stream string, idl
 			// if ackErr != nil {
 			// tracer.WithTrace(ctx).Errorf("Failed to XAck malformed reclaimed message %s in stream %s, group %s: %v", msg.ID, stream, r.consumerGroup, ackErr)
 			// }
-			tracer.WithTrace(ctx).Errorf("received reclaimed message %s with invalid body format from stream %s, group %s: %v", msg.ID, stream, r.consumerGroup, msg.Values["body"])
+			tracer.WithTrace(ctx).Errorf("received reclaimed message %s with invalid body format from stream %s, group %s: %v", msg.ID, topic, consumerGroup, msg.Values["body"])
 			continue
 		}
 
 		// 解析时间戳 ("timestamp" 字段)
 		timestampVal, ok := msg.Values["timestamp"].(string)
 		if !ok {
-			tracer.WithTrace(ctx).Errorf("received reclaimed message %s without valid timestamp field from stream %s, group %s", msg.ID, stream, r.consumerGroup)
+			tracer.WithTrace(ctx).Errorf("received reclaimed message %s without valid timestamp field from stream %s, group %s", msg.ID, topic, consumerGroup)
 			messages = append(messages, &types.Message{
 				ID:        msg.ID,
 				Body:      []byte(body),
-				Topic:     stream,
+				Topic:     topic,
 				Timestamp: time.Now(),
 			})
 			continue
@@ -233,11 +231,11 @@ func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, stream string, idl
 
 		nanoTimestamp, err := strconv.ParseInt(timestampVal, 10, 64)
 		if err != nil {
-			tracer.WithTrace(ctx).Errorf("failed to parse timestamp for reclaimed message %s from stream %s, group %s: %v", msg.ID, stream, r.consumerGroup, err)
+			tracer.WithTrace(ctx).Errorf("failed to parse timestamp for reclaimed message %s from stream %s, group %s: %v", msg.ID, topic, consumerGroup, err)
 			messages = append(messages, &types.Message{
 				ID:        msg.ID,
 				Body:      []byte(body),
-				Topic:     stream,
+				Topic:     topic,
 				Timestamp: time.Now(),
 			})
 			continue
@@ -246,7 +244,7 @@ func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, stream string, idl
 		messages = append(messages, &types.Message{
 			ID:        msg.ID,
 			Body:      []byte(body),
-			Topic:     stream,
+			Topic:     topic,
 			Timestamp: time.Unix(0, nanoTimestamp),
 		})
 	}
