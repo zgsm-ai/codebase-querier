@@ -25,7 +25,7 @@ func Test_GenerateCScipIndex(t *testing.T) {
 
 		localCodebase, err := codebase.NewLocalCodebase(storeConf)
 		assert.NoError(t, err)
-		generator := scipindex.NewIndexGenerator(scipConf, localCodebase)
+		generator := scipindex.NewIndexGenerator(svcCtx.CmdLogger, scipConf, localCodebase)
 		err = generator.Generate(context.Background(), codebasePath)
 		assert.NoError(t, err)
 		indexFile := filepath.Join(testProjectsBaseDir, projectPath, types.CodebaseIndexDir, indexFileName)

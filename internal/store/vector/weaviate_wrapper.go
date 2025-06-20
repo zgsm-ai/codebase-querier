@@ -291,7 +291,20 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 	if len(docs) == 0 {
 		return nil
 	}
+	// TODO 事务保障
+	// 先删除已有的相同codebaseId和FilePath的数据，避免重复  TODO 启动一个定时任务，清理重复数据。根据CodebaseId、FilePath、Content 去重。
+	err := r.DeleteCodeChunks(ctx, docs, options)
+	if err != nil {
+		tracer.WithTrace(ctx).Errorf("[%s]failed to delete existing code chunks before upsert: %v", docs[0].CodebasePath, err)
+	}
 
+	return r.InsertCodeChunks(ctx, docs, options)
+}
+
+func (r *weaviateWrapper) InsertCodeChunks(ctx context.Context, docs []*types.CodeChunk, options Options) error {
+	if len(docs) == 0 {
+		return nil
+	}
 	tenantName, err := r.generateTenantName(docs[0].CodebasePath)
 	if err != nil {
 		return err
@@ -301,12 +314,6 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 		return err
 	}
 	tracer.WithTrace(ctx).Infof("embedded %d chunks for codebase %s successfully", len(docs), docs[0].CodebaseName)
-
-	// 先删除已有的相同codebaseId和FilePath的数据，避免重复  TODO 启动一个定时任务，清理重复数据。根据CodebaseId、FilePath、Content 去重。
-	err = r.DeleteCodeChunks(ctx, docs, options)
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("[%s]failed to delete existing code chunks before upsert: %v", docs[0].CodebasePath, err)
-	}
 
 	objs := make([]*models.Object, len(chunks), len(chunks))
 	for i, c := range chunks {

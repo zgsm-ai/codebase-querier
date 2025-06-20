@@ -5,6 +5,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"github.com/go-openapi/strfmt"
+	"github.com/weaviate/weaviate/entities/models"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	api "github.com/zgsm-ai/codebase-indexer/test/api_test"
@@ -236,6 +238,42 @@ func TestEmbeddingIndexSummary(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, summary.TotalFiles > 0)
 		assert.True(t, summary.TotalChunks > 0)
+
+	})
+}
+
+func TestEmbeddingSameId(t *testing.T) {
+	assert.NotPanics(t, func() {
+		ctx := context.Background()
+		svcC := api.InitSvcCtx(ctx, nil)
+		client, err := goweaviate.NewClient(goweaviate.Config{
+			Host:       svcC.Config.VectorStore.Weaviate.Endpoint,
+			Scheme:     "http",
+			AuthConfig: auth.ApiKey{Value: svcC.Config.VectorStore.Weaviate.APIKey},
+		})
+		assert.NoError(t, err)
+		codebaseId := 1
+		codebasePath := "/tmp/projects/go/kubernetes"
+		tenantName, err := generateTenantName(codebasePath)
+		embedder, err := vector.NewEmbedder(svcC.Config.VectorStore.Embedder)
+		assert.NoError(t, err)
+		assert.NoError(t, err)
+		vec, err := embedder.EmbedQuery(ctx, "hello")
+		assert.NoError(t, err)
+		obj := &models.Object{
+			ID:     strfmt.UUID("b24426f8-ebac-4f51-bedd-1996830db349"),
+			Class:  svcC.Config.VectorStore.Weaviate.ClassName,
+			Tenant: tenantName,
+			Vector: vec,
+			Properties: map[string]any{
+				vector.MetadataCodebaseId:   codebaseId,
+				vector.MetadataCodebasePath: codebasePath,
+			},
+		}
+		resp, err := client.Batch().ObjectsBatcher().WithObjects(obj).Do(ctx)
+		assert.NoError(t, err)
+		err = vector.CheckBatchErrors(resp)
+		assert.NoError(t, err)
 
 	})
 }

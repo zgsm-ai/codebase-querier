@@ -11,10 +11,9 @@ import (
 
 // Store 向量存储接口
 type Store interface {
-	// Delete 删除代码库的向量索引
 	DeleteByCodebase(ctx context.Context, codebaseId int32, codebasePath string) error
-	// GetIndexStatus 获取索引状态
 	GetIndexSummary(ctx context.Context, codebaseId int32, codebasePath string) (*types.EmbeddingSummary, error)
+	InsertCodeChunks(ctx context.Context, docs []*types.CodeChunk, options Options) error
 	UpsertCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) error
 	DeleteCodeChunks(ctx context.Context, chunks []*types.CodeChunk, options Options) error
 	Query(ctx context.Context, query string, topK int, options Options) ([]*types.SemanticFileItem, error)

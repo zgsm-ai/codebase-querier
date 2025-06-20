@@ -33,7 +33,7 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 	svcCtx := getSvcCtx(timeout)
 
 	codegraphConfig := config.MustLoadCodegraphConfig(svcCtx.Config.IndexTask.GraphTask.ConfFile)
-	generator := scip.NewIndexGenerator(codegraphConfig, svcCtx.CodebaseStore)
+	generator := scip.NewIndexGenerator(svcCtx.CmdLogger, codegraphConfig, svcCtx.CodebaseStore)
 	defer cancelFunc()
 	basePath := "/test/tmp/projects/"
 	testcases := []struct {
@@ -134,7 +134,7 @@ func TestCodegraphConfig(t *testing.T) {
 	svcCtx := getSvcCtx(timeout)
 
 	codegraphConfig := config.MustLoadCodegraphConfig(svcCtx.Config.IndexTask.GraphTask.ConfFile)
-	generator := scip.NewIndexGenerator(codegraphConfig, svcCtx.CodebaseStore)
+	generator := scip.NewIndexGenerator(svcCtx.CmdLogger, codegraphConfig, svcCtx.CodebaseStore)
 	defer cancelFunc()
 	basePath := "/test/tmp/projects/"
 	testcases := []struct {
@@ -214,7 +214,7 @@ func TestCodegraphConfig(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			codebasePath := filepath.Join(basePath, tc.Language, tc.Project)
 			t.Logf("start to testing %s codebase %s", tc.Name, codebasePath)
-			executor, err := generator.InitCommandExecutor(timeout, codebasePath)
+			executor, err := generator.InitCommandExecutor(timeout, svcCtx.CmdLogger, codebasePath)
 			assert.NoError(t, err)
 			buildCmds, indexCmds := executor.BuildCmds, executor.IndexCmds
 			var build []string

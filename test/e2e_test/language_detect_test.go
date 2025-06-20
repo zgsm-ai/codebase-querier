@@ -96,7 +96,7 @@ func TestLanguageDetect(t *testing.T) {
 			ctx := context.Background()
 			serviceContext := api.InitSvcCtx(ctx, nil)
 			conf := config.MustLoadCodegraphConfig("G:\\projects\\codebase-indexer\\test\\e2e_test\\conf\\codegraph.yaml")
-			generator := scip.NewIndexGenerator(conf, serviceContext.CodebaseStore)
+			generator := scip.NewIndexGenerator(serviceContext.CmdLogger, conf, serviceContext.CodebaseStore)
 			indexTool, buildTool, err := generator.DetectLanguageAndTool(ctx, tc.CodebasePath)
 			var buildToolName string
 			if buildTool == nil {
