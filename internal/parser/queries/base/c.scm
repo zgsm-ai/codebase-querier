@@ -64,3 +64,14 @@
           )
   )
 
+;; function_call
+(function_definition
+  body: (_
+          (expression_statement
+            (call_expression
+              function: (identifier) @function.call.name
+              )
+            )
+          )
+  )
+
