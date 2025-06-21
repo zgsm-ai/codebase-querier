@@ -1,20 +1,38 @@
 (preproc_include
   "#include" @name
-  ) @definition.include
+  ) @include
 
-(preproc_def )  @definition.macro @name
+(preproc_def) @macro @name
 
 ;; Constant declarations
-(declaration
-  (type_qualifier) @qualifier
-  declarator: (init_declarator
-                declarator: (identifier) @name)
-  (#eq? @qualifier "const")) @definition.const
+(translation_unit
+  (declaration
+    (type_qualifier) @qualifier
+    declarator: (init_declarator
+                  declarator: (identifier) @name)
+    (#eq? @qualifier "const")) @const
+  )
 
+;; extern Variable declarations
+(translation_unit
+  (declaration
+    (storage_class_specifier) @type
+    (identifier) @name
+    (#eq? @type "extern")
+    ) @global_extern_variable
+  )
 
 ;; Variable declarations
-(declaration
-  declarator: (identifier) @name) @definition.variable
+(translation_unit
+  (declaration
+    (_) * @type
+    declarator: (init_declarator
+                  declarator: (identifier) @name)
+    (#not-eq? @type "const")
+    (#not-eq? @type "extern")
+    ) @global_variable
+)
+
 
 ;; Function definitions
 (function_definition
@@ -23,7 +41,7 @@
 
 (declaration
   declarator: (function_declarator
-                declarator:  (identifier) @name)
+                declarator: (identifier) @name)
   ) @declaration.function
 
 

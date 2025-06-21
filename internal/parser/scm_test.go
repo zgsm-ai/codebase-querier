@@ -8,7 +8,7 @@ import (
 func TestScmLoad(t *testing.T) {
 	assert.NotPanics(t,
 		func() {
-			loadScm()
+			_ = loadScm()
 		})
 }
 

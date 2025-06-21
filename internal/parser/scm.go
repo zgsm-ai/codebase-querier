@@ -28,38 +28,44 @@ func loadScm() error {
 	DefinitionQueries = make(map[Language]string)
 	configs := GetLanguageConfigs()
 	for _, lang := range configs {
-		baseQuery := makeQueryPath(lang.Language, baseSubDir)
-		defQuery := makeQueryPath(lang.Language, defSubdir)
-		baseQueryContent, err := scmFS.ReadFile(baseQuery)
-		if err != nil {
-			return fmt.Errorf("failed to read base query file %s for %s: %w", baseQuery, lang.Language, err)
-		}
-		defQueryContent, err := scmFS.ReadFile(defQuery)
-		if err != nil {
-			return fmt.Errorf("failed to read definition query file %s for %s: %w", defQuery, lang.Language, err)
-		}
 		// 校验query
 		langParser := sitter.NewParser()
 		sitterLang := lang.SitterLanguage()
-		err = langParser.SetLanguage(sitterLang)
+		err := langParser.SetLanguage(sitterLang)
 		if err != nil {
 			return fmt.Errorf("failed to init language parser %s: %w", lang.Language, err)
 		}
-		query, queryError := sitter.NewQuery(sitterLang, string(baseQueryContent))
-		if queryError != nil && IsRealQueryErr(queryError) {
-			return fmt.Errorf("failed to parse base query file %s: %w", baseQuery, queryError)
-		}
-		query, queryError = sitter.NewQuery(sitterLang, string(defQueryContent))
-		if queryError != nil && IsRealQueryErr(queryError) {
-			return fmt.Errorf("failed to parse def query file %s : %w", defQuery, queryError)
+
+		baseQueryContent, err := loadLanguageScm(lang, baseSubDir, sitterLang)
+		if err != nil {
+			return err
 		}
 
-		query.Close()
+		defQueryContent, err := loadLanguageScm(lang, defSubdir, sitterLang)
+		if err != nil {
+			return err
+		}
+
 		langParser.Close()
-		DefinitionQueries[lang.Language] = string(defQueryContent)
 		BaseQueries[lang.Language] = string(baseQueryContent)
+		DefinitionQueries[lang.Language] = string(defQueryContent)
 	}
 	return nil
+}
+
+func loadLanguageScm(lang *LanguageConfig, scmDir string, sitterLang *sitter.Language) ([]byte, error) {
+	var err error
+	baseQuery := makeQueryPath(lang.Language, scmDir)
+	baseQueryContent, err := scmFS.ReadFile(baseQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read base query file %s for %s: %w", baseQuery, lang.Language, err)
+	}
+	query, queryError := sitter.NewQuery(sitterLang, string(baseQueryContent))
+	if queryError != nil && IsRealQueryErr(queryError) {
+		return nil, fmt.Errorf("failed to parse base query file %s: %w", baseQuery, queryError)
+	}
+	query.Close()
+	return baseQueryContent, nil
 }
 
 func makeQueryPath(lang Language, subdir string) string {
