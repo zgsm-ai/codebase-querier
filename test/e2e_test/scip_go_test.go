@@ -69,7 +69,7 @@ func TestParseGoScipIndexBadgerDB(t *testing.T) {
 	assert.NoError(t, err)
 	parser := scipindex.NewIndexParser(localCodebase, graph)
 	ctx = context.WithValue(ctx, tracer.Key, tracer.TaskTraceId(codebaseID))
-	err = parser.ParseSCIPFile(ctx, codebasePath, indexFile)
+	err = parser.ProcessScipIndexFile(ctx, codebasePath, indexFile)
 	assert.NoError(t, err)
 	t.Logf("time cost: %v seconds", time.Since(start).Seconds())
 }
@@ -89,7 +89,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
-	parser, err := definition.NewStructureParser()
+	parser, err := definition.NeDefinitionParser()
 	assert.NoError(t, err)
 	var data []*codegraphpb.CodeDefinition
 	count := 0
@@ -107,7 +107,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 			t.Logf("read file error: %v", err)
 			return err
 		}
-		parsed, err := parser.Parse(ctx, &types.CodeFile{
+		parsed, err := parser.Parse(ctx, &types.SourceFile{
 			Path:         walkCtx.RelativePath,
 			CodebasePath: codebasePath,
 			Content:      bytes,

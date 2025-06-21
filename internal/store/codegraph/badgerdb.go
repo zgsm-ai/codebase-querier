@@ -205,67 +205,76 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 		tracer.WithTrace(ctx).Infof("QueryDefinition execution time: %d ms", time.Since(startTime).Milliseconds())
 	}()
 
-	// 1. 获取文档
-	var doc codegraphpb.Document
-	err := b.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(DocKey(opts.FilePath))
-		if err != nil {
-			if errors.Is(err, badger.ErrKeyNotFound) {
-				return fmt.Errorf("document not found: %s", opts.FilePath)
-			}
-			return fmt.Errorf("failed to get document: %w", err)
-		}
-		return item.Value(func(val []byte) error {
-			return DeserializeDocument(val, &doc)
-		})
-	})
-	if err != nil {
-		tracer.WithTrace(ctx).Errorf("Failed to get document: %v", err)
-		return nil, err
-	}
-	queryStartLine := int32(opts.StartLine - 1)
-	queryEndLine := int32(opts.EndLine - 1)
 	var res []*types.DefinitionNode
-	foundSymbols := b.findSymbolInDocByLineRange(ctx, &doc, queryStartLine, queryEndLine)
-	// 去重, 如果range 出现过，则剔除
-	existedDefs := make(map[string]bool)
-	// 遍历，封装结果，取定义
-	for _, s := range foundSymbols {
-		// 本身是定义
-		if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
-			// 去掉本范围内的定义
-			if len(s.Range) > 0 && isInLinesRange(s.Range[0], queryStartLine, queryEndLine) {
-				continue
-			}
-			res = append(res, &types.DefinitionNode{
-				FilePath: s.Path,
-				Name:     s.Name,
-				Position: types.ToPosition(s.Range),
-			})
 
-			continue
-		} else if s.Role == codegraphpb.RelationType_RELATION_REFERENCE { // 引用
-			for _, r := range s.Relations {
-				// 引用的 relation 是定义
-				if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
-					// 如果已经访问过，就跳过
-					if isSymbolExists(r.FilePath, r.Range, existedDefs) {
-						continue
-					}
-					existedDefs[symbolMapKey(r.FilePath, r.Range)] = true
-					// 引用节点，加入node的children
-					res = append(res, &types.DefinitionNode{
-						FilePath: r.FilePath,
-						Name:     r.Name, //TODO r.Name 有时候是identifier，未处理
-						Position: types.ToPosition(r.Range),
-					})
+	snippet := opts.CodeSnippet
+	// 根据代码片段中的标识符名模糊搜索
+	if snippet != types.EmptyString {
+		// 调用tree_sitter 解析，获取所有的标识符及位置
+
+	} else {
+		// 1. 获取文档
+		var doc codegraphpb.Document
+		err := b.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(DocKey(opts.FilePath))
+			if err != nil {
+				if errors.Is(err, badger.ErrKeyNotFound) {
+					return fmt.Errorf("document not found: %s", opts.FilePath)
 				}
+				return fmt.Errorf("failed to get document: %w", err)
 			}
-		} else {
-			tracer.WithTrace(ctx).Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
+			return item.Value(func(val []byte) error {
+				return DeserializeDocument(val, &doc)
+			})
+		})
+		if err != nil {
+			tracer.WithTrace(ctx).Errorf("Failed to get document: %v", err)
+			return nil, err
+		}
+		queryStartLine := int32(opts.StartLine - 1)
+		queryEndLine := int32(opts.EndLine - 1)
+		foundSymbols := b.findSymbolInDocByLineRange(ctx, &doc, queryStartLine, queryEndLine)
+		// 去重, 如果range 出现过，则剔除
+		existedDefs := make(map[string]bool)
+		// 遍历，封装结果，取定义
+		for _, s := range foundSymbols {
+			// 本身是定义
+			if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
+				// 去掉本范围内的定义
+				if len(s.Range) > 0 && isInLinesRange(s.Range[0], queryStartLine, queryEndLine) {
+					continue
+				}
+				res = append(res, &types.DefinitionNode{
+					FilePath: s.Path,
+					Name:     s.Name,
+					Position: types.ToPosition(s.Range),
+				})
+
+				continue
+			} else if s.Role == codegraphpb.RelationType_RELATION_REFERENCE { // 引用
+				for _, r := range s.Relations {
+					// 引用的 relation 是定义
+					if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
+						// 如果已经访问过，就跳过
+						if isSymbolExists(r.FilePath, r.Range, existedDefs) {
+							continue
+						}
+						existedDefs[symbolMapKey(r.FilePath, r.Range)] = true
+						// 引用节点，加入node的children
+						res = append(res, &types.DefinitionNode{
+							FilePath: r.FilePath,
+							Name:     r.Name, //TODO r.Name 有时候是identifier，未处理
+							Position: types.ToPosition(r.Range),
+						})
+					}
+				}
+			} else {
+				tracer.WithTrace(ctx).Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
+			}
 		}
 	}
-	//TODO  根据struct_doc 重新封装它的 position，变为范围。doc的range是单行。
+
+	// 根据struct_doc 重新封装它的 position，变为范围。doc的range是单行。
 	if err := b.refillDefinitionRange(ctx, res); err != nil {
 		tracer.WithTrace(ctx).Errorf("QueryDefinition:  refill definition range err:%v", utils.TruncateError(err))
 	}
@@ -644,9 +653,9 @@ func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, co
 		defer iter.Close()
 		for iter.Rewind(); iter.Valid(); iter.Next() {
 			key := iter.Item().Key()
-			if IsDocKey(key) {
+			if isDocKey(key) {
 				relationFileCount++
-			} else if IsStructKey(key) {
+			} else if isStructKey(key) {
 				definitionFileCount++
 			} else {
 				tracer.WithTrace(ctx).Debugf("GetIndexSummary unknown key type:%s", string(key))
@@ -663,4 +672,18 @@ func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, co
 		TotalFiles:           relationFileCount,
 		TotalDefinitionFiles: definitionFileCount,
 	}, nil
+}
+
+func (b BadgerDBGraph) BatchWriteDefSymbolKeysMap(ctx context.Context, defSymbolKeysMap map[string]*codegraphpb.KeySet) error {
+	wb := b.db.NewWriteBatch()
+	for key, docKeys := range defSymbolKeysMap {
+		docKeysBytes, err := SerializeDocument(docKeys)
+		if err != nil {
+			return err
+		}
+		if err := wb.Set(SymbolIndexKey(key), docKeysBytes); err != nil {
+			return err
+		}
+	}
+	return wb.Flush()
 }

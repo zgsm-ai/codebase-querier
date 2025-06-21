@@ -21,6 +21,8 @@ type GraphStore interface {
 	// BatchWriteCodeStructures BatchWrite 批量写入接口
 	BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeDefinition) error
 
+	BatchWriteDefSymbolKeysMap(ctx context.Context, symbolKeysMap map[string]*codegraphpb.KeySet) error
+
 	// QueryRelation 查询接口
 	QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)
 
@@ -37,27 +39,38 @@ type GraphStore interface {
 
 // 键前缀
 const (
-	DocPrefix    = "doc:" // 文档数据前缀
-	StructPrefix = "sct:" // 结构数据前缀
-	SymPrefix    = "sym:" // 符号数据前缀
+	docPrefix      = "doc:"       // 代码文件数据前缀
+	structPrefix   = "sct:"       // 代码文件定义结构数据前缀
+	symPrefix      = "sym:"       // 符号数据前缀
+	symIndexPrefix = "sym_index:" // 符号->doc_key数据前缀
 )
 
 // DocKey 键生成函数  unix path
 func DocKey(path string) []byte {
-	return []byte(fmt.Sprintf("%s%s", DocPrefix, utils.ToUnixPath(path)))
+	return []byte(fmt.Sprintf("%s%s", docPrefix, utils.ToUnixPath(path)))
 }
 
 // StructKey 键生成函数 unix path
 func StructKey(path string) []byte {
-	return []byte(fmt.Sprintf("%s%s", StructPrefix, utils.ToUnixPath(path)))
+	return []byte(fmt.Sprintf("%s%s", structPrefix, utils.ToUnixPath(path)))
 }
 
-func IsDocKey(key []byte) bool {
-	return strings.HasPrefix(string(key), DocPrefix)
+// SymbolKey 键生成函数 unix path
+func SymbolKey(path string) []byte {
+	return []byte(fmt.Sprintf("%s%s", symPrefix, utils.ToUnixPath(path)))
 }
 
-func IsStructKey(key []byte) bool {
-	return strings.HasPrefix(string(key), StructPrefix)
+// SymbolIndexKey 键生成函数 unix path
+func SymbolIndexKey(symbolName string) []byte {
+	return []byte(fmt.Sprintf("%s%s", symIndexPrefix, symbolName))
+}
+
+func isDocKey(key []byte) bool {
+	return strings.HasPrefix(string(key), docPrefix)
+}
+
+func isStructKey(key []byte) bool {
+	return strings.HasPrefix(string(key), structPrefix)
 }
 
 // SerializeDocument 序列化函数

@@ -14,6 +14,12 @@ mock:
 	mockgen -source=./internal/store/codebase/wrapper/minio_wrapper.go -destination=./internal/store/codebase/wrapper/mocks/minio_client_mock.go -package=mocks
 	mockgen -source=internal/store/mq/mq.go -destination=internal/store/mq/mocks/mq_mock.go --package=mocks
 
+.PHONY:proto
+proto:
+	protoc --go_out=. internal/store/codegraph/definition.proto
+	protoc --go_out=. internal/store/codegraph/document.proto
+	protoc --go_out=. internal/store/codegraph/keys.proto
+
 .PHONY:test
 test:
 	go test ./internal/...

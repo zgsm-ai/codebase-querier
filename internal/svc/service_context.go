@@ -32,7 +32,7 @@ type ServiceContext struct {
 	CodeSplitter         *embedding.CodeSplitter
 	Cache                cache.Store[any]
 	redisClient          *redis.Client // 保存Redis客户端引用以便关闭
-	FileDefinitionParser *definition.Parser
+	FileDefinitionParser *definition.DefParser
 	serverContext        context.Context
 	TaskPool             *ants.Pool
 	CmdLogger            *tracer.CmdLogger
@@ -133,7 +133,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
-	parser, err := definition.NewStructureParser()
+	parser, err := definition.NeDefinitionParser()
 	if err != nil {
 		return nil, err
 	}

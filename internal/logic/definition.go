@@ -70,7 +70,7 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 		return nil, err
 	}
 	codebasePath := codebase.Path
-	// todo concurrency control
+	// todo concurrency test
 	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err

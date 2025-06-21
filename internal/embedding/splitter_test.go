@@ -25,8 +25,8 @@ func anotherFunc() int {
 }
 `)
 
-	// Create a dummy CodeFile
-	codeFile := &types.CodeFile{
+	// Create a dummy SourceFile
+	codeFile := &types.SourceFile{
 		Path:    filepath.Join("testdata", "go", "simple.go"),
 		Content: goCode,
 	}
@@ -120,7 +120,7 @@ func function3() {
 }
 `)
 
-	codeFile := &types.CodeFile{
+	codeFile := &types.SourceFile{
 		Path:    filepath.Join("testdata", "go", "multi_func.go"),
 		Content: goCode,
 	}
@@ -205,7 +205,7 @@ func veryLongFunc1() {
 		lines = append(lines, fmt.Sprintf("line %d with some content to ensure token count", i))
 	}
 }`)
-	codeFile := &types.CodeFile{
+	codeFile := &types.SourceFile{
 		Path:    filepath.Join("testdata", "go", "long_func.go"),
 		Content: goCode,
 	}

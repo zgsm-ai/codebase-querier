@@ -34,7 +34,7 @@ func NewCodeSplitter(splitOptions SplitOptions) (*CodeSplitter, error) {
 }
 
 // Split 将代码文件分割成多个代码块
-func (p *CodeSplitter) Split(codeFile *types.CodeFile) ([]*types.CodeChunk, error) {
+func (p *CodeSplitter) Split(codeFile *types.SourceFile) ([]*types.CodeChunk, error) {
 
 	language, err := parser.GetLangConfigByFilePath(codeFile.Path)
 	if err != nil {
@@ -143,7 +143,7 @@ func (p *CodeSplitter) countToken(content []byte) int {
 }
 
 // splitFuncWithSlidingWindow 使用滑动窗口将大函数分割成多个小块
-func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, codeFile *types.CodeFile, funcStartLine int) []*types.CodeChunk {
+func (p *CodeSplitter) splitFuncWithSlidingWindow(content string, codeFile *types.SourceFile, funcStartLine int) []*types.CodeChunk {
 	filePath := codeFile.Path
 	maxTokens := p.splitOptions.MaxTokensPerChunk
 	overlapTokens := p.splitOptions.SlidingWindowOverlapTokens

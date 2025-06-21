@@ -1,6 +1,6 @@
 package types
 
-type CodeFile struct {
+type SourceFile struct {
 	CodebaseId   int32
 	CodebasePath string
 	CodebaseName string

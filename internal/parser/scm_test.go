@@ -1,4 +1,4 @@
-package definition
+package parser
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -8,7 +8,7 @@ import (
 func TestScmLoad(t *testing.T) {
 	assert.NotPanics(t,
 		func() {
-			mustLoad()
+			loadScm()
 		})
 }
 

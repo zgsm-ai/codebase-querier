@@ -165,7 +165,7 @@ func (t *embeddingProcessor) splitFile(ctx context.Context, syncFile *types.Sync
 		return nil, err
 	}
 	// 切分文件
-	return t.svcCtx.CodeSplitter.Split(&types.CodeFile{
+	return t.svcCtx.CodeSplitter.Split(&types.SourceFile{
 		CodebaseId:   t.params.CodebaseID,
 		CodebasePath: t.params.CodebasePath,
 		CodebaseName: t.params.CodebaseName,

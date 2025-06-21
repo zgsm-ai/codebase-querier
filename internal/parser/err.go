@@ -7,6 +7,7 @@ import (
 
 var ErrFileExtNotFound = errors.New("file extension not found")
 var ErrLangConfNotFound = errors.New("langConf not found")
+var ErrQueryNotFound = errors.New("query not found")
 
 // IsRealQueryErr prevent *sitter.QueryError(nil)
 func IsRealQueryErr(err error) bool {

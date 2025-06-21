@@ -1,10 +1,8 @@
-package definition
+package parser
 
-import "github.com/zgsm-ai/codebase-indexer/internal/parser"
-
-// DefinitionNodeKind 定义了各语言在 tree-sitter 中的原始节点类型
-var DefinitionNodeKind = map[parser.Language][]string{
-	parser.Go: {
+// DefinitionNodeType 定义了各语言在 tree-sitter 中的原始节点类型
+var DefinitionNodeType = map[Language][]string{
+	Go: {
 		"function_declaration", // 函数声明
 		"method_declaration",   // 方法声明
 		"type_declaration",     // 类型声明
@@ -13,7 +11,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"var_declaration",      // 变量声明
 		"const_declaration",    // 常量声明
 	},
-	parser.Java: {
+	Java: {
 		"class_declaration",       // 类声明
 		"interface_declaration",   // 接口声明
 		"method_declaration",      // 方法声明
@@ -22,20 +20,20 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"field_declaration",       // 字段声明
 		"type_parameter",          // 类型参数(泛型)
 	},
-	parser.Python: {
+	Python: {
 		"function_definition",  // 函数定义
 		"class_definition",     // 类定义
 		"decorated_definition", // 装饰器定义
 		"assignment",           // 赋值语句
 	},
-	parser.JavaScript: {
+	JavaScript: {
 		"function_declaration", // 函数声明
 		"class_declaration",    // 类声明
 		"method_definition",    // 方法定义
 		"arrow_function",       // 箭头函数
 		"variable_declarator",  // 变量声明
 	},
-	parser.TypeScript: {
+	TypeScript: {
 		"function_declaration",   // 函数声明
 		"class_declaration",      // 类声明
 		"interface_declaration",  // 接口声明
@@ -44,14 +42,14 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"namespace_declaration",  // 命名空间声明
 		"module_declaration",     // 模块声明
 	},
-	parser.TSX: {
+	TSX: {
 		"function_declaration",     // 函数声明
 		"class_declaration",        // 类声明
 		"jsx_element",              // JSX元素
 		"jsx_self_closing_element", // JSX自闭合元素
 		"jsx_fragment",             // JSX片段
 	},
-	parser.Rust: {
+	Rust: {
 		"function_item", // 函数项
 		"struct_item",   // 结构体项
 		"enum_item",     // 枚举项
@@ -61,7 +59,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"const_item",    // 常量项
 		"static_item",   // 静态项
 	},
-	parser.C: {
+	C: {
 		"function_definition", // 函数定义
 		"struct_declaration",  // 结构体声明
 		"union_declaration",   // 联合体声明
@@ -69,7 +67,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"typedef_declaration", // 类型定义
 		"declaration",         // 声明
 	},
-	parser.CPP: {
+	CPP: {
 		"function_definition",  // 函数定义
 		"class_declaration",    // 类声明
 		"struct_declaration",   // 结构体声明
@@ -77,7 +75,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"template_declaration", // 模板声明
 		"using_declaration",    // using声明
 	},
-	parser.CSharp: {
+	CSharp: {
 		"method_declaration",    // 方法声明
 		"class_declaration",     // 类声明
 		"interface_declaration", // 接口声明
@@ -86,14 +84,14 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"delegate_declaration",  // 委托声明
 		"event_declaration",     // 事件声明
 	},
-	parser.Ruby: {
+	Ruby: {
 		"method",           // 方法
 		"class",            // 类
 		"module",           // 模块
 		"singleton_method", // 单例方法
 		"constant",         // 常量
 	},
-	parser.PHP: {
+	PHP: {
 		"function_definition",   // 函数定义
 		"method_declaration",    // 方法声明
 		"class_declaration",     // 类声明
@@ -101,7 +99,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"trait_declaration",     // 特质声明
 		"namespace_definition",  // 命名空间定义
 	},
-	parser.Kotlin: {
+	Kotlin: {
 		"class_declaration",     // 类声明
 		"interface_declaration", // 接口声明
 		"object_declaration",    // 对象声明
@@ -111,7 +109,7 @@ var DefinitionNodeKind = map[parser.Language][]string{
 		"enum_class",            // 枚举类
 		"companion_object",      // 伴生对象
 	},
-	parser.Scala: {
+	Scala: {
 		"class_definition",  // 类定义
 		"trait_definition",  // 特质定义
 		"object_definition", // 对象定义

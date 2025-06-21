@@ -44,10 +44,10 @@ var TestVar = "test"
 `)
 
 	// 获取 Go 语言配置
-	parser, err := NewStructureParser()
+	parser, err := NeDefinitionParser()
 	assert.NoError(t, err)
 	// 解析文件结构
-	structure, err := parser.Parse(context.Background(), &types.CodeFile{
+	structure, err := parser.Parse(context.Background(), &types.SourceFile{
 		Content: code,
 		Path:    "test.go",
 	}, ParseOptions{})

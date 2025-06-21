@@ -49,7 +49,7 @@ func (l *StructureLogic) ParseFileDefinitions(req *types.FileDefinitionParseRequ
 		return nil, err
 	}
 
-	parsed, err := l.svcCtx.FileDefinitionParser.Parse(ctx, &types.CodeFile{
+	parsed, err := l.svcCtx.FileDefinitionParser.Parse(ctx, &types.SourceFile{
 		CodebasePath: codebase.Path,
 		Path:         filePath,
 		Content:      bytes,

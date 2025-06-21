@@ -81,7 +81,7 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 		}
 
 		// 解析并保存
-		if err = t.indexParser.ParseSCIPFile(ctx, t.params.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
+		if err = t.indexParser.ProcessScipIndexFile(ctx, t.params.CodebasePath, scip.DefaultIndexFilePath()); err != nil {
 			return fmt.Errorf("codegraph task failed to parse & save code graph: %w", err)
 		}
 
@@ -128,13 +128,13 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 					return fmt.Errorf("code structure task read file failed: %w", err)
 				}
 
-				structureParser, err := definition.NewStructureParser()
+				structureParser, err := definition.NeDefinitionParser()
 				if err != nil {
 					atomic.AddInt32(&t.failedFileCnt, 1)
 					return fmt.Errorf("code structure task init parser failed: %w", err)
 				}
 
-				parsedData, err := structureParser.Parse(ctx, &types.CodeFile{
+				parsedData, err := structureParser.Parse(ctx, &types.SourceFile{
 					Path:         path,
 					CodebasePath: t.params.CodebasePath,
 					Name:         filepath.Base(path),

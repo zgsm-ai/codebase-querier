@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
+	"time"
 
 	"github.com/sourcegraph/scip/bindings/go/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
@@ -17,11 +18,11 @@ import (
 
 const writeBatchSize = 500
 
-// scipMetadata scip parsed metadata.
-type scipMetadata struct {
+// ScipMetadata scip parsed metadata.
+type ScipMetadata struct {
 	Metadata                 *scip.Metadata
 	ExternalSymbolsByName    map[string]*scip.SymbolInformation
-	AllOccurrenceDefinitions map[string]*codegraphpb.Symbol
+	AllDefinitionOccurrences map[string]*codegraphpb.Symbol
 	DocCountByPath           map[string]int
 }
 
@@ -40,7 +41,7 @@ func NewIndexParser(codebaseStore codebase.Store, graphStore codegraph.GraphStor
 }
 
 // visitDocument handles a single SCIP document during streaming parse.
-func (i *IndexParser) visitDocument(ctx context.Context, metadata *scipMetadata,
+func (i *IndexParser) visitDocument(ctx context.Context, metadata *ScipMetadata,
 	duplicateDocs map[string][]*scip.Document, pendingDocs *[]*codegraphpb.Document) func(d *scip.Document) {
 	return func(document *scip.Document) {
 		path := document.RelativePath
@@ -65,33 +66,49 @@ func (i *IndexParser) visitDocument(ctx context.Context, metadata *scipMetadata,
 		}
 		*pendingDocs = append(*pendingDocs, doc)
 
-		//// 到达一定批次，写入数据 处理完所有才能入库
-		//if len(*pendingDocs) >= writeBatchSize {
-		//	if err := i.graphStore.BatchWriteDocuments(ctx, *pendingDocs); err != nil {
-		//		logx.Errorf("failed to batch write remaining documents: %w", err)
-		//	}
-		//	// 处理完，清空
-		//	*pendingDocs = (*pendingDocs)[:0]
-		//}
 	}
 }
 
-// ParseSCIPFile parses a SCIP index file and saves its data to graphStore.
-func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFilePath string) error {
+// ProcessScipIndexFile parses a SCIP index file and saves its data to graphStore.
+func (i *IndexParser) ProcessScipIndexFile(ctx context.Context, codebasePath, scipFilePath string) error {
+	start := time.Now()
+	metadata, processedDocs, err := i.ParseScipIndexFile(ctx, codebasePath, scipFilePath)
+	if err != nil {
+		return fmt.Errorf("scip_parser parse index file %s err:%w", scipFilePath, err)
+	}
+
+	err = i.saveDocs(ctx, processedDocs)
+	if err != nil {
+		return fmt.Errorf("scip_parser save docs err:%w", err)
+	}
+
+	err = i.saveSymbolKeysMap(ctx, metadata)
+	if err != nil {
+		return fmt.Errorf("scip_parser save symbol keys err:%w", err)
+	}
+
+	tracer.WithTrace(ctx).Debugf("scip_parser processed %d files successfully, cost %d ms ", len(processedDocs), time.Since(start).Milliseconds())
+	return nil
+}
+
+func (i *IndexParser) ParseScipIndexFile(ctx context.Context, codebasePath string, scipFilePath string) (*ScipMetadata,
+	[]*codegraphpb.Document, error) {
+	tracer.WithTrace(ctx).Infof("scip_parser start to parse scip index file: %s/%s", codebasePath, scipFilePath)
+	start := time.Now()
 	fileStat, err := i.codebaseStore.Stat(ctx, codebasePath, scipFilePath)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if fileStat == nil || fileStat.IsDir {
-		return fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
+		return nil, nil, fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
 	}
 	if fileStat.Size == 0 {
-		return fmt.Errorf("empty SCIP file: %s", scipFilePath)
+		return nil, nil, fmt.Errorf("empty SCIP file: %s", scipFilePath)
 	}
 
 	file, err := i.codebaseStore.Open(ctx, codebasePath, scipFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to open SCIP file: %w", err)
+		return nil, nil, fmt.Errorf("failed to open SCIP file: %w", err)
 	}
 	defer file.Close()
 
@@ -99,12 +116,11 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 
 	metadata, err := i.prepareVisit(file)
 	if err != nil {
-		return fmt.Errorf("failed to collect metadata and symbols: %w", err)
+		return nil, nil, fmt.Errorf("failed to collect metadata and symbols: %w", err)
 	}
-	tracer.WithTrace(ctx).Debugf("parsed %s files cnt: %d", codebasePath, len(metadata.DocCountByPath))
 
 	if _, err := file.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to reset file pointer: %w", err)
+		return nil, nil, fmt.Errorf("failed to reset file pointer: %w", err)
 	}
 
 	duplicateDocs := make(map[string][]*scip.Document)
@@ -115,24 +131,67 @@ func (i *IndexParser) ParseSCIPFile(ctx context.Context, codebasePath, scipFileP
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {
-		return fmt.Errorf("failed to parse SCIP file: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse SCIP file: %w", err)
 	}
+	tracer.WithTrace(ctx).Infof("scip_parser parsed index %s %d files successfully, cost %d ms ", scipFilePath,
+		len(processedDocs), time.Since(start).Milliseconds())
+	return metadata, processedDocs, nil
+}
+
+func (i *IndexParser) saveSymbolKeysMap(ctx context.Context, metadata *ScipMetadata) error {
+	start := time.Now()
+	tracer.WithTrace(ctx).Infof("scip_parser start to save symbol keys map")
+	symbolKeysMap := make(map[string]*codegraphpb.KeySet, len(metadata.AllDefinitionOccurrences))
+	for _, v := range metadata.AllDefinitionOccurrences {
+		if v.Role != codegraphpb.RelationType_RELATION_DEFINITION {
+			tracer.WithTrace(ctx).Debugf("symbol %s role is not definition, skip", v.Identifier)
+			continue
+		}
+		if ks, ok := symbolKeysMap[v.Name]; ok {
+			ks.Keys = append(ks.Keys, &codegraphpb.KeyRange{
+				DocKey: codegraph.DocKey(v.Path),
+				Range:  v.Range,
+			})
+		} else {
+			symbolKeysMap[v.Name] = &codegraphpb.KeySet{
+				Keys: []*codegraphpb.KeyRange{
+					{
+						DocKey: codegraph.DocKey(v.Path),
+						Range:  v.Range,
+					}}}
+		}
+	}
+
+	if len(symbolKeysMap) > 0 {
+		if err := i.graphStore.BatchWriteDefSymbolKeysMap(ctx, symbolKeysMap); err != nil {
+			return fmt.Errorf("failed to batch write symbol keys map: %w", err)
+		}
+	}
+	tracer.WithTrace(ctx).Infof("scip_parser save symbol keys map %d symbols successfully, cost %d ms ",
+		len(symbolKeysMap), time.Since(start).Milliseconds())
+	return nil
+}
+
+func (i *IndexParser) saveDocs(ctx context.Context, processedDocs []*codegraphpb.Document) error {
+	start := time.Now()
+	tracer.WithTrace(ctx).Infof("scip_parser start to save docs")
 	// todo 只能等处理完所有docs，才入库。否则信息不全
 	if len(processedDocs) > 0 {
 		if err := i.graphStore.BatchWrite(ctx, processedDocs); err != nil {
 			return fmt.Errorf("failed to batch write remaining documents: %w", err)
 		}
 	}
-
+	tracer.WithTrace(ctx).Infof("scip_parser save %d docs successfully, cost %d ms ",
+		len(processedDocs), time.Since(start).Milliseconds())
 	return nil
 }
 
 // prepareVisit performs the first pass to collect metadata and external symbols.
-func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
-	result := &scipMetadata{
+func (i *IndexParser) prepareVisit(file io.Reader) (*ScipMetadata, error) {
+	result := &ScipMetadata{
 		ExternalSymbolsByName:    make(map[string]*scip.SymbolInformation),
 		DocCountByPath:           make(map[string]int),
-		AllOccurrenceDefinitions: make(map[string]*codegraphpb.Symbol),
+		AllDefinitionOccurrences: make(map[string]*codegraphpb.Symbol),
 	}
 
 	visitor := scip.IndexVisitor{
@@ -151,7 +210,7 @@ func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
 					continue
 				}
 				// 只保存定义，symbol 会在多个文件中重复出现，因为有引用的存在
-				result.AllOccurrenceDefinitions[occ.Symbol] = buildSymbol(occ, d.RelativePath)
+				result.AllDefinitionOccurrences[occ.Symbol] = buildSymbol(occ, d.RelativePath)
 			}
 		},
 		VisitExternalSymbol: func(s *scip.SymbolInformation) {
@@ -167,7 +226,7 @@ func (i *IndexParser) prepareVisit(file io.Reader) (*scipMetadata, error) {
 }
 
 // processDocument processes a single document and returns the document and its symbols.
-func (i *IndexParser) processDocument(doc *scip.Document, metadata *scipMetadata) (*codegraphpb.Document, error) {
+func (i *IndexParser) processDocument(doc *scip.Document, metadata *ScipMetadata) (*codegraphpb.Document, error) {
 	// TODO go package 并不属于某个filePath，需要在内存中处理完所有关系，才能入库。
 	// TODO 这种 带#的找不到definition k8s.io/apiserver/pkg/apis/audit`/Event#RequestURI.  role 8 definition not found in allSymbolDefinitions
 	addMissingExternalSymbols(doc, metadata.ExternalSymbolsByName)
@@ -175,7 +234,7 @@ func (i *IndexParser) processDocument(doc *scip.Document, metadata *scipMetadata
 	document := &codegraphpb.Document{
 		Path: doc.RelativePath,
 	}
-	document.Symbols = populateSymbolsAndOccurrences(doc, metadata.AllOccurrenceDefinitions)
+	document.Symbols = populateSymbolsAndOccurrences(doc, metadata.AllDefinitionOccurrences)
 	return document, nil
 }
 
