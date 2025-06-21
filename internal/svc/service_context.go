@@ -5,7 +5,7 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/definition"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/dao/query"
 	"github.com/zgsm-ai/codebase-indexer/internal/embedding"
@@ -20,22 +20,22 @@ import (
 )
 
 type ServiceContext struct {
-	Config          config.Config
-	CodegraphConf   *config.CodegraphConfig
-	db              *gorm.DB
-	Querier         *query.Query
-	CodebaseStore   codebase.Store
-	MessageQueue    mq.MessageQueue
-	DistLock        redisstore.DistributedLock
-	Embedder        vector.Embedder
-	VectorStore     vector.Store
-	CodeSplitter    *embedding.CodeSplitter
-	Cache           cache.Store[any]
-	redisClient     *redis.Client // 保存Redis客户端引用以便关闭
-	StructureParser *structure.Parser
-	serverContext   context.Context
-	TaskPool        *ants.Pool
-	CmdLogger       *tracer.CmdLogger
+	Config               config.Config
+	CodegraphConf        *config.CodegraphConfig
+	db                   *gorm.DB
+	Querier              *query.Query
+	CodebaseStore        codebase.Store
+	MessageQueue         mq.MessageQueue
+	DistLock             redisstore.DistributedLock
+	Embedder             vector.Embedder
+	VectorStore          vector.Store
+	CodeSplitter         *embedding.CodeSplitter
+	Cache                cache.Store[any]
+	redisClient          *redis.Client // 保存Redis客户端引用以便关闭
+	FileDefinitionParser *definition.Parser
+	serverContext        context.Context
+	TaskPool             *ants.Pool
+	CmdLogger            *tracer.CmdLogger
 }
 
 // Close closes the shared Redis client and database connection
@@ -133,7 +133,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	if err != nil {
 		return nil, err
 	}
-	parser, err := structure.NewStructureParser()
+	parser, err := definition.NewStructureParser()
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	}
 	svcCtx.TaskPool = taskPool
 
-	svcCtx.StructureParser = parser
+	svcCtx.FileDefinitionParser = parser
 	svcCtx.CodebaseStore = codebaseStore
 	svcCtx.MessageQueue = messageQueue
 	svcCtx.VectorStore = vectorStore

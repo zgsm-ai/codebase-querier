@@ -10,16 +10,16 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-func structureHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func definitionQueryHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.StructureRequest
+		var req types.DefinitionRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return
 		}
 
-		l := logic.NewStructureLogic(r.Context(), svcCtx)
-		resp, err := l.Structure(&req)
+		l := logic.NewDefinitionQueryLogic(r.Context(), svcCtx)
+		resp, err := l.QueryDefinition(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {

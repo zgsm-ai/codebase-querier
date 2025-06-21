@@ -1,4 +1,4 @@
-package structure
+package definition
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func NewStructureParser() (*Parser, error) {
 }
 
 // Parse 解析文件结构，返回结构信息（例如函数、结构体、接口、变量、常量等）
-func (s *Parser) Parse(ctx context.Context, codeFile *types.CodeFile, opts ParseOptions) (*codegraphpb.CodeStructure, error) {
+func (s *Parser) Parse(ctx context.Context, codeFile *types.CodeFile, opts ParseOptions) (*codegraphpb.CodeDefinition, error) {
 	// Extract file extension
 	langConf, err := parser.GetLangConfigByFilePath(codeFile.Path)
 	if err != nil {
@@ -76,7 +76,7 @@ func (s *Parser) Parse(ctx context.Context, codeFile *types.CodeFile, opts Parse
 	}
 
 	// 返回结构信息，包含处理后的定义
-	return &codegraphpb.CodeStructure{
+	return &codegraphpb.CodeDefinition{
 		Definitions: definitions,
 		Path:        codeFile.Path,
 		Language:    string(langConf.Language),

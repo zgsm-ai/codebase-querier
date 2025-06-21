@@ -1,4 +1,4 @@
-package structure
+package definition
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 var (
 	ErrNoCaptures   = errors.New("no captures in match")
 	ErrMissingNode  = errors.New("captured node is missing")
-	ErrNoDefinition = errors.New("no Definition node found")
+	ErrNoDefinition = errors.New("no QueryDefinition node found")
 )
 
 const name = "name"
@@ -52,7 +52,7 @@ func (p *Parser) ProcessDefinitionNode(
 	// 获取名称
 	nodeName := nameNode.Utf8Text(code)
 	if nodeName == "" {
-		return nil, fmt.Errorf("no name found for Definition")
+		return nil, fmt.Errorf("no name found for QueryDefinition")
 	}
 
 	// 获取范围

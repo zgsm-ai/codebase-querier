@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/definition"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
-	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
@@ -109,7 +109,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 
 	t.totalFileCnt = int32(len(t.syncFileModeMap))
 	var (
-		structureData = make([]*codegraphpb.CodeStructure, 0, t.totalFileCnt)
+		structureData = make([]*codegraphpb.CodeDefinition, 0, t.totalFileCnt)
 		deleteFiles   = make([]string, 0, t.totalFileCnt)
 		mu            sync.Mutex // 保护 structureData 和 deleteFiles
 	)
@@ -128,7 +128,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 					return fmt.Errorf("code structure task read file failed: %w", err)
 				}
 
-				structureParser, err := structure.NewStructureParser()
+				structureParser, err := definition.NewStructureParser()
 				if err != nil {
 					atomic.AddInt32(&t.failedFileCnt, 1)
 					return fmt.Errorf("code structure task init parser failed: %w", err)
@@ -139,7 +139,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 					CodebasePath: t.params.CodebasePath,
 					Name:         filepath.Base(path),
 					Content:      content,
-				}, structure.ParseOptions{IncludeContent: false})
+				}, definition.ParseOptions{IncludeContent: false})
 
 				if parser.IsNotSupportedFileError(err) {
 					atomic.AddInt32(&t.ignoreFileCnt, 1)

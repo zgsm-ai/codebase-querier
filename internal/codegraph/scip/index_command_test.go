@@ -68,7 +68,7 @@ func TestNewCommandExecutor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor, err := newCommandExecutor(tt.workDir, tt.indexTool, tt.buildTool, nil)
+			executor, err := newCommandExecutor(nil, tt.workDir, tt.indexTool, tt.buildTool, nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
@@ -262,9 +262,10 @@ func TestCommandExecutor_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := &CommandExecutor{
-				workDir:   tmpDir,
-				BuildCmds: buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
-				IndexCmds: buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+				workDir:         tmpDir,
+				BuildCmds:       buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
+				IndexCmds:       buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+				cmdLoggerWriter: os.Stdout,
 			}
 			defer executor.Close()
 			err := executor.Execute(context.Background())

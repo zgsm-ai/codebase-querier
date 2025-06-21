@@ -50,12 +50,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			{
 				Method:  http.MethodGet,
 				Path:    "/api/v1/search/definition",
-				Handler: definitionHandler(serverCtx),
+				Handler: definitionQueryHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,
 				Path:    "/api/v1/files/structure",
-				Handler: structureHandler(serverCtx),
+				Handler: definitionParseHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),

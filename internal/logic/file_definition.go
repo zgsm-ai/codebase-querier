@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/definition"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
@@ -23,7 +23,7 @@ type StructureLogic struct {
 	svcCtx *svc.ServiceContext
 }
 
-func NewStructureLogic(ctx context.Context, svcCtx *svc.ServiceContext) *StructureLogic {
+func NewFileDefinitionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *StructureLogic {
 	return &StructureLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
@@ -31,7 +31,7 @@ func NewStructureLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Structu
 	}
 }
 
-func (l *StructureLogic) Structure(req *types.StructureRequest) (resp *types.StructureResponseData, err error) {
+func (l *StructureLogic) ParseFileDefinitions(req *types.FileDefinitionParseRequest) (resp *types.FileDefinitionResponseData, err error) {
 	clientId := req.ClientId
 	clientPath := req.CodebasePath
 	filePath := req.FilePath
@@ -49,17 +49,17 @@ func (l *StructureLogic) Structure(req *types.StructureRequest) (resp *types.Str
 		return nil, err
 	}
 
-	parsed, err := l.svcCtx.StructureParser.Parse(ctx, &types.CodeFile{
+	parsed, err := l.svcCtx.FileDefinitionParser.Parse(ctx, &types.CodeFile{
 		CodebasePath: codebase.Path,
 		Path:         filePath,
 		Content:      bytes,
-	}, structure.ParseOptions{IncludeContent: true})
+	}, definition.ParseOptions{IncludeContent: true})
 	if err != nil {
 		return nil, err
 	}
-	resp = new(types.StructureResponseData)
+	resp = new(types.FileDefinitionResponseData)
 	for _, d := range parsed.Definitions {
-		resp.List = append(resp.List, &types.StructreItem{
+		resp.List = append(resp.List, &types.FileDefitnionItem{
 			Name:     d.Name,
 			ItemType: d.Type,
 			Position: types.ToPosition(d.Range),

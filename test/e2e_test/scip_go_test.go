@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/sourcegraph/scip/bindings/go/scip"
-	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/structure"
+	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/definition"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
@@ -89,9 +89,9 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 	graph, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	defer graph.Close()
 	assert.NoError(t, err)
-	parser, err := structure.NewStructureParser()
+	parser, err := definition.NewStructureParser()
 	assert.NoError(t, err)
-	var data []*codegraphpb.CodeStructure
+	var data []*codegraphpb.CodeDefinition
 	count := 0
 	err = localCodebase.Walk(ctx, codebasePath, "", func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
 		if walkCtx.Info.IsDir {
@@ -111,7 +111,7 @@ func TestParseGoStructureIndexBadgerDB(t *testing.T) {
 			Path:         walkCtx.RelativePath,
 			CodebasePath: codebasePath,
 			Content:      bytes,
-		}, structure.ParseOptions{IncludeContent: false})
+		}, definition.ParseOptions{IncludeContent: false})
 		if err != nil && !tparser.IsNotSupportedFileError(err) {
 			return err
 		}

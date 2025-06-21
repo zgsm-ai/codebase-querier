@@ -19,21 +19,21 @@ import (
 const maxLineLimit = 500
 const definitionFillContentNodeLimit = 100
 
-type DefinitionLogic struct {
+type DefinitionQueryLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewDefinitionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *DefinitionLogic {
-	return &DefinitionLogic{
+func NewDefinitionQueryLogic(ctx context.Context, svcCtx *svc.ServiceContext) *DefinitionQueryLogic {
+	return &DefinitionQueryLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.DefinitionResponseData, err error) {
+func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (resp *types.DefinitionResponseData, err error) {
 	// 参数验证
 	if req.ClientId == types.EmptyString {
 		return nil, errs.NewMissingParamError(types.ClientId)
@@ -92,7 +92,7 @@ func (l *DefinitionLogic) Definition(req *types.DefinitionRequest) (resp *types.
 	}, nil
 }
 
-func (l *DefinitionLogic) fillContent(ctx context.Context, nodes []*types.DefinitionNode, codebasePath string, nodeLimit int) error {
+func (l *DefinitionQueryLogic) fillContent(ctx context.Context, nodes []*types.DefinitionNode, codebasePath string, nodeLimit int) error {
 	if len(nodes) == 0 {
 		return nil
 	}

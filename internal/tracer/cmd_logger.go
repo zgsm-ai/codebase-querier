@@ -173,7 +173,7 @@ func (w *prefixWriter) needReopen() bool {
 }
 
 func (w *prefixWriter) reopenFile() error {
-	logx.Info("cmd_logger: Reopening file:%s", w.serviceName)
+	logx.Infof("cmd_logger: Reopening file:%s", w.serviceName)
 
 	// Acquire write lock to ensure no other operations during reopen
 	w.logger.mu.Lock()
@@ -363,7 +363,7 @@ func (l *CmdLogger) rotateFiles() error {
 		oldPath := filepath.Join(l.logDir, f.Name())
 		newPath := filepath.Join(l.logDir, serviceName+"-"+date+".log")
 
-		logx.Info("cmd_logger: Rotating log file: from=%s, to=%s", oldPath, newPath)
+		logx.Infof("cmd_logger: Rotating log file: from=%s, to=%s", oldPath, newPath)
 		if err := os.Rename(oldPath, newPath); err != nil {
 			logx.Errorf("cmd_logger: Failed to rename file: from=%s, to=%s, err=%v", oldPath, newPath, err)
 			return err
@@ -414,7 +414,7 @@ func (l *CmdLogger) cleanOldLogs() error {
 			// Double-check with date in filename
 			fileDate := extractDateFromFileName(f.Name())
 			if !fileDate.IsZero() && fileDate.Before(cutoff) {
-				logx.Info("cmd_logger: Deleting expired log file: path=%s, modTime=%s, date=%s",
+				logx.Infof("cmd_logger: Deleting expired log file: path=%s, modTime=%s, date=%s",
 					filePath, fileInfo.ModTime().Format("2006-01-02"),
 					fileDate.Format("2006-01-02"))
 

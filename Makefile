@@ -4,6 +4,7 @@ TAG ?= latest
 init:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	go install github.com/golang/mock/mockgen@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
 
 .PHONY:mock
 mock:
@@ -26,3 +27,7 @@ build:
 docker:
 	docker build -t zgsm/codebase-indexer:$(TAG) .
 	docker push zgsm/codebase-indexer:$(TAG)
+
+.PHONY:lint
+lint:
+	golangci-lint run ./...

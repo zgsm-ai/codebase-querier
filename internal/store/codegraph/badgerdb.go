@@ -94,7 +94,7 @@ func (b BadgerDBGraph) BatchWrite(ctx context.Context, docs []*codegraphpb.Docum
 	return wb.Flush()
 }
 
-func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeStructure) error {
+func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeDefinition) error {
 	wb := b.db.NewWriteBatch()
 	// 写入文档
 	for _, doc := range docs {
@@ -298,7 +298,7 @@ func (b BadgerDBGraph) findSymbolInDocByIdentifier(doc *codegraphpb.Document, id
 }
 
 // findSymbolInDocByIdentifier 在结构文件中符号在该范围的symbol
-func (b BadgerDBGraph) findSymbolInStruct(ctx context.Context, doc *codegraphpb.CodeStructure, position types.Position) *codegraphpb.Symbol {
+func (b BadgerDBGraph) findSymbolInStruct(ctx context.Context, doc *codegraphpb.CodeDefinition, position types.Position) *codegraphpb.Symbol {
 	line := position.StartLine
 	column := position.StartColumn
 	if line == 0 && column == 0 {
@@ -386,7 +386,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(ctx context.Context, node *types.G
 
 	if len(children) == 0 {
 		// 如果references 为空，说明当前 node 是引用节点， 找到它属于哪个函数/类/结构体，再找它的definition节点，再找引用
-		var structFile codegraphpb.CodeStructure
+		var structFile codegraphpb.CodeDefinition
 		err = b.findDocument(ctx, StructKey(symbolPath), &structFile)
 		if err != nil {
 			tracer.WithTrace(ctx).Errorf("Failed to find struct file for path %s: %v", symbolPath, err)
@@ -595,7 +595,7 @@ func (b BadgerDBGraph) refillDefinitionRange(ctx context.Context, nodes []*types
 			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s invalid line :%d, length less than 0", n.FilePath, n.Name, line))
 			continue
 		}
-		var structFile codegraphpb.CodeStructure
+		var structFile codegraphpb.CodeDefinition
 		err := b.findDocument(ctx, StructKey(n.FilePath), &structFile)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s ,failed to find struct file by line %d: %v", n.FilePath, n.Name, line, err))

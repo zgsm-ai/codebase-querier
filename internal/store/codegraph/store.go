@@ -19,7 +19,7 @@ type GraphStore interface {
 	BatchWrite(ctx context.Context, docs []*codegraphpb.Document) error
 
 	// BatchWriteCodeStructures BatchWrite 批量写入接口
-	BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeStructure) error
+	BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeDefinition) error
 
 	// QueryRelation 查询接口
 	QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)

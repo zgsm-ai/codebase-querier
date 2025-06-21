@@ -114,21 +114,21 @@ type ReadOptions struct {
 	EndLine   int
 }
 
-type StructreItem struct {
+type FileDefitnionItem struct {
 	Name     string   `json:"name"`     // 节点名字
 	ItemType string   `json:"type"`     // 节点类型（definition=定义，reference=引用）
 	Position Position `json:"position"` // 代码位置
 	Content  string   `json:"content"`  // 代码内容
 }
 
-type StructureRequest struct {
+type FileDefinitionParseRequest struct {
 	ClientId     string `form:"clientId"`     // 用户机器ID
 	CodebasePath string `form:"codebasePath"` // 项目绝对路径
 	FilePath     string `form:"filePath"`     // 文件相对路径
 }
 
-type StructureResponseData struct {
-	List []*StructreItem `json:"list"` // 关系树列表
+type FileDefinitionResponseData struct {
+	List []*FileDefitnionItem `json:"list"` // 关系树列表
 }
 
 type DefinitionNode struct {

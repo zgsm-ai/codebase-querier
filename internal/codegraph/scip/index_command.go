@@ -42,11 +42,18 @@ func newCommandExecutor(
 		logx.Errorf("[%s] scip index generator failed to get hostname:%v", workDir, err)
 		hostname = uuid.New().String()
 	}
-	writer, err := cmdLogger.GetWriter(hostname)
-	if err != nil {
-		logx.Errorf("[%s] scip index generator failed to get cmdLogger writer, use stdout. err: %v", err)
+	var writer io.Writer
+	if cmdLogger == nil {
+		logx.Errorf("[%s] scip index generator cmdLogger is nil, use stdout.", workDir)
 		writer = os.Stdout
+	} else {
+		writer, err = cmdLogger.GetWriter(hostname)
+		if err != nil {
+			logx.Errorf("[%s] scip index generator failed to get cmdLogger writer, use stdout. err: %v", workDir, err)
+			writer = os.Stdout
+		}
 	}
+
 	return &CommandExecutor{
 		cmdLoggerWriter: writer,
 		workDir:         workDir,

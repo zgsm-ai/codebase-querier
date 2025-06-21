@@ -10,7 +10,7 @@ import (
 )
 
 func TestStructureQuery(t *testing.T) {
-	var result response.Response[types.StructureResponseData]
+	var result response.Response[types.FileDefinitionResponseData]
 	err := doRequest(http.MethodGet, "/codebase-indexer/api/v1/files/structure", map[string]string{
 		"clientId":     clientId,
 		"codebasePath": codebasePath,

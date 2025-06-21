@@ -10,16 +10,16 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
-func definitionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func definitionParseHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.DefinitionRequest
+		var req types.FileDefinitionParseRequest
 		if err := httpx.Parse(r, &req); err != nil {
 			response.Error(w, err)
 			return
 		}
 
-		l := logic.NewDefinitionLogic(r.Context(), svcCtx)
-		resp, err := l.Definition(&req)
+		l := logic.NewFileDefinitionLogic(r.Context(), svcCtx)
+		resp, err := l.ParseFileDefinitions(&req)
 		if err != nil {
 			response.Error(w, err)
 		} else {

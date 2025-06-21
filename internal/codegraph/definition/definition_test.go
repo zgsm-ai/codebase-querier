@@ -1,4 +1,4 @@
-package structure
+package definition
 
 import (
 	"context"

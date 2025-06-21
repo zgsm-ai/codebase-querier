@@ -51,7 +51,7 @@ func (mr *MockGraphStoreMockRecorder) BatchWrite(ctx, docs interface{}) *gomock.
 }
 
 // BatchWriteCodeStructures mocks base method.
-func (m *MockGraphStore) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeStructure) error {
+func (m *MockGraphStore) BatchWriteCodeStructures(ctx context.Context, docs []*codegraphpb.CodeDefinition) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchWriteCodeStructures", ctx, docs)
 	ret0, _ := ret[0].(error)
