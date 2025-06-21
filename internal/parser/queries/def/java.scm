@@ -1,10 +1,6 @@
 ;; Java structure query
 ;; Captures class definitions, interface definitions, method definitions, and more
 
-(package_declaration ) @name @decllaration.package
-
-(import_declaration ) @name @declaration.import
-
 ;; Class declarations
 (class_declaration
   name: (identifier) @name) @declaration.class
@@ -49,7 +45,3 @@
 ;; Annotation declarations
 (annotation_type_declaration
   name: (identifier) @name) @declaration.annotation_type
-
-;; Record declarations (Java 14+)
-(record_declaration
-  name: (identifier) @name) @declaration.record

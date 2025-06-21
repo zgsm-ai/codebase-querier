@@ -28,6 +28,9 @@ abstract class Shape {
 interface Drawable {
     void draw();
 }
+public @interface MyAnnotation {
+    String value() default "default value"; // 定义一个名为value的元素，带有默认值
+}
 
 // 4. 具体类实现接口
 class Circle extends Shape implements Drawable {
@@ -77,6 +80,7 @@ class Container<T> {
 }
 
 // 7. 主类
+@Data
 public class Main {
     // 8. 静态变量
     private static int globalCounter = 0;

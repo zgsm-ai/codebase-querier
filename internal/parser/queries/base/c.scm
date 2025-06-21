@@ -1,6 +1,6 @@
 (preproc_include
-  "#include" @name
-  ) @definition.include
+  "#include" @include.name
+  ) @include
 
 (preproc_def) @macro @name
 
@@ -56,22 +56,15 @@
   declarator: (function_declarator
                 declarator: (identifier) @name)) @definition.function
 
+;; TODO 去找它的 identifier
+;; variable & function  declaration
+(declaration
+  type: (_) @type
+  ) @declaration
 
-;; todo 去找它的 identifier , 基本数据类型，和其它类型不一样
-(function_definition
-  body: (_
-          (declaration) @function.local_variable
-          )
-  )
-
-;; function_call
-(function_definition
-  body: (_
-          (expression_statement
-            (call_expression
-              function: (identifier) @function.call.name
-              )
-            )
-          )
-  )
+;; function_call  TODO ，这里不好确定它的parent，原因是存在嵌套、赋值等。可能得通过代码去递归。
+(call_expression
+  function: (identifier) @function.call.name
+  arguments: (argument_list) @function.call.arguments
+  ) @call.funciton
 

@@ -1,10 +1,7 @@
-;; C++ structure query
-;; Captures class definitions, function definitions, variable declarations, and more
+(preproc_include
+  "#include" @include.name
+  ) @include
 
-;; Function definitions
-(function_definition
-  declarator: (function_declarator
-                declarator: (identifier) @name)) @definition.function
 
 ;; Class declarations
 (class_specifier
@@ -13,7 +10,6 @@
 ;; Struct declarations
 (struct_specifier
   name: (type_identifier) @name) @definition.struct
-
 
 
 ;; Variable declarations (keep as declaration)
@@ -40,3 +36,26 @@
 ;; Typedef declarations
 (type_definition
   declarator: (type_identifier) @name) @definition.typedef
+
+(function_definition
+  declarator: (function_declarator
+                declarator: (identifier) @name)) @definition.function
+
+;; TODO 对象.方法
+(call_expression
+  function: (
+              field_expression
+              argument: (identifier) @method.call.object
+              field: (field_identifier) @method.call.name
+              )
+  arguments: (argument_list) @method.call.arguments
+  ) @call.method
+
+;; 函数调用
+(call_expression
+  function: (qualified_identifier
+              scope: (namespace_identifier) @call.function.namespace
+              name: (identifier) @call.function.name
+              )
+  arguments: (argument_list) @call.function.arguments
+  ) @call.function

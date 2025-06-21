@@ -1,5 +1,4 @@
-;; C# structure query
-;; Captures method definitions, class definitions, interface definitions, and more
+(using_directive ) @using
 
 ;; Method definitio
 (method_declaration
@@ -70,4 +69,14 @@
 ;; Conversion operator definitions
 (conversion_operator_declaration
   type: (identifier) @name) @declaration.conversion_operator
+
+;; 方法调用
+(invocation_expression
+  function: (member_access_expression
+              expression: (identifier) @call.method.object
+              name: (identifier) @call.method.name
+
+              )
+  arguments: (argument_list) @call.method.arguments
+  )
 

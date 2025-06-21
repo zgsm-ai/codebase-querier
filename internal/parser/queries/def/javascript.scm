@@ -31,16 +31,11 @@
 (method_definition
   name: (property_identifier) @name) @definition.method
 
-;; Variable declarations
-(variable_declaration
-  (variable_declarator
-    name: (identifier) @name)) @declaration.variable
-
-;; Constant declarations (const)
-(lexical_declaration
-  "const"
-  (variable_declarator
-    name: (identifier) @name)) @declaration.constant
+(program
+  (_
+    (variable_declarator) @global_variable
+    )
+  )
 
 ;; Object properties
 (pair
@@ -49,7 +44,7 @@
 ;; Export declarations
 (export_statement
   declaration: (function_declaration
-    name: (identifier) @name)) @declaration.export_function
+                 name: (identifier) @name)) @declaration.export_function
 
 ;; Export named declarations
 (export_statement
