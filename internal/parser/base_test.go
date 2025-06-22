@@ -33,6 +33,10 @@ func TestBaseParse(t *testing.T) {
 			res, err := parser.Parse(context.Background(), tt.sourceFile, opts)
 			assert.ErrorIs(t, err, tt.wantErr)
 			assert.NotNil(t, res)
+			assert.NotNil(t, res.Package)
+			assert.NotEmpty(t, res.Imports)
+			assert.NotEmpty(t, res.Elements)
+
 		})
 	}
 }

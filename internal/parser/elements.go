@@ -28,16 +28,18 @@ type CodeElement interface {
 	Update(ctx context.Context, captureName string,
 		capture *treesitter.QueryCapture, source []byte, opts ParseOptions) error
 	SetContent(content []byte)
+	setRootIndex(rootIndex uint32)
 }
 
 // BaseElement 提供接口的基础实现，其他类型嵌入该结构体
 type BaseElement struct {
-	Name     string
-	Type     ElementType
-	Content  []byte
-	Range    []int32
-	Parent   CodeElement
-	Children []CodeElement
+	Name             string
+	rootCaptureIndex uint32
+	Type             ElementType
+	Content          []byte
+	Range            []int32
+	Parent           CodeElement
+	Children         []CodeElement
 }
 
 // Package 表示代码包
@@ -100,12 +102,14 @@ func (e *BaseElement) GetChildren() []CodeElement { return e.Children }
 func (e *BaseElement) SetContent(content []byte) {
 	e.Content = content
 }
+func (e *BaseElement) setRootIndex(rootCaptureIndex uint32) {
+	e.rootCaptureIndex = rootCaptureIndex
+}
 func (e *BaseElement) Update(ctx context.Context, captureName string, capture *treesitter.QueryCapture,
 	source []byte, opts ParseOptions) error {
-
-	index := int(capture.Index)
 	node := &capture.Node
-	if index == 0 {
+
+	if capture.Index == e.rootCaptureIndex { // root capture: @package @function @class etc
 		// rootNode
 		rootCaptureNode := node
 		e.Range = []int32{
@@ -124,11 +128,11 @@ func (e *BaseElement) Update(ctx context.Context, captureName string, capture *t
 	if e.Name == types.EmptyString && isElementNameCapture(e.Type, captureName) {
 		// 取root节点的name，比如definition.function.name
 		// 获取名称 ,go import 带双引号
-		name := strings.ReplaceAll(node.Utf8Text([]byte{}), types.SingleDoubleQuote, types.EmptyString)
+		name := strings.ReplaceAll(node.Utf8Text(source), types.SingleDoubleQuote, types.EmptyString)
 		if name == types.EmptyString {
 			tracer.WithTrace(ctx).Errorf("tree_sitter base_processor name_node %s %v name not found", captureName, e.Range)
 		}
-		e.Name = node.Utf8Text([]byte{})
+		e.Name = name
 	}
 
 	return nil
@@ -203,8 +207,7 @@ func (v *Variable) Update(ctx context.Context, captureName string,
 
 	// TODO 局部变量不是很容易区分，存在多层嵌套。找到它的名字不太容易。存在一行返回多个局部变量的情况,当前只取了第一个
 	if v.Name == types.EmptyString {
-		nameNode := findIdentifier(node)
-		if nameNode != nil {
+		if nameNode := findIdentifierNode(node); nameNode != nil {
 			v.Name = nameNode.Utf8Text(source)
 		}
 	}
@@ -220,6 +223,7 @@ func (v *Import) Update(ctx context.Context, captureName string,
 
 	node := &capture.Node
 
+	// TODO 各个scm 的source、alias full_name 解析。
 	if v.Source == types.EmptyString && isSourceCapture(captureName) {
 		v.Source = node.Utf8Text(source)
 	}
@@ -233,4 +237,35 @@ func (v *Import) Update(ctx context.Context, captureName string,
 	}
 
 	return nil
+}
+
+func initRootElement(elementTypeValue string) CodeElement {
+	elementType := toElementType(elementTypeValue)
+	base := &BaseElement{}
+	switch elementType {
+	case ElementTypePackage:
+		base.Type = ElementTypePackage
+		return &Package{BaseElement: base}
+	case ElementTypeImport:
+		base.Type = ElementTypeImport
+		return &Import{BaseElement: base}
+	case ElementTypeFunction:
+		base.Type = ElementTypeFunction
+		return &Function{BaseElement: base}
+	case ElementTypeClass:
+		base.Type = ElementTypeClass
+		return &Class{BaseElement: base}
+	case ElementTypeMethod:
+		base.Type = ElementTypeMethod
+		return &Method{BaseElement: base}
+	case ElementTypeFunctionCall:
+		base.Type = ElementTypeFunctionCall
+		return &Call{BaseElement: base}
+	case ElementTypeMethodCall:
+		base.Type = ElementTypeMethodCall
+		return &Call{BaseElement: base}
+	default:
+		base.Type = ElementTypeUndefined
+		return base
+	}
 }

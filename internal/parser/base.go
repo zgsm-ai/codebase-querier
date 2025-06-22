@@ -6,6 +6,7 @@ import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 )
 
 type Parser struct{}
@@ -48,7 +49,12 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 	}
 	defer query.Close()
 
-	// 执行 query，并处理匹配结果
+	captureNames := query.CaptureNames() // 根据scm文件从上到下排列的
+
+	if len(captureNames) == 0 {
+		return nil, fmt.Errorf("tree_sitter base_processor query capture names is empty")
+	}
+
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 	matches := qc.Matches(query, tree.RootNode(), content)
@@ -60,26 +66,35 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 	var imports []*Import
 	elements := make([]CodeElement, 0)
 	for {
+		// 统一的上下文取消检测函数
+		if err = utils.CheckContextCanceled(ctx); err != nil {
+			tracer.WithTrace(ctx).Errorf("tree_sitter base processor context canceled: %v", err)
+			return nil, err
+		}
+
 		m := matches.Next()
 		if m == nil {
 			break
-		} // TODO Parent 、Children 关系处理。比如变量定义在函数中，函数定义在类中。
-		element, err := p.processNode(ctx, m, query, content, opts)
+		}
+		// TODO Parent 、Children 关系处理。比如变量定义在函数中，函数定义在类中。
+		element, err := p.processNode(ctx, m, captureNames, content, opts)
 		if err != nil {
 			tracer.WithTrace(ctx).Errorf("tree_sitter base processor processNode error: %v", err)
 			continue // 跳过错误的匹配
 		}
-		// 去重，
+		// 去重，主要针对variable
 		if position, ok := visited[element.GetName()]; ok && isSamePosition(position, element.GetRange()) {
 			tracer.WithTrace(ctx).Debugf("tree_sitter base_processor duplicate element visited: %s, %v",
 				element.GetName(), position)
 			continue
 		}
+		visited[element.GetName()] = element.GetRange()
 		// 处理package go/java
-		if element.GetType() == ElementTypePackage {
+		if element.GetType() == ElementTypePackage && sourcePackage == nil {
 			sourcePackage = element.(*Package)
 			continue
 		}
+
 		// 处理imports
 		if element.GetType() == ElementTypeImport {
 			imports = append(imports, element.(*Import))
@@ -91,8 +106,9 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 
 	// 返回结构信息，包含处理后的定义
 	return &ParsedSource{
-		Package:  sourcePackage,
 		Path:     sourceFile.Path,
+		Package:  sourcePackage,
+		Imports:  imports,
 		Language: langConf.Language,
 		Elements: elements,
 	}, nil
@@ -100,16 +116,19 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 
 func (p *Parser) processNode(ctx context.Context,
 	match *sitter.QueryMatch,
-	query *sitter.Query,
+	captureNames []string,
 	source []byte,
 	opts ParseOptions) (CodeElement, error) {
 
-	if len(match.Captures) == 0 || len(query.CaptureNames()) == 0 {
+	if len(match.Captures) == 0 || len(captureNames) == 0 {
 		return nil, ErrNoCaptures
-	}
-	rootCaptureName := query.CaptureNames()[0]
+	} // root node
+	rootIndex := match.Captures[0].Index
+	rootCaptureName := captureNames[rootIndex]
 
-	codeElement := getByElementType(rootCaptureName)
+	rootElement := initRootElement(rootCaptureName)
+
+	rootElement.setRootIndex(rootIndex)
 
 	for _, capture := range match.Captures {
 		if capture.Node.IsMissing() || capture.Node.IsError() {
@@ -117,39 +136,22 @@ func (p *Parser) processNode(ctx context.Context,
 				capture.Node.Kind())
 			continue
 		}
-		captureName := query.CaptureNames()[capture.Index]
+		captureName := captureNames[capture.Index] // index not in order
 
-		if err := codeElement.Update(ctx, captureName, &capture, source, opts); err != nil {
+		if err := rootElement.Update(ctx, captureName, &capture, source, opts); err != nil {
 			// TODO full_name（import）、 find identifier recur (variable)、parameters/arguments
 			tracer.WithTrace(ctx).Debugf("parse capture node %s err: %v", captureName, err)
 		}
 	}
 
-	return codeElement, nil
+	return rootElement, nil
 }
 
-func getByElementType(elementTypeValue string) CodeElement {
-	elementType := toElementType(elementTypeValue)
-	switch elementType {
-	case ElementTypePackage:
-		return &Package{}
-	case ElementTypeImport:
-		return &Import{}
-	case ElementTypeFunction:
-		return &Function{}
-	case ElementTypeClass:
-		return &Class{}
-	case ElementTypeMethod:
-		return &Method{}
-	case ElementTypeFunctionCall, ElementTypeMethodCall:
-		return &Call{}
-	default:
-		return &BaseElement{}
+// findIdentifierNode 递归遍历语法树节点，查找类型为"identifier"的节点
+func findIdentifierNode(node *sitter.Node) *sitter.Node {
+	if node == nil {
+		return nil
 	}
-}
-
-// findIdentifier 递归遍历语法树节点，查找类型为"identifier"的节点
-func findIdentifier(node *sitter.Node) *sitter.Node {
 	// 检查当前节点是否为identifier类型
 	if node.Kind() == identifier {
 		return node
@@ -163,7 +165,7 @@ func findIdentifier(node *sitter.Node) *sitter.Node {
 		}
 
 		// 递归查找子节点中的identifier
-		result := findIdentifier(child)
+		result := findIdentifierNode(child)
 		if result != nil {
 			return result // 找到则立即返回
 		}
@@ -171,4 +173,16 @@ func findIdentifier(node *sitter.Node) *sitter.Node {
 
 	// 未找到identifier节点
 	return nil
+}
+
+func isSamePosition(source []int32, target []int32) bool {
+	if len(source) != len(target) {
+		return false
+	}
+	for i := range source {
+		if source[i] != target[i] {
+			return false
+		}
+	}
+	return true
 }
