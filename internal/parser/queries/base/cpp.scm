@@ -1,54 +1,73 @@
 (preproc_include
-  "#include" @include.name
+  path: (system_lib_string)* @include.name
+  path: (string_literal)* @include.name
   ) @include
 
+(using_declaration
+  (identifier) @using.name
+  ) @using
+
+(namespace_definition
+  name: (namespace_identifier) @namespace.name
+  ) @namespace
 
 ;; Class declarations
 (class_specifier
-  name: (type_identifier) @name) @definition.class
+  name: (type_identifier) @definition.class.name) @definition.class
 
 ;; Struct declarations
 (struct_specifier
-  name: (type_identifier) @name) @definition.struct
+  name: (type_identifier) @definition.struct.name) @definition.struct
 
 
 ;; Variable declarations (keep as declaration)
 (declaration
   declarator: (init_declarator
-                declarator: (identifier) @name)) @variable
+                declarator: (identifier) @variable.name)) @variable
 
 ;; Member variable declarations (keep as declaration)
 (field_declaration
-  declarator: (field_identifier) @name) @declaration.field
+  declarator: (field_identifier) @definition.field.name) @definition.field
 
 ;; Union declarations
 (union_specifier
-  name: (type_identifier) @name) @definition.union
+  name: (type_identifier) @definition.union.name) @definition.union
 
 ;; Enum declarations
 (enum_specifier
-  name: (type_identifier) @name) @definition.enum
+  name: (type_identifier) @efinition.enum.name) @definition.enum
 
 ;; Type alias declarations (these are definitions)
 (alias_declaration
-  name: (type_identifier) @name) @definition.type_alias
+  name: (type_identifier) @definition.type_alias.name) @definition.type_alias
 
 ;; Typedef declarations
 (type_definition
-  declarator: (type_identifier) @name) @definition.typedef
+  declarator: (type_identifier) @definition.typedef.name) @definition.typedef
+
+(declaration
+  declarator: (function_declarator
+                declarator: (identifier) @declaration.function.name
+                parameters: (parameter_list) @declaration.function.parameters
+                )
+  ) @declaration.function
+
+
 
 (function_definition
   declarator: (function_declarator
-                declarator: (identifier) @name)) @definition.function
+                declarator: (identifier) @definition.function.name
+                parameters: (parameter_list) @definition.function.parameters
+                )) @definition.function
 
 ;; TODO 对象.方法
 (call_expression
   function: (
               field_expression
-              argument: (identifier) @method.call.object
-              field: (field_identifier) @method.call.name
+              argument: (identifier) @call.method.object
+              field: (field_identifier) @call.method.name
               )
-  arguments: (argument_list) @method.call.arguments
+  arguments: (argument_list) @call.method.arguments
   ) @call.method
 
 ;; 函数调用

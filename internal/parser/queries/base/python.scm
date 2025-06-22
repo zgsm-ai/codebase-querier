@@ -45,7 +45,7 @@
 
 ;; Enum definitions (Python 3.4+)
 (class_definition
-  name: (identifier) @name
+  name: (identifier) @definition.enum.name
   superclasses: (argument_list
                   (identifier) @base
                   (#eq? @base "Enum"))) @definition.enum

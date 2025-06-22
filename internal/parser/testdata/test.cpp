@@ -2,9 +2,13 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "a.h"
 
 #define PI 3.14159
 constexpr int MAX = 100;
+using std;
+
+int add(int a, int b) ;
 
 // 1. 命名空间定义
 namespace Geometry {

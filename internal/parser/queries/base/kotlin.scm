@@ -11,37 +11,38 @@
 
 ;; Class definitions
 (class_definition
-  name: (identifier) @name) @definition.class
+  name: (identifier) @definition.class.name) @definition.class
 
 ;; Object definitions
 (object_definition
-  name: (identifier) @name) @definition.object
+  name: (identifier) @definition.object.name) @definition.object
 
 ;; Function definitions
 (function_definition
-  name: (identifier) @name) @definition.function
+  name: (identifier) @definition.function.name) @definition.function
 
 ;; Property definitions
 (property_definition
-  (identifier) @name) @definition.property
+  (identifier) @definition.property.name) @definition.property
 
 
 ;; Type alias definitions
 (type_alias
-  (identifier) @name) @definition.type_alias
+  (identifier) @definition.type_alias.name) @definition.type_alias
 
 ;; Enum class definitions
 (enum_entry
-  (identifier) @name) @definition.enum
+  (identifier) @definition.enum.name) @definition.enum
 
 ;; Companion object definitions
 (companion_object
-  name: (identifier) @name) @definition.companion
+  name: (identifier) @definition.companion.name) @definition.companion
 
 ;; Constructor definitions
 (class_definition
-  name: (identifier) @name) @definition.constructor
+  name: (identifier) @definition.constructor.name) @definition.constructor
 
+;; TODO
 (call_expression
 
   ) @call.method

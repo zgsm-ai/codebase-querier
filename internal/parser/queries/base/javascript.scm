@@ -1,12 +1,19 @@
 (import_statement
   (import_clause
-    ) @import.names
+    (identifier) @import.name
+    ) *
+  (import_clause
+    (named_imports
+      (import_specifier
+        name: (identifier) @import.name
+        alias: (identifier) * @import.alias
+        )
+      )
+    ) *
+  source: (string)* @import.source
+
   ) @import
 
-(import_statement
-  source: (string
-            ) @import.name
-  ) @import
 
 ;; Function declarations
 (function_declaration
@@ -18,31 +25,34 @@
 ;; 全局变量
 (program
   (_
-    (variable_declarator) @global_variable
+    (variable_declarator
+      name: (identifier) @global_variable.name
+      ) @global_variable
     )
   )
 
-
 ;; 函数、变量
 
-(variable_declarator) @variable
+(variable_declarator
+  name: (identifier) @variable.name
+  ) @variable
 
 
 
 ;; Object properties
 (pair
-  key: (property_identifier) @name) @declaration.property
+  key: (property_identifier) @definition.property.name) @definition.property
 
 ;; Export declarations
 (export_statement
   declaration: (function_declaration
-                 name: (identifier) @name)) @declaration.export_function
+                 name: (identifier) @definition.export_function.name)) @definition.export_function
 
 ;; Export named declarations
 (export_statement
   (export_clause
     (export_specifier
-      name: (identifier) @name))) @declaration.export_statement
+      name: (identifier) @definition.export_statement.name))) @definition.export_statement
 
 ;; 函数调用
 (call_expression

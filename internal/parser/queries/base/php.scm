@@ -3,50 +3,50 @@
 
 ;; Function definitions
 (function_definition
-  name: (name) @name) @definition.function
+  name: (name) @definition.function.name) @definition.function
 
 ;; Method declarations
 (method_declaration
-  name: (name) @name) @declaration.method
+  name: (name) @definition.method.name) @definition.method
 
 ;; Class declarations
 (class_declaration
-  name: (name) @name) @declaration.class
+  name: (name) @definition.class.name) @definition.class
 
 ;; Interface declarations
 (interface_declaration
-  name: (name) @name) @declaration.interface
+  name: (name) @definition.interface.name) @definition.interface
 
 ;; Trait declarations
 (trait_declaration
-  name: (name) @name) @declaration.trait
+  name: (name) @definition.trait.name) @definition.trait
 
 ;; Namespace definitions
 (namespace_definition
-  name: (namespace_name) @name) @definition.namespace
+  name: (namespace_name) @namespace.name) @namespace
 
 ;; Property declarations
 (property_declaration
   (property_element
-    (variable_name) @name)) @declaration.property
+    (variable_name) @definition.property.name)) @definition.property
 
 ;; Constant declarations
 (const_declaration
-  (const_element (name) @name)) @declaration.constant
+  (const_element (name) @definition.constant.name)) @definition.constant
 
 ;; Variable declarations
 (static_variable_declaration
-  (variable_name) @name) @declaration.static_variable
+  (variable_name) @definition.static_variable.name) @definition.static_variable
 
 ;; Type alias declarations (using)
 (use_declaration
-  (name) @name) @declaration.using
+  (name) @using.name) @using
 
 ;; Enum declarations (PHP 8.1+)
 (enum_declaration
-  name: (name) @name) @declaration.enum
+  name: (name) @definition.enum.name) @definition.enum
 
 (function_call_expression
-  function: (name) @call.name
+  function: (name) @call.function.name
   arguments: (arguments) @call.function.arguments
   ) @call.function

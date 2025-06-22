@@ -1,6 +1,21 @@
-(package_identifier) @package
+(package_clause
+  (package_identifier) @package.name
+  ) @package
 
-(import_declaration (import_spec_list (import_spec) @import.name) * (import_spec) * @import.name) @import
+;; TODO 双引号需要去掉
+(import_declaration
+  (import_spec_list
+    (import_spec
+      name: (package_identifier) * @import.alias
+      path: (interpreted_string_literal) @import.name
+      )
+    ) *
+
+  (import_spec
+    name: (package_identifier) * @import.alias
+    path: (interpreted_string_literal) @import.name
+    ) *
+  ) @import
 
 ;; function
 (function_declaration
@@ -8,12 +23,13 @@
   parameters: (parameter_list) @definition.function.parameters
   ) @definition.function
 
+(source_file (var_declaration (var_spec name: (identifier) @global_variable.name)) @global_variable)
 
-(var_declaration (var_spec name: (identifier) @name)) @variable
+(var_declaration (var_spec name: (identifier) @variable.name)) @variable
 
 ;; 多个局部变量，逗号分割
 (short_var_declaration
-  left:(expression_list) @local_variable.names
+  left: (expression_list) @local_variable.names
   ) @local_variable
 
 ;; method
@@ -34,9 +50,8 @@
 
 (type_declaration (type_spec name: (type_identifier) @declaration.type_alias.name type: (type_identifier))) @definition.type_alias
 
-(source_file (var_declaration (var_spec name: (identifier) @global_variable.name)) @global_variable)
 
-(source_file (const_declaration (const_spec name: (identifier) @const.name)) @const)
+(source_file (const_declaration (const_spec name: (identifier) @constant.name)) @constant)
 
 
 ;; function/method_call

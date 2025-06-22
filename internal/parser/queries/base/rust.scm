@@ -1,9 +1,12 @@
 (use_declaration
   argument: (scoped_identifier
-              name: (identifier) @use.name) *
+              name: (identifier) @use.name) * @use.full_name
   argument: (scoped_use_list
-              list: (use_list) @use.names
-              ) *
+              list: (use_list
+                      (self)* @use.name
+                      (identifier) @use.name
+                      (self)* @use.name
+                      )) * @use.full_name
   ) @use
 
 ;; Rust structure query
@@ -11,43 +14,43 @@
 
 ;; Function definitions
 (function_item
-  name: (identifier) @name) @function_item
+  name: (identifier) @definition.function.name) @definition.function
 
 ;; Struct definitions
 (struct_item
-  name: (type_identifier) @name) @struct_item
+  name: (type_identifier) @definition.struct.name) @definition.struct
 
 ;; Enum definitions
 (enum_item
-  name: (type_identifier) @name) @enum_item
+  name: (type_identifier) @definition.enum.name) @definition.enum
 
 ;; Trait definitions
 (trait_item
-  name: (type_identifier) @name) @trait_item
+  name: (type_identifier) @definition.trait.name) @definition.trait
 
 ;; Implementation blocks
 (impl_item
-  trait: (type_identifier) @name) @impl_item
+  trait: (type_identifier) @definition.impl_item.name) @definition.impl_item
 
 ;; Type definitions
 (type_item
-  name: (type_identifier) @name) @type_item
+  name: (type_identifier) @definition.type_item.name) @definition.type_item
 
 ;; Constant definitions
 (const_item
-  name: (identifier) @name) @const_item
+  name: (identifier) @constant.name) @constant
 
 ;; Static definitions
 (static_item
-  name: (identifier) @name) @static_item
+  name: (identifier) @static_item.name) @static_item
 
 ;; Module declarations
 (mod_item
-  name: (identifier) @name) @class
+  name: (identifier) @module.name) @module
 
 ;; Macro definitions
 (macro_definition
-  name: (identifier) @name) @definition.macro
+  name: (identifier) @macro.name) @macro
 
 (let_declaration
   pattern: (identifier) @local_variable.name

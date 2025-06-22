@@ -1,6 +1,6 @@
 #include <stdio.h>      // 标准输入输出库
 #include <stdlib.h>     // 标准库（包含动态内存分配）
-
+#include "b.h"
 // 1. 宏定义与常量
 #define PI 3.14159
 const int MAX_VALUE = 100;

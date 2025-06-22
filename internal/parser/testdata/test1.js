@@ -1,6 +1,6 @@
 // 导入模块
 import defaultName from 'modules.js';
-import { export } from 'modules';
+import { test } from 'modules';
 import { export as ex1 } from 'modules';
 import { export1, export2 } from 'modules.js';
 import { export1 as ex1, export2 as ex2 } from 'moduls.js';

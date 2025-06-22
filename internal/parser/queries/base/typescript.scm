@@ -1,17 +1,25 @@
 (import_statement
   (import_clause
-    ) @import.names
-  ) @import
-
-(import_statement
-  source: (string
-            ) @import.name
+    (identifier) @import.name
+    ) *
+  (import_clause
+    (named_imports
+      (import_specifier
+        name: (identifier) @import.name
+        alias: (identifier) * @import.alias
+        )
+      ) *
+    (namespace_import
+      (identifier) @import.name
+      ) *
+    ) *
+  source: (string) * @import.source
   ) @import
 
 ;; let/const declarations
 (lexical_declaration
   (variable_declarator
-    name: (identifier) @name )
+    name: (identifier) @name)
   ) @declaration.let
 
 ;; Function declarations
@@ -21,7 +29,7 @@
 ;; Function expressions
 (variable_declaration
   (variable_declarator
-    name: (identifier) @name )
+    name: (identifier) @name)
   ) @declaration.variable
 
 
@@ -51,16 +59,16 @@
 
 ;; Abstract class declarations（修正祖先节点判断逻辑）
 (class_declaration
-  name: (type_identifier) @name ) @declaration.class
+  name: (type_identifier) @name) @declaration.class
 
 ;; Abstract method declarations
 (method_definition
-  name: (property_identifier) @name ) @definition.method
+  name: (property_identifier) @name) @definition.method
 
-(import_statement ) @import_declaration
+(import_statement) @import_declaration
 
 ;; Export type declarations
-(export_statement ) @export_declaration
+(export_statement) @export_declaration
 
 ;; method call
 (call_expression
@@ -71,6 +79,6 @@
   ) @call.method
 
 (call_expression
-  function:  (identifier) @call.function.object
+  function: (identifier) @call.function.object
   arguments: (arguments) @call.function.arguments
   ) @call.function

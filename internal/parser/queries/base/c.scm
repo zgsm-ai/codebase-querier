@@ -1,22 +1,26 @@
 (preproc_include
-  "#include" @include.name
+  path: (system_lib_string)* @include.name
+  path: (string_literal)* @include.name
   ) @include
 
-(preproc_def) @macro @name
+;; Macro definitions
+(preproc_def
+  name: (identifier) @constant.name
+  ) @constant
 
 ;; Constant declarations
 (declaration
   (type_qualifier) @qualifier
   declarator: (init_declarator
-                declarator: (identifier) @name)
-  (#eq? @qualifier "const")) @const
+                declarator: (identifier) @constant.name)
+  (#eq? @qualifier "const")) @constant
 
 
 ;; extern Variable declarations
 (translation_unit
   (declaration
-    (storage_class_specifier) @type
-    (identifier) @name
+    (storage_class_specifier)
+    (identifier) @global_extern_variable.name
     (#eq? @type "extern")
     ) @global_extern_variable
   )
@@ -27,7 +31,7 @@
   (declaration
     (_) * @type
     declarator: (init_declarator
-                  declarator: (identifier) @name)
+                  declarator: (identifier) @global_variable.name)
     (#not-eq? @type "const")
     (#not-eq? @type "extern")
     ) @global_variable
@@ -35,26 +39,31 @@
 
 ;; Struct declarations
 (struct_specifier
-  name: (type_identifier) @name) @declaration.struct
+  name: (type_identifier) @definition.struct.name) @definition.struct
 
 ;; Enum declarations
 (enum_specifier
-  name: (type_identifier) @name) @declaration.enum
+  name: (type_identifier) @definition.enum.name) @definition.enum
 
 ;; Union declarations
 (union_specifier
-  name: (type_identifier) @name) @declaration.union
+  name: (type_identifier) @definition.union.name) @definition.union
 
 
 (declaration
   declarator: (function_declarator
-                declarator: (identifier) @name)
+                declarator: (identifier) @declaration.function.name
+                parameters: (parameter_list) @declaration.function.parameters
+                )
   ) @declaration.function
 
 ;; Function definitions
 (function_definition
   declarator: (function_declarator
-                declarator: (identifier) @name)) @definition.function
+                declarator: (identifier) @definition.function.name
+                parameters: (parameter_list) @definition.function.parameters
+                )
+  ) @definition.function
 
 ;; TODO 去找它的 identifier
 ;; variable & function  declaration
@@ -64,7 +73,7 @@
 
 ;; function_call  TODO ，这里不好确定它的parent，原因是存在嵌套、赋值等。可能得通过代码去递归。
 (call_expression
-  function: (identifier) @function.call.name
-  arguments: (argument_list) @function.call.arguments
+  function: (identifier) @call.funciton.name
+  arguments: (argument_list) @call.funciton.arguments
   ) @call.funciton
 

@@ -3,54 +3,54 @@
 
 ;; Method definitions
 (method
-  name: (identifier) @name) @method
+  name: (identifier) @definition.method.name) @definition.method
 
 ;; Class definitions
 (class
-  name: (constant) @name) @class
+  name: (constant) @definition.class.name) @definition.class
 
 ;; Module definitions
 (module
-  name: (constant) @name) @module
+  name: (constant) @module.name) @module
 
 ;; Singleton method definitions
 (singleton_method
-  name: (identifier) @name) @singleton_method
+  name: (identifier) @definition.singleton_method.name) @definition.singleton_method
 
 
 ;; Constant assignments
 (assignment
-  left: (constant) @name) @constant
+  left: (constant) @constant.name) @constant
 
 ;; Constant assignments (convention: uppercase names)
 (assignment
-  left: (identifier) @name
+  left: (identifier) @constant.name
   (#match? @name "^[A-Z][A-Z0-9_]*$")) @constant
 
 ;; Module methods
 (module
   body: (body_statement
           (method
-            name: (identifier) @name))) @method
+            name: (identifier) @definition.method.name))) @definition.method
 
 ;; Class methods
 (class
   body: (body_statement
           (singleton_method
-            name: (identifier) @name))) @method
+            name: (identifier) @definition.method.name))) @definition.method
 
 ;; Instance methods
 (class
   body: (body_statement
           (method
-            name: (identifier) @name))) @method
+            name: (identifier) @name))) @definition.method
 
 ;; Attribute accessors
 (call
   method: (identifier) @accessor
   (#match? @accessor "^(attr_reader|attr_writer|attr_accessor)$")
   arguments: (argument_list
-               (simple_symbol) @name)) @attribute
+               (simple_symbol) @definition.attribute.name)) @definition.attribute
 
 ;; method call
 (call
