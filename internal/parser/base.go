@@ -6,7 +6,6 @@ import (
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"strings"
 )
 
 type Parser struct{}
@@ -55,22 +54,44 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 	matches := qc.Matches(query, tree.RootNode(), content)
 
 	// 消费 matches，并调用 ProcessStructureMatch 处理匹配结果
-	elements := make([]*CodeElement, 0)
+	// elementName->elementPosition
+	var visited = make(map[string][]int32)
+	var sourcePackage *Package
+	var imports []*Import
+	elements := make([]CodeElement, 0)
 	for {
 		m := matches.Next()
 		if m == nil {
 			break
-		}
+		} // TODO Parent 、Children 关系处理。比如变量定义在函数中，函数定义在类中。
 		element, err := p.processNode(ctx, m, query, content, opts)
 		if err != nil {
 			tracer.WithTrace(ctx).Errorf("tree_sitter base processor processNode error: %v", err)
 			continue // 跳过错误的匹配
 		}
+		// 去重，
+		if position, ok := visited[element.GetName()]; ok && isSamePosition(position, element.GetRange()) {
+			tracer.WithTrace(ctx).Debugf("tree_sitter base_processor duplicate element visited: %s, %v",
+				element.GetName(), position)
+			continue
+		}
+		// 处理package go/java
+		if element.GetType() == ElementTypePackage {
+			sourcePackage = element.(*Package)
+			continue
+		}
+		// 处理imports
+		if element.GetType() == ElementTypeImport {
+			imports = append(imports, element.(*Import))
+			continue
+		}
+
 		elements = append(elements, element)
 	}
 
 	// 返回结构信息，包含处理后的定义
 	return &ParsedSource{
+		Package:  sourcePackage,
 		Path:     sourceFile.Path,
 		Language: langConf.Language,
 		Elements: elements,
@@ -81,81 +102,50 @@ func (p *Parser) processNode(ctx context.Context,
 	match *sitter.QueryMatch,
 	query *sitter.Query,
 	source []byte,
-	opts ParseOptions) (*CodeElement, error) {
-	if len(match.Captures) == 0 {
+	opts ParseOptions) (CodeElement, error) {
+
+	if len(match.Captures) == 0 || len(query.CaptureNames()) == 0 {
 		return nil, ErrNoCaptures
 	}
+	rootCaptureName := query.CaptureNames()[0]
 
-	var captureRoot *sitter.Node
-	var captureRootNameNode *sitter.Node
-	var parameterNode *sitter.Node
-	var ownerNode *sitter.Node // a.method  b.function
-	var rootCaptureName string
-	for i, capture := range match.Captures {
-		captureName := query.CaptureNames()[capture.Index]
-		if i == 0 {
-			captureRoot = &capture.Node
-			rootCaptureName = captureName
+	codeElement := getByElementType(rootCaptureName)
+
+	for _, capture := range match.Captures {
+		if capture.Node.IsMissing() || capture.Node.IsError() {
+			tracer.WithTrace(ctx).Debugf("tree_sitter base_processor capture node %s is missing or error",
+				capture.Node.Kind())
 			continue
 		}
+		captureName := query.CaptureNames()[capture.Index]
 
-		if isNodeNameCapture(rootCaptureName, captureName) { // *.name 可能存在多个.name
-			captureRootNameNode = &capture.Node
-		} else if isParameterCapture(captureName) {
-			parameterNode = &capture.Node
-		} else if isOwnerCapture(captureName) {
-			ownerNode = &capture.Node
-		} else {
+		if err := codeElement.Update(ctx, captureName, &capture, source, opts); err != nil {
 			// TODO full_name（import）、 find identifier recur (variable)、parameters/arguments
-			tracer.WithTrace(ctx).Debugf("unknown capture: %s", captureName)
+			tracer.WithTrace(ctx).Debugf("parse capture node %s err: %v", captureName, err)
 		}
 	}
-	// TODO 局部变量不是很容易区分，存在多层嵌套。找到它的名字不太容器。存在一行返回多个局部变量的情况,当前只取了第一个
-	if captureRootNameNode == nil && isElementType(rootCaptureName, ElementTypeVariable) {
-		captureRootNameNode = findIdentifier(captureRoot)
-	}
 
-	if captureRoot == nil || captureRootNameNode == nil {
-		return nil, ErrMissingNode
-	}
+	return codeElement, nil
+}
 
-	// 获取名称 ,go import 带双引号
-	name := strings.ReplaceAll(captureRootNameNode.Utf8Text(source), types.SingleDoubleQuote, types.EmptyString)
-	if name == types.EmptyString {
-		return nil, fmt.Errorf("tree_sitter base_processor no name found")
+func getByElementType(elementTypeValue string) CodeElement {
+	elementType := toElementType(elementTypeValue)
+	switch elementType {
+	case ElementTypePackage:
+		return &Package{}
+	case ElementTypeImport:
+		return &Import{}
+	case ElementTypeFunction:
+		return &Function{}
+	case ElementTypeClass:
+		return &Class{}
+	case ElementTypeMethod:
+		return &Method{}
+	case ElementTypeFunctionCall, ElementTypeMethodCall:
+		return &Call{}
+	default:
+		return &BaseElement{}
 	}
-	// 获取参数
-	var parameters []string
-	if parameterNode != nil {
-		parameters = append(parameters, strings.Split(parameterNode.Utf8Text(source), types.Comma)...)
-	}
-	// 获取owner 方法所属的类，函数所属的包/模块等。
-	var ownerName string
-	if ownerNode != nil {
-		ownerName = ownerNode.Utf8Text(source)
-	}
-
-	// 获取范围
-	startPoint := captureRoot.StartPosition()
-	endPoint := captureRoot.EndPosition()
-	startLine := startPoint.Row
-	startColumn := startPoint.Column
-	endLine := endPoint.Row
-	endColumn := endPoint.Column
-
-	var content []byte
-	if opts.IncludeContent {
-		content = source[captureRoot.StartByte():captureRoot.EndByte()]
-	}
-
-	return &CodeElement{
-		Type:       toElementType(rootCaptureName),
-		Name:       name,
-		Owner:      ownerName,
-		Parameters: parameters,
-		Range:      []int32{int32(startLine), int32(startColumn), int32(endLine), int32(endColumn)},
-		Content:    content,
-	}, nil
 }
 
 // findIdentifier 递归遍历语法树节点，查找类型为"identifier"的节点

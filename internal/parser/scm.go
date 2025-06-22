@@ -70,3 +70,15 @@ func loadLanguageScm(lang *LanguageConfig, scmDir string, sitterLang *sitter.Lan
 func makeQueryPath(lang Language, subdir string) string {
 	return filepath.ToSlash(filepath.Join(queryDir, subdir, string(lang)+queryExt))
 }
+
+func isSamePosition(source []int32, target []int32) bool {
+	if len(source) != len(target) {
+		return false
+	}
+	for i := range source {
+		if source[i] != target[i] {
+			return false
+		}
+	}
+	return true
+}

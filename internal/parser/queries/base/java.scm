@@ -1,8 +1,6 @@
 (package_declaration
-  (scoped_identifier
-    name: (identifier) @package.name
-    ) @package.full_name
-  )  @package
+  (scoped_identifier) @package.name
+  ) @package
 
 (import_declaration
   (scoped_identifier
@@ -57,7 +55,7 @@
 
 ;; Type parameters
 (type_parameters
-  (type_parameter) @type_parameters.name ) @type_parameters
+  (type_parameter) @type_parameters.name) @type_parameters
 
 ;; Annotation declarations
 (annotation_type_declaration
