@@ -2,20 +2,12 @@ package definition
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
-)
-
-// Custom errors
-var (
-	ErrNoCaptures   = errors.New("no captures in match")
-	ErrMissingNode  = errors.New("captured node is missing")
-	ErrNoDefinition = errors.New("no QueryDefinition node found")
 )
 
 const name = "name"
@@ -94,7 +86,7 @@ func (s *DefParser) Parse(ctx context.Context, codeFile *types.SourceFile, opts 
 func (p *DefParser) ProcessDefinitionNode(match *sitter.QueryMatch, query *sitter.Query,
 	source []byte, opts ParseOptions) (*codegraphpb.Definition, error) {
 	if len(match.Captures) == 0 {
-		return nil, ErrNoCaptures
+		return nil, parser.ErrNoCaptures
 	}
 
 	// 获取定义节点、名称节点和其他必要节点
@@ -113,7 +105,7 @@ func (p *DefParser) ProcessDefinitionNode(match *sitter.QueryMatch, query *sitte
 	}
 
 	if defNode == nil || nameNode == nil {
-		return nil, ErrMissingNode
+		return nil, parser.ErrMissingNode
 	}
 	// TODO range 有问题，golang  import (xxx xxx xxx) 捕获的是整体。
 	// 获取名称

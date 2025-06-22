@@ -14,11 +14,11 @@
 
 ;; Class declarations
 (class_declaration
-  name: (identifier) @declaration.class.name) @definition.class
+  name: (identifier) @definition.class.name) @definition.class
 
 ;; Interface declarations
 (interface_declaration
-  name: (identifier) @declaration.interface.name) @declaration.interface
+  name: (identifier) @definition.interface.name) @definition.interface
 
 ;; Struct declarations
 (struct_declaration
@@ -81,7 +81,7 @@
 ;; 方法调用
 (invocation_expression
   function: (member_access_expression
-              expression: (identifier) @call.method.object
+              expression: (identifier) @call.method.owner
               name: (identifier) @call.method.name
               )
   arguments: (argument_list) @call.method.arguments

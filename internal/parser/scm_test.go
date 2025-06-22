@@ -8,12 +8,7 @@ import (
 func TestScmLoad(t *testing.T) {
 	assert.NotPanics(t,
 		func() {
-			_ = loadScm()
+			err := loadScm()
+			assert.NoError(t, err)
 		})
 }
-
-//func TestCTopQuery(t *testing.T) {
-//	code, err := os.ReadFile("./testdata/test.c")
-//	assert.NoError(t, err)
-//
-//}

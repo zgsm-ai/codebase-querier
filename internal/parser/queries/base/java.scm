@@ -36,12 +36,12 @@
 
 ;; Enum declarations
 (enum_declaration
-  name: (identifier) @name) @declaration.enum
+  name: (identifier) @name) @definition.enum
 
 ;; Field declarations
 (field_declaration
   declarator: (variable_declarator
-                name: (identifier) @name)) @declaration.field
+                name: (identifier) @name)) @definition.field
 
 ;; Constant field declarations (static final)
 (field_declaration
@@ -75,9 +75,9 @@
                 )
   ) @local_variable
 
-;; 函数调用
+;; 方法调用
 (method_invocation
-  object: (_) @call.method.object
+  object: (_) @call.method.owner
   name: (identifier) @call.method.name
   arguments: (argument_list) @call.method.arguments
   ) @call.method

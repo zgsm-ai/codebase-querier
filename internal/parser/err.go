@@ -9,6 +9,13 @@ var ErrFileExtNotFound = errors.New("file extension not found")
 var ErrLangConfNotFound = errors.New("langConf not found")
 var ErrQueryNotFound = errors.New("query not found")
 
+// Custom errors
+var (
+	ErrNoCaptures   = errors.New("no captures in match")
+	ErrMissingNode  = errors.New("captured def or name node is missing")
+	ErrNoDefinition = errors.New("no QueryDefinition node found")
+)
+
 // IsRealQueryErr prevent *sitter.QueryError(nil)
 func IsRealQueryErr(err error) bool {
 	if err != nil {

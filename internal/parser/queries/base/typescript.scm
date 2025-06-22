@@ -20,17 +20,17 @@
 (lexical_declaration
   (variable_declarator
     name: (identifier) @name)
-  ) @declaration.let
+  ) @definition.let
 
 ;; Function declarations
 (function_declaration
-  name: (identifier) @name) @declaration.function
+  name: (identifier) @name) @definition.function
 
 ;; Function expressions
 (variable_declaration
   (variable_declarator
     name: (identifier) @name)
-  ) @declaration.variable
+  ) @definition.variable
 
 
 ;; Method definitions (inside classes)
@@ -39,27 +39,27 @@
 
 ;; Interface declarations
 (interface_declaration
-  name: (type_identifier) @name) @declaration.interface
+  name: (type_identifier) @name) @definition.interface
 
 ;; Type alias declarations
 (type_alias_declaration
-  name: (type_identifier) @name) @declaration.type_alias
+  name: (type_identifier) @name) @definition.type_alias
 
 ;; Type declarations（TypeScript 中通常用 type_alias_declaration 表示类型别名）
 ;; 注：type_declaration 可能不是标准节点，建议统一使用 type_alias_declaration
 
 ;; Enum declarations
 (enum_declaration
-  name: (identifier) @name) @declaration.enum
+  name: (identifier) @name) @definition.enum
 
 
 ;; Decorator declarations
 (decorator
-  (identifier) @name) @declaration.decorator
+  (identifier) @name) @definition.decorator
 
-;; Abstract class declarations（修正祖先节点判断逻辑）
+;; Abstract class declarations
 (class_declaration
-  name: (type_identifier) @name) @declaration.class
+  name: (type_identifier) @name) @definition.class
 
 ;; Abstract method declarations
 (method_definition
@@ -73,12 +73,12 @@
 ;; method call
 (call_expression
   function: (_
-              (identifier) @call.method.object
+              (identifier) @call.method.owner
               )
   arguments: (arguments) @call.method.arguments
   ) @call.method
 
 (call_expression
-  function: (identifier) @call.function.object
+  function: (identifier) @call.function.owner
   arguments: (arguments) @call.function.arguments
   ) @call.function

@@ -27,28 +27,39 @@
 
 (var_declaration (var_spec name: (identifier) @variable.name)) @variable
 
-;; 多个局部变量，逗号分割
+;; 多个局部变量，逗号分割,正常不会超过10个
 (short_var_declaration
-  left: (expression_list) @local_variable.names
+  left: (expression_list
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          (identifier)* @local_variable.name
+          )
   ) @local_variable
 
 ;; method
 (method_declaration
   receiver: (parameter_list
               (parameter_declaration
-                name: (identifier) @definition.method.receiver.name
-                type: (type_identifier) @definition.method.receiver.type
+                name: (identifier)*
+                type: (type_identifier) @definition.method.owner
                 )
               )
   name: (field_identifier) @definition.method.name
   parameters: (parameter_list) @definition.method.parameters
-  ) @declaration.method
+  ) @definition.method
 
-(type_declaration (type_spec name: (type_identifier) @declaration.interface.name type: (interface_type))) @definition.interface
+(type_declaration (type_spec name: (type_identifier) @definition.interface.name type: (interface_type))) @definition.interface
 
-(type_declaration (type_spec name: (type_identifier) @declaration.struct.name type: (struct_type))) @definition.struct
+(type_declaration (type_spec name: (type_identifier) @definition.struct.name type: (struct_type))) @definition.struct
 
-(type_declaration (type_spec name: (type_identifier) @declaration.type_alias.name type: (type_identifier))) @definition.type_alias
+(type_declaration (type_spec name: (type_identifier) @definition.type_alias.name type: (type_identifier))) @definition.type_alias
 
 
 (source_file (const_declaration (const_spec name: (identifier) @constant.name)) @constant)
@@ -57,7 +68,7 @@
 ;; function/method_call
 (call_expression
   function: (selector_expression
-              operand: (identifier) @call.function.object
+              operand: (identifier) @call.function.owner
               field: (field_identifier) @call.function.name
               )
   arguments: (argument_list) @call.function.arguments

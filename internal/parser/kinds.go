@@ -1,5 +1,7 @@
 package parser
 
+const identifier = "identifier"
+
 // DefinitionNodeType 定义了各语言在 tree-sitter 中的原始节点类型
 var DefinitionNodeType = map[Language][]string{
 	Go: {

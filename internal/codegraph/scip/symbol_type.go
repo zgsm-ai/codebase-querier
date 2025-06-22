@@ -37,7 +37,7 @@ func buildSymbol(occ *scip.Occurrence, path string) *codegraphpb.Symbol {
 }
 
 // 0: "UnspecifiedSuffix"
-// 1: "Namespace" / "Package"
+// 1: "Package" / "Package"
 // 2: "Type"
 // 3: "Term"
 // 4: "Method"

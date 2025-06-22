@@ -57,7 +57,7 @@
 ;; 函数调用
 (call_expression
   function: (member_expression
-              object: (identifier) @call.function.object
+              object: (identifier) @call.function.owner
               property: (property_identifier) @call.function.name
               )
   arguments: (arguments) @call.function.arguments

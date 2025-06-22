@@ -64,7 +64,7 @@
 (call_expression
   function: (
               field_expression
-              argument: (identifier) @call.method.object
+              argument: (identifier) @call.method.owner
               field: (field_identifier) @call.method.name
               )
   arguments: (argument_list) @call.method.arguments

@@ -76,7 +76,7 @@
 ;; method call
 (call
   function: (attribute
-              object: (identifier) @call.method.object
+              object: (identifier) @call.method.owner
               attribute: (identifier) @call.method.name
               )
   arguments: (argument_list) @call.method.arguments
