@@ -9,17 +9,17 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 )
 
-type Parser struct{}
+type BaseParser struct{}
 
 type ParseOptions struct {
 	IncludeContent bool
 }
 
-func NewParser() *Parser {
-	return &Parser{}
+func NewBaseParser() *BaseParser {
+	return &BaseParser{}
 }
 
-func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts ParseOptions) (*ParsedSource, error) {
+func (p *BaseParser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts ParseOptions) (*ParsedSource, error) {
 	// Extract file extension
 	langConf, err := GetLangConfigByFilePath(sourceFile.Path)
 	if err != nil {
@@ -114,7 +114,7 @@ func (p *Parser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts P
 	}, nil
 }
 
-func (p *Parser) processNode(ctx context.Context,
+func (p *BaseParser) processNode(ctx context.Context,
 	match *sitter.QueryMatch,
 	captureNames []string,
 	source []byte,

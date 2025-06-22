@@ -72,6 +72,9 @@ func isDocKey(key []byte) bool {
 func isStructKey(key []byte) bool {
 	return strings.HasPrefix(string(key), structPrefix)
 }
+func isSymbolIndexKey(key []byte) bool {
+	return strings.HasPrefix(string(key), symIndexPrefix)
+}
 
 // SerializeDocument 序列化函数
 func SerializeDocument(doc proto.Message) ([]byte, error) {

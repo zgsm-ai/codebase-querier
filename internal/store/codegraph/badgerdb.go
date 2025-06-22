@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
@@ -207,10 +208,63 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 
 	var res []*types.DefinitionNode
 
+	var foundSymbols []*codegraphpb.Symbol
+	queryStartLine := int32(opts.StartLine - 1)
+	queryEndLine := int32(opts.EndLine - 1)
+
 	snippet := opts.CodeSnippet
+
 	// 根据代码片段中的标识符名模糊搜索
 	if snippet != types.EmptyString {
 		// 调用tree_sitter 解析，获取所有的标识符及位置
+		baseParser := parser.NewBaseParser()
+		parsedData, err := baseParser.Parse(ctx, &types.SourceFile{
+			Path:    opts.FilePath,
+			Content: []byte(snippet),
+		}, parser.ParseOptions{
+			IncludeContent: false,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("faled to parse code snippet for definition query: %w", err)
+		}
+		imports := parsedData.Imports
+		elements := parsedData.Elements
+		// 找到所有的Call
+		var callNames []string
+		for _, e := range elements {
+			if c, ok := e.(*parser.Call); ok {
+				callNames = append(callNames, c.Name)
+			}
+		}
+		if len(callNames) == 0 {
+			return nil, fmt.Errorf("no function/method call found in code snippet")
+		}
+		var importNames []string
+		for _, i := range imports {
+			importNames = append(importNames, i.Name)
+		}
+
+		// 根据所找到的call 的name + imports， 去模糊匹配symbol
+		foundSymbolKeys, err := b.fullTextSearchSymbolName(ctx, callNames, importNames)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search function/method call names: %w", err)
+		}
+		if len(foundSymbolKeys) == 0 {
+			return nil, fmt.Errorf("failed to found function/method call names")
+		}
+		for _, key := range foundSymbolKeys {
+			var document codegraphpb.Document
+			if err = b.loadValue(ctx, key.DocKey, &document); err != nil {
+				tracer.WithTrace(ctx).Errorf("Failed to get document by key: %s, err:%v", string(key.DocKey), err)
+				continue
+			}
+			if symbol := b.findSymbolInDocByRange(ctx, &document, key.Range); symbol != nil {
+				foundSymbols = append(foundSymbols, symbol)
+			} else {
+				tracer.WithTrace(ctx).Errorf("Failed to find symbol in document %s by range: %v",
+					string(key.DocKey), key.Range)
+			}
+		}
 
 	} else {
 		// 1. 获取文档
@@ -231,49 +285,48 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 			tracer.WithTrace(ctx).Errorf("Failed to get document: %v", err)
 			return nil, err
 		}
-		queryStartLine := int32(opts.StartLine - 1)
-		queryEndLine := int32(opts.EndLine - 1)
-		foundSymbols := b.findSymbolInDocByLineRange(ctx, &doc, queryStartLine, queryEndLine)
-		// 去重, 如果range 出现过，则剔除
-		existedDefs := make(map[string]bool)
-		// 遍历，封装结果，取定义
-		for _, s := range foundSymbols {
-			// 本身是定义
-			if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
-				// 去掉本范围内的定义
-				if len(s.Range) > 0 && isInLinesRange(s.Range[0], queryStartLine, queryEndLine) {
-					continue
-				}
-				res = append(res, &types.DefinitionNode{
-					FilePath: s.Path,
-					Name:     s.Name,
-					Position: types.ToPosition(s.Range),
-				})
 
+		foundSymbols = b.findSymbolInDocByLineRange(ctx, &doc, queryStartLine, queryEndLine)
+
+	}
+	// 去重, 如果range 出现过，则剔除
+	existedDefs := make(map[string]bool)
+	// 遍历，封装结果，取定义
+	for _, s := range foundSymbols {
+		// 本身是定义
+		if s.Role == codegraphpb.RelationType_RELATION_DEFINITION {
+			// 去掉本范围内的定义，仅过滤范围查询，不过滤全文检索
+			if len(s.Range) > 0 && snippet != types.EmptyString && isInLinesRange(s.Range[0], queryStartLine, queryEndLine) {
 				continue
-			} else if s.Role == codegraphpb.RelationType_RELATION_REFERENCE { // 引用
-				for _, r := range s.Relations {
-					// 引用的 relation 是定义
-					if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
-						// 如果已经访问过，就跳过
-						if isSymbolExists(r.FilePath, r.Range, existedDefs) {
-							continue
-						}
-						existedDefs[symbolMapKey(r.FilePath, r.Range)] = true
-						// 引用节点，加入node的children
-						res = append(res, &types.DefinitionNode{
-							FilePath: r.FilePath,
-							Name:     r.Name, //TODO r.Name 有时候是identifier，未处理
-							Position: types.ToPosition(r.Range),
-						})
-					}
-				}
-			} else {
-				tracer.WithTrace(ctx).Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
 			}
+			res = append(res, &types.DefinitionNode{
+				FilePath: s.Path,
+				Name:     s.Name,
+				Position: types.ToPosition(s.Range),
+			})
+
+			continue
+		} else if s.Role == codegraphpb.RelationType_RELATION_REFERENCE { // 引用
+			for _, r := range s.Relations {
+				// 引用的 relation 是定义
+				if r.RelationType == codegraphpb.RelationType_RELATION_DEFINITION {
+					// 如果已经访问过，就跳过
+					if isSymbolExists(r.FilePath, r.Range, existedDefs) {
+						continue
+					}
+					existedDefs[symbolMapKey(r.FilePath, r.Range)] = true
+					// 引用节点，加入node的children
+					res = append(res, &types.DefinitionNode{
+						FilePath: r.FilePath,
+						Name:     r.Name, //TODO r.Name 有时候是identifier，未处理
+						Position: types.ToPosition(r.Range),
+					})
+				}
+			}
+		} else {
+			tracer.WithTrace(ctx).Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
 		}
 	}
-
 	// 根据struct_doc 重新封装它的 position，变为范围。doc的range是单行。
 	if err := b.refillDefinitionRange(ctx, res); err != nil {
 		tracer.WithTrace(ctx).Errorf("QueryDefinition:  refill definition range err:%v", utils.TruncateError(err))
@@ -334,7 +387,7 @@ func (b BadgerDBGraph) findSymbolInStruct(ctx context.Context, doc *codegraphpb.
 	}
 	// 找到了def, 下一步根据def 的path、 range，找 symbol
 	var document codegraphpb.Document
-	err := b.findDocument(ctx, DocKey(doc.Path), &document)
+	err := b.loadValue(ctx, DocKey(doc.Path), &document)
 	if err != nil {
 		tracer.WithTrace(ctx).Debugf("findSymbolInStruct document not found by path %v in doc: %s", position, doc.Path)
 		return nil
@@ -362,7 +415,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(ctx context.Context, node *types.G
 
 	// 根据path和position，定义到 symbol，从而找到它的relation
 	var document codegraphpb.Document
-	err := b.findDocument(ctx, DocKey(symbolPath), &document)
+	err := b.loadValue(ctx, DocKey(symbolPath), &document)
 	if err != nil {
 		tracer.WithTrace(ctx).Errorf("Failed to find document for path %s: %v", symbolPath, err)
 		return
@@ -396,7 +449,7 @@ func (b BadgerDBGraph) buildChildrenRecursive(ctx context.Context, node *types.G
 	if len(children) == 0 {
 		// 如果references 为空，说明当前 node 是引用节点， 找到它属于哪个函数/类/结构体，再找它的definition节点，再找引用
 		var structFile codegraphpb.CodeDefinition
-		err = b.findDocument(ctx, StructKey(symbolPath), &structFile)
+		err = b.loadValue(ctx, StructKey(symbolPath), &structFile)
 		if err != nil {
 			tracer.WithTrace(ctx).Errorf("Failed to find struct file for path %s: %v", symbolPath, err)
 			return
@@ -429,18 +482,18 @@ func (b BadgerDBGraph) buildChildrenRecursive(ctx context.Context, node *types.G
 	}
 }
 
-// findDocument 查找并反序列化文档
-func (b BadgerDBGraph) findDocument(ctx context.Context, key []byte, message proto.Message) error {
+// loadValue 查找并反序列化文档
+func (b BadgerDBGraph) loadValue(ctx context.Context, key []byte, data proto.Message) error {
 	startTime := time.Now()
 	defer func() {
-		tracer.WithTrace(ctx).Debugf("findDocument took %v", time.Since(startTime))
+		tracer.WithTrace(ctx).Debugf("loadValue took %v", time.Since(startTime))
 	}()
 
 	if len(key) == 0 {
 		return fmt.Errorf("invalid input: key is empty")
 	}
-	if message == nil {
-		return fmt.Errorf("invalid input: message is nil")
+	if data == nil {
+		return fmt.Errorf("invalid input: data is nil")
 	}
 
 	err := b.db.View(func(txn *badger.Txn) error {
@@ -455,7 +508,7 @@ func (b BadgerDBGraph) findDocument(ctx context.Context, key []byte, message pro
 			if len(val) == 0 {
 				return fmt.Errorf("empty document value")
 			}
-			if err := DeserializeDocument(val, message); err != nil {
+			if err := DeserializeDocument(val, data); err != nil {
 				return fmt.Errorf("failed to deserialize document: %w", err)
 			}
 			return nil
@@ -463,7 +516,7 @@ func (b BadgerDBGraph) findDocument(ctx context.Context, key []byte, message pro
 	})
 
 	if err != nil {
-		tracer.WithTrace(ctx).Errorf("findDocument error for key %s: %v", string(key), err)
+		tracer.WithTrace(ctx).Errorf("loadValue error for key %s: %v", string(key), err)
 	}
 	return err
 }
@@ -605,7 +658,7 @@ func (b BadgerDBGraph) refillDefinitionRange(ctx context.Context, nodes []*types
 			continue
 		}
 		var structFile codegraphpb.CodeDefinition
-		err := b.findDocument(ctx, StructKey(n.FilePath), &structFile)
+		err := b.loadValue(ctx, StructKey(n.FilePath), &structFile)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("refillDefinitionRange node %s %s ,failed to find struct file by line %d: %v", n.FilePath, n.Name, line, err))
 			continue
@@ -686,4 +739,57 @@ func (b BadgerDBGraph) BatchWriteDefSymbolKeysMap(ctx context.Context, defSymbol
 		}
 	}
 	return wb.Flush()
+}
+
+func (b BadgerDBGraph) fullTextSearchSymbolName(ctx context.Context, names []string, imports []string) ([]*codegraphpb.KeyRange, error) {
+	start := time.Now()
+	var foundKeys []*codegraphpb.KeyRange
+	err := b.db.View(func(txn *badger.Txn) error {
+		iter := txn.NewIterator(badger.IteratorOptions{})
+		defer iter.Close()
+		for iter.Rewind(); iter.Valid(); iter.Next() {
+			key := iter.Item().Key()
+			if !isSymbolIndexKey(key) {
+				continue
+			}
+			symbolName := string(key)
+			found := false
+			for _, name := range names {
+				if strings.Contains(symbolName, name) {
+					found = true
+					break
+				}
+				// TODO imports
+			}
+			if !found {
+				continue
+			}
+
+			item, err := txn.Get(key)
+			if err != nil {
+				tracer.WithTrace(ctx).Errorf("fullTextSearchSymbolName get key %s error:%v", string(key), err)
+				continue
+			}
+			var keyset codegraphpb.KeySet
+			err = item.Value(func(val []byte) error {
+				if len(val) == 0 {
+					return fmt.Errorf("empty symbol index value")
+				}
+				if err = DeserializeDocument(val, &keyset); err != nil {
+					return fmt.Errorf("failed to deserialize document: %w", err)
+				}
+				return nil
+			})
+			if len(keyset.Keys) > 0 {
+				foundKeys = append(foundKeys, keyset.Keys...)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	tracer.WithTrace(ctx).Infof("codegraph symbol name fulltext-search end, cost %d ms, doc keys found:%d",
+		time.Since(start).Milliseconds(), len(foundKeys))
+	return foundKeys, nil
 }
