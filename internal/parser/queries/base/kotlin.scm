@@ -10,19 +10,19 @@
   ) @import
 
 ;; Class definitions
-(class_definition
+(class_declaration
   name: (identifier) @definition.class.name) @definition.class
 
 ;; Object definitions
-(object_definition
+(object_declaration
   name: (identifier) @definition.object.name) @definition.object
 
 ;; Function definitions
-(function_definition
+(function_declaration
   name: (identifier) @definition.function.name) @definition.function
 
 ;; Property definitions
-(property_definition
+(property_declaration
   (identifier) @definition.property.name) @definition.property
 
 
@@ -39,7 +39,7 @@
   name: (identifier) @definition.companion.name) @definition.companion
 
 ;; Constructor definitions
-(class_definition
+(class_declaration
   name: (identifier) @definition.constructor.name) @definition.constructor
 
 ;; TODO

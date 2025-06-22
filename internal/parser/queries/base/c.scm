@@ -19,7 +19,7 @@
 ;; extern Variable declarations
 (translation_unit
   (declaration
-    (storage_class_specifier)
+    (storage_class_specifier) @type
     (identifier) @global_extern_variable.name
     (#eq? @type "extern")
     ) @global_extern_variable

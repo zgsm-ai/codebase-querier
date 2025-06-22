@@ -15,8 +15,8 @@ const defSubdir = "def"
 const baseSubDir = "base"
 const queryExt = ".scm"
 
-var DefinitionQueries map[Language]string
-var BaseQueries map[Language]string
+var DefinitionQueries = make(map[Language]string)
+var BaseQueries = make(map[Language]string)
 
 func init() {
 	if err := loadScm(); err != nil {
@@ -25,7 +25,6 @@ func init() {
 }
 
 func loadScm() error {
-	DefinitionQueries = make(map[Language]string)
 	configs := GetLanguageConfigs()
 	for _, lang := range configs {
 		// 校验query
@@ -69,5 +68,5 @@ func loadLanguageScm(lang *LanguageConfig, scmDir string, sitterLang *sitter.Lan
 }
 
 func makeQueryPath(lang Language, subdir string) string {
-	return filepath.Join(queryDir, subdir, string(lang)+queryExt)
+	return filepath.ToSlash(filepath.Join(queryDir, subdir, string(lang)+queryExt))
 }

@@ -25,7 +25,7 @@
 ;; Constant assignments (convention: uppercase names)
 (assignment
   left: (identifier) @constant.name
-  (#match? @name "^[A-Z][A-Z0-9_]*$")) @constant
+  (#match? @constant.name "^[A-Z][A-Z0-9_]*$")) @constant
 
 ;; Module methods
 (module
