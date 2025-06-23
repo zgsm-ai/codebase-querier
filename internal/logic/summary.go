@@ -86,14 +86,7 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (*types.IndexSumm
 		defer wg.Done()
 		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel() // 避免资源泄漏
-		graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebase.Path, types.CodebaseIndexDir)))
-		if err != nil {
-			tracer.WithTrace(ctx).Errorf("failed to open graph store, err:%w", err)
-			return
-		}
-		defer graphStore.Close()
-
-		codegraphSummary, err = graphStore.GetIndexSummary(timeoutCtx, codebase.ID, codebase.Path)
+		codegraphSummary, err = getCodegraphSummary(timeoutCtx, codebase)
 		if err != nil {
 			if errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
 				tracer.WithTrace(timeoutCtx).Errorf("codegraph summary query timed out after %v", timeout)
@@ -193,6 +186,16 @@ func (l *SummaryLogic) Summary(req *types.IndexSummaryRequest) (*types.IndexSumm
 	}
 
 	return resp, nil
+}
+
+func getCodegraphSummary(ctx context.Context, codebase *model.Codebase) (*types.CodeGraphSummary, error) {
+	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebase.Path, types.CodebaseIndexDir)))
+	defer graphStore.Close()
+	if err != nil {
+		tracer.WithTrace(ctx).Errorf("failed to open graph store, err:%w", err)
+		return nil, err
+	}
+	return graphStore.GetIndexSummary(ctx, codebase.ID, codebase.Path)
 }
 
 func convertStatus(status string) string {

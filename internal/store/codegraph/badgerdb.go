@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
@@ -21,6 +22,9 @@ import (
 )
 
 const dbName = "badger.db"
+
+const openMaxRetries = 3
+const openRetryInterval = time.Second
 
 // BadgerDBGraph implements GraphStore using BadgerDB
 type BadgerDBGraph struct {
@@ -61,14 +65,27 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 
 	badgerOpts = badgerOpts.WithLoggingLevel(badger.WARNING)
 
-	// Open database
-	badgerDB, err := badger.Open(badgerOpts)
+	badgerDB, err := openWithRetry(badgerOpts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open graph database:%w", err)
 	}
 
 	b.db = badgerDB
 	return b, nil
+}
+
+func openWithRetry(badgerOpts badger.Options) (*badger.DB, error) {
+	var badgerDB *badger.DB
+	var err error
+	for i := 1; i <= openMaxRetries; i++ {
+		badgerDB, err = badger.Open(badgerOpts)
+		if err == nil {
+			break
+		}
+		logx.Errorf("badger db  open failed, retrying %d/%d", i, openMaxRetries)
+		time.Sleep(openRetryInterval)
+	}
+	return badgerDB, err
 }
 
 type GraphOption func(*BadgerDBGraph)
@@ -110,7 +127,7 @@ func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*cod
 	return wb.Flush()
 }
 
-// QueryRelation 实现查询接口
+// QueryRelations 实现查询接口
 func (b BadgerDBGraph) QueryRelations(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error) {
 	startTime := time.Now()
 	defer func() {
@@ -563,6 +580,9 @@ func (b BadgerDBGraph) querySymbolsByPosition(ctx context.Context, doc *codegrap
 
 // Close 关闭数据库连接
 func (b BadgerDBGraph) Close() error {
+	if b.db.IsClosed() {
+		return nil
+	}
 	if err := b.db.RunValueLogGC(0.5); err != nil {
 		_ = fmt.Errorf("failed to run value log GC, err:%v", err)
 	}

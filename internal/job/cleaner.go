@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const cleanLockKey = "codebase_indexer:cleaner:lock"
+const cleanLockKey = "codebase_indexer:lock:cleaner"
 const lockTimeout = time.Second * 120
 
 type Cleaner struct {

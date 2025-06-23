@@ -93,7 +93,7 @@ var TestVar = "test"
 		case "test":
 			assert.Equal(t, "package", def.Type)
 		case "TestVar":
-			assert.Equal(t, "declaration.var", def.Type)
+			assert.Equal(t, "global_variable", def.Type)
 		default:
 			t.Errorf("unexpected definition: %s", def.Name)
 		}

@@ -18,7 +18,7 @@ import (
 
 const indexNodeEnableVal = "1"
 const indexNodeEnv = "INDEX_NODE"
-const lockKeyPrefixFmt = "codebase_indexer:lock:%d"
+const lockKeyPrefixFmt = "codebase_indexer:lock:index:%d"
 const DistLockTimeout = time.Minute * 3
 const msgFailedThreshold = 10
 
