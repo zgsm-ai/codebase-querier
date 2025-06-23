@@ -64,10 +64,15 @@ languages:
             - "__sourcePath__:__sourcePath__"
             - "-w"
             - "__sourcePath__"
+            - "-e"
+            - "GOPROXY=https://goproxy.cn,direct"
+            - "-e"
+            - "GOSUMDB=off"
             - "__image__"
             - "scip-go"
             - "--output"
             - "__outputPath__/index.scip"
+            - "-v"
 
   - name: java
     detection_files: ["pom.xml", "build.gradle"]
@@ -95,41 +100,41 @@ languages:
               - "__outputPath__/index.scip"
               - "--"
               - "verify"
+              - "--offline"
               - "--batch-mode"
               - "--fail-never"
               - "-DskipTests"
-              - "--offline"
               - "-T"
               - "8"
-      - name: gradle
-        detection_files: ["build.gradle"]
-        priority: 20
-        build_commands:
-          - base: "docker"
-            args:
-              - "run"
-              - "--rm"
-              - "-v"
-              - "__sourcePath__:__sourcePath__"
-              - "-w"
-              - "__sourcePath__"
-              - "__image__"
-              - "scip-java"
-              - "index"
-              - "--cwd"
-              - "__sourcePath__"
-              - "--targetroot"
-              - "__outputPath__/build"
-              - "--output"
-              - "__outputPath__/index.scip"
-              - "--"
-              - "--offline"
-              - "--continue"
-              - "--no-tests"
-              - "--parallel"
-              - "--max-workers"
-              - "8"
-              - "--no-interactive"
+      # - name: gradle
+      #   detection_files: ["build.gradle"]
+      #   priority: 20
+      #   build_commands:
+      #     - base: "docker"
+      #       args:
+      #         - "run"
+      #         - "--rm"
+      #         - "-v"
+      #         - "__sourcePath__:__sourcePath__"
+      #         - "-w"
+      #         - "__sourcePath__"
+      #         - "__image__"
+      #         - "scip-java"
+      #         - "index"
+      #         - "--cwd"
+      #         - "__sourcePath__"
+      #         - "--targetroot"
+      #         - "__outputPath__/build"
+      #         - "--output"
+      #         - "__outputPath__/index.scip"
+      #         - "--"
+      #         - "--offline"
+      #         - "--continue"
+      #         - "--no-tests"
+      #         - "--parallel"
+      #         - "--max-workers"
+      #         - "8"
+      #         - "--no-interactive"
     index:
       name: scip-java
       commands:
@@ -172,7 +177,9 @@ languages:
             - "-w"
             - "__sourcePath__"
             - "__image__"
-            - "scip-python"
+            - "node"
+            - "--max-old-space-size=16000" #16g
+            - "/usr/bin/scip-python"
             - "index"
             - "--output"
             - "__outputPath__/index.scip"
@@ -265,7 +272,7 @@ languages:
               - "-w"
               - "__sourcePath__"
               - "__image__"
-              - "bare"
+              - "bear"
               - "--output"
               - "__outputPath__/build/compile_commands.json"
               - "--"
@@ -289,7 +296,7 @@ languages:
               - "__image__"
               - "bash"
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
     index:
       name: scip-clang
       commands:
@@ -348,7 +355,7 @@ languages:
               - "-w"
               - "__sourcePath__"
               - "__image__"
-              - "bare"
+              - "bear"
               - "--output"
               - "__outputPath__/build/compile_commands.json"
               - "--"
@@ -373,7 +380,7 @@ languages:
               - "__image__"
               - "bash"
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
 
     index:
       name: scip-clang
@@ -417,6 +424,8 @@ languages:
             - "CARGO_BUILD_JOBS=32"
             - "-e"
             - "RUSTUP_AUTO_INSTALL=0"
+            - "-e"
+            - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"
             - "__image__"
             - "rust-analyzer"
             - "scip"
@@ -428,3 +437,4 @@ languages:
             - "NUM_JOBS=32"
             - "CARGO_BUILD_JOBS=32"
             - "RUSTUP_AUTO_INSTALL=0"
+            - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"

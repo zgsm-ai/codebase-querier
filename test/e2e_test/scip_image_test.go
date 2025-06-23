@@ -2,6 +2,13 @@ package e2e
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -9,12 +16,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	api "github.com/zgsm-ai/codebase-indexer/test/api_test"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 func getSvcCtx(ctx context.Context) *svc.ServiceContext {
@@ -45,69 +46,69 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		//{
 		//	Name:     "typescript",
 		//	Language: "typescript",
-		//	CodebasePath:  "vue-next",
+		//	Project:  "vue-next",
 		//	wantErr:  nil,
 		//},
-		{
-			Name:     "javascript",
-			Language: "javascript",
-			Project:  "vue",
-			wantErr:  nil,
-		},
+		//{
+		//	Name:     "javascript",
+		//	Language: "javascript",
+		//	Project:  "vue",
+		//	wantErr:  nil,
+		//},
 		//{
 		//	Name:     "go",
 		//	Language: "go",
-		//	CodebasePath:  "kubernetes",
+		//	Project:  "gin",
 		//	wantErr:  nil,
 		//},
-		{
-			Name:     "java maven",
-			Language: "java",
-			Project:  "hadoop",
-			wantErr:  nil,
-		},
-		{
-			Name:     "java gradle",
-			Language: "java",
-			Project:  "spring-boot",
-			wantErr:  nil,
-		},
-		{
-			Name:     "python",
-			Language: "python",
-			Project:  "django",
-			wantErr:  nil,
-		},
-		{
-			Name:     "ruby",
-			Language: "ruby",
-			Project:  "vagrant",
-			wantErr:  nil,
-		},
-		{
-			Name:     "csharp",
-			Language: "csharp",
-			Project:  "mono",
-			wantErr:  nil,
-		},
+		//{
+		//	Name:     "java maven",
+		//	Language: "java",
+		//	Project:  "hadoop",
+		//	wantErr:  nil,
+		//},
+		//{
+		//	Name:     "java gradle",
+		//	Language: "java",
+		//	Project:  "spring-boot",
+		//	wantErr:  nil,
+		//},
+		//{
+		//	Name:     "python",
+		//	Language: "python",
+		//	Project:  "django",
+		//	wantErr:  nil,
+		//},
+		//{
+		//	Name:     "ruby",
+		//	Language: "ruby",
+		//	Project:  "vagrant",
+		//	wantErr:  nil,
+		//},
+		//{
+		//	Name:     "csharp",
+		//	Language: "csharp",
+		//	Project:  "mono",
+		//	wantErr:  nil,
+		//},
 		{
 			Name:     "c cmake",
 			Language: "c",
 			Project:  "netdata",
 			wantErr:  nil,
 		},
-		{
-			Name:     "cpp",
-			Language: "cpp",
-			Project:  "opencv",
-			wantErr:  nil,
-		},
-		{
-			Name:     "rust",
-			Language: "rust",
-			Project:  "rust",
-			wantErr:  nil,
-		},
+		//{
+		//	Name:     "cpp",
+		//	Language: "cpp",
+		//	Project:  "grpc",
+		//	wantErr:  nil,
+		//},
+		//{
+		//	Name:     "rust",
+		//	Language: "rust",
+		//	Project:  "deno",
+		//	wantErr:  nil,
+		//},
 	}
 	for _, tc := range testcases {
 

@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zgsm-ai/codebase-indexer/internal/config"
-	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
 // CommandExecutor handles command execution for SCIP indexing
@@ -122,6 +123,7 @@ func (e *CommandExecutor) Execute(ctx context.Context) error {
 	start := time.Now()
 
 	tracer.WithTrace(ctx).Infof("[%s] scip index generator start to execute index commands.", e.workDir)
+	e.cmdLoggerWriter.Write([]byte("-----------------------------------"))
 	_, logErr := e.cmdLoggerWriter.Write([]byte(fmt.Sprintf("[%s] start to execute index command", e.workDir)))
 	if logErr != nil {
 		tracer.WithTrace(ctx).Errorf("[%s] scip index generator command write log err:%v", logErr)

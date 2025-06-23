@@ -6,8 +6,10 @@ languages:
     index:
       name: scip-typescript
       commands:
-        - base: "scip-typescript"
+        - base: "node"
           args:
+            - "--max-old-space-size=16000"
+            - "/usr/bin/scip-typescript"
             - "index"
             - "--cwd"
             - "__sourcePath__"
@@ -22,8 +24,10 @@ languages:
     index:
       name: scip-typescript
       commands:
-        - base: "scip-typescript"
+        - base: "node"
           args:
+            - "--max-old-space-size=16000"
+            - "/usr/bin/scip-typescript"
             - "index"
             - "--cwd"
             - "__sourcePath__"
@@ -40,6 +44,7 @@ languages:
           args:
             - "--output"
             - "__outputPath__/index.scip"
+            - "-v"
 
   - name: java
     detection_files: ["pom.xml", "build.gradle"]
@@ -49,13 +54,13 @@ languages:
         priority: 10 # Maven priority (lower number is higher priority)
         build_commands:
           - base: "mvn"
-            args: ["verify", "--batch-mode", "--fail-never", "-DskipTests", "--offline", "-T", "8"]
-      - name: gradle
-        detection_files: ["build.gradle"]
-        priority: 20 # Gradle priority
-        build_commands:
-          - base: "gradle"
-            args: ["--offline", "--continue", "--no-tests", "--parallel", "--max-workers", "8", "--no-interactive"]
+            args: ["verify", "--batch-mode", "--fail-never", "-DskipTests", "-T", "8"]
+      # - name: gradle
+      #   detection_files: ["build.gradle"]
+      #   priority: 20 # Gradle priority
+      #   build_commands:
+      #     - base: "gradle"
+      #       args: ["--offline", "--continue", "--no-tests", "--parallel", "--max-workers", "8", "--no-interactive"]
     index:
       name: scip-java
       commands:
@@ -89,8 +94,10 @@ languages:
     index:
       name: scip-python
       commands:
-        - base: "scip-python"
+        - base: "node"
           args:
+            - "--max-old-space-size=16000"
+            - "/usr/bin/scip-python"
             - "index"
             - "--output"
             - "__outputPath__/index.scip"
@@ -115,20 +122,20 @@ languages:
             - "--gem-metadata"
             - "ruby@v0.0.1"
 
-  - name: csharp
-    detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
-    index:
-      name: scip-dotnet
-      commands:
-        - base: "scip-dotnet"
-          args:
-            - "index"
-            - "--output"
-            - "__outputPath__/index.scip"
-            - "--working-directory"
-            - "__sourcePath__"
-            - "--skip-dotnet-restore"
-            - "True"
+  # - name: csharp
+  #   detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
+  #   index:
+  #     name: scip-dotnet
+  #     commands:
+  #       - base: "scip-dotnet"
+  #         args:
+  #           - "index"
+  #           - "--output"
+  #           - "__outputPath__/index.scip"
+  #           - "--working-directory"
+  #           - "__sourcePath__"
+  #           - "--skip-dotnet-restore"
+  #           - "True"
 
   - name: c
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
@@ -150,7 +157,7 @@ languages:
         detection_files: ["Makefile"]
         priority: 20
         build_commands:
-          - base: "bare"
+          - base: "bear"
             args:
               - "--output"
               - "__outputPath__/build/compile_commands.json"
@@ -167,7 +174,7 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
     index:
       name: scip-clang
       commands:
@@ -200,7 +207,7 @@ languages:
         detection_files: ["Makefile"]
         priority: 20 # Make second priority
         build_commands:
-          - base: "bare"
+          - base: "bear"
             args:
               - "--output"
               - "__outputPath__/build/compile_commands.json"
@@ -217,7 +224,7 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bare --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
     index:
       name: scip-clang
       commands:
@@ -246,3 +253,4 @@ languages:
             - "NUM_JOBS=32"
             - "CARGO_BUILD_JOBS=32"
             - "RUSTUP_AUTO_INSTALL=0"
+            - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 目标目录
-TARGET_DIR="/tmp/projects"
+TARGET_DIR="/test/tmp/projects"
 mkdir -p ${TARGET_DIR}
 
 # 使用普通数组和分隔符定义每种语言的多个项目
@@ -24,8 +24,8 @@ LANGUAGES=(
 C_PROJECTS="git@github.com:redis/redis.git|git@github.com:sqlite/sqlite.git|git@github.com:openssl/openssl.git|git@github.com:netdata/netdata.git"
 CPP_PROJECTS="git@github.com:protocolbuffers/protobuf.git|git@github.com:grpc/grpc.git|git@github.com:opencv/opencv.git"
 CSHARP_PROJECTS="git@github.com:dotnet/efcore.git|git@github.com:aspnetcore/AspNetCore.git|git@github.com:mono/mono.git"
-GO_PROJECTS="git@github.com:golang/go.git|git@github.com:kubernetes/kubernetes.git|git@github.com:docker/docker-ce.git"
-JAVA_PROJECTS="git@github.com:spring-projects/spring-boot.git|git@github.com:apache/hadoop.git|git@github.com:elastic/elasticsearch.git"
+GO_PROJECTS="git@github.com:gin-gonic/gin.git|git@github.com:kubernetes/kubernetes.git|git@github.com:hypermodeinc/dgraph.git"
+JAVA_PROJECTS="git@github.com:apache/hadoop.git|git@github.com:apache/maven.git|git@github.com:apache/dubbo.git"
 JAVASCRIPT_PROJECTS="git@github.com:facebook/react.git|git@github.com:vuejs/vue.git|git@github.com:angular/angular.git"
 KOTLIN_PROJECTS="git@github.com:JetBrains/kotlin.git|git@github.com:androidx/androidx.git|git@github.com:Kotlin/kotlinx.coroutines.git"
 PYTHON_PROJECTS="git@github.com:django/django.git|git@github.com:pandas-dev/pandas.git|git@github.com:scikit-learn/scikit-learn.git"

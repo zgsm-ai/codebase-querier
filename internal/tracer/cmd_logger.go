@@ -2,13 +2,14 @@ package tracer
 
 import (
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -104,7 +105,6 @@ type prefixWriter struct {
 }
 
 func (w *prefixWriter) Write(p []byte) (n int, err error) {
-	logx.Debugf("cmd_logger: Writing log, bytes=%d", len(p))
 	// Acquire write lock to ensure thread-safety during file reopening
 	w.logger.mu.Lock()
 	defer w.logger.mu.Unlock()
@@ -157,7 +157,6 @@ func (w *prefixWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	logx.Debugf("cmd_logger: Successfully wrote log, bytes=%d", len(p))
 	return len(p), nil
 }
 
@@ -168,7 +167,6 @@ func (w *prefixWriter) needReopen() bool {
 		now.Month() != w.openTime.Month() ||
 		now.Day() != w.openTime.Day()
 
-	logx.Debugf("cmd_logger: Checking file reopen needed:,result=%t", result)
 	return result
 }
 
