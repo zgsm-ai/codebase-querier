@@ -111,7 +111,7 @@ func (p *DefParser) ProcessDefinitionNode(match *sitter.QueryMatch, query *sitte
 	// 获取名称
 	nodeName := nameNode.Utf8Text(source)
 	if nodeName == "" {
-		return nil, fmt.Errorf("no name found for QueryDefinition")
+		return nil, fmt.Errorf("no name found for QueryDefinitions")
 	}
 
 	// 获取范围

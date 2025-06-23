@@ -111,10 +111,10 @@ func (b BadgerDBGraph) BatchWriteCodeStructures(ctx context.Context, docs []*cod
 }
 
 // QueryRelation 实现查询接口
-func (b BadgerDBGraph) QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error) {
+func (b BadgerDBGraph) QueryRelations(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error) {
 	startTime := time.Now()
 	defer func() {
-		tracer.WithTrace(ctx).Infof("QueryRelation execution time: %d ms", time.Since(startTime).Milliseconds())
+		tracer.WithTrace(ctx).Infof("QueryRelations execution time: %d ms", time.Since(startTime).Milliseconds())
 	}()
 
 	// 1. 获取文档
@@ -199,11 +199,11 @@ func (b BadgerDBGraph) QueryRelation(ctx context.Context, opts *types.RelationRe
 	return res, nil
 }
 
-// QueryDefinition 查询定义
-func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error) {
+// QueryDefinitions 查询定义
+func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error) {
 	startTime := time.Now()
 	defer func() {
-		tracer.WithTrace(ctx).Infof("QueryDefinition execution time: %d ms", time.Since(startTime).Milliseconds())
+		tracer.WithTrace(ctx).Infof("QueryDefinitions execution time: %d ms", time.Since(startTime).Milliseconds())
 	}()
 
 	var res []*types.DefinitionNode
@@ -245,7 +245,7 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 		}
 
 		// 根据所找到的call 的name + imports， 去模糊匹配symbol
-		foundSymbolKeys, err := b.fullTextSearchSymbolName(ctx, callNames, importNames)
+		foundSymbolKeys, err := b.searchSymbolNames(ctx, callNames, importNames)
 		if err != nil {
 			return nil, fmt.Errorf("failed to search function/method call names: %w", err)
 		}
@@ -324,12 +324,12 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 				}
 			}
 		} else {
-			tracer.WithTrace(ctx).Errorf("QueryDefinition: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
+			tracer.WithTrace(ctx).Errorf("QueryDefinitions: unsupported symbol %s type %s ", s.Identifier, string(s.Role))
 		}
 	}
 	// 根据struct_doc 重新封装它的 position，变为范围。doc的range是单行。
 	if err := b.refillDefinitionRange(ctx, res); err != nil {
-		tracer.WithTrace(ctx).Errorf("QueryDefinition:  refill definition range err:%v", utils.TruncateError(err))
+		tracer.WithTrace(ctx).Errorf("QueryDefinitions:  refill definition range err:%v", utils.TruncateError(err))
 	}
 
 	return res, nil
@@ -484,11 +484,6 @@ func (b BadgerDBGraph) buildChildrenRecursive(ctx context.Context, node *types.G
 
 // loadValue 查找并反序列化文档
 func (b BadgerDBGraph) loadValue(ctx context.Context, key []byte, data proto.Message) error {
-	startTime := time.Now()
-	defer func() {
-		tracer.WithTrace(ctx).Debugf("loadValue took %v", time.Since(startTime))
-	}()
-
 	if len(key) == 0 {
 		return fmt.Errorf("invalid input: key is empty")
 	}
@@ -741,9 +736,11 @@ func (b BadgerDBGraph) BatchWriteDefSymbolKeysMap(ctx context.Context, defSymbol
 	return wb.Flush()
 }
 
-func (b BadgerDBGraph) fullTextSearchSymbolName(ctx context.Context, names []string, imports []string) ([]*codegraphpb.KeyRange, error) {
+func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, imports []string) ([]*codegraphpb.KeyRange, error) {
 	start := time.Now()
-	var foundKeys []*codegraphpb.KeyRange
+	// 去重
+	names = utils.DeDuplicate(names)
+	foundKeys := make(map[string][]*codegraphpb.KeyRange)
 	err := b.db.View(func(txn *badger.Txn) error {
 		iter := txn.NewIterator(badger.IteratorOptions{})
 		defer iter.Close()
@@ -752,22 +749,22 @@ func (b BadgerDBGraph) fullTextSearchSymbolName(ctx context.Context, names []str
 			if !isSymbolIndexKey(key) {
 				continue
 			}
-			symbolName := string(key)
-			found := false
+			symbolName := strings.TrimPrefix(string(key), symIndexPrefix)
+			var matchName string
 			for _, name := range names {
-				if strings.Contains(symbolName, name) {
-					found = true
+				if symbolName == name { //TODO 是否包含特殊符号？ 将 namespace 放入 KeyRange, 用于过滤（map->[keyRange]）
+					matchName = name
 					break
 				}
-				// TODO imports
+
 			}
-			if !found {
+			if matchName == types.EmptyString {
 				continue
 			}
 
 			item, err := txn.Get(key)
 			if err != nil {
-				tracer.WithTrace(ctx).Errorf("fullTextSearchSymbolName get key %s error:%v", string(key), err)
+				tracer.WithTrace(ctx).Errorf("searchSymbolNames get key %s error:%v", string(key), err)
 				continue
 			}
 			var keyset codegraphpb.KeySet
@@ -780,16 +777,27 @@ func (b BadgerDBGraph) fullTextSearchSymbolName(ctx context.Context, names []str
 				}
 				return nil
 			})
-			if len(keyset.Keys) > 0 {
-				foundKeys = append(foundKeys, keyset.Keys...)
+			if len(keyset.Keys) == 0 {
+				continue
 			}
+			if _, ok := foundKeys[matchName]; !ok {
+				foundKeys[matchName] = make([]*codegraphpb.KeyRange, 0)
+			}
+			foundKeys[matchName] = append(foundKeys[matchName], keyset.Keys...)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	tracer.WithTrace(ctx).Infof("codegraph symbol name fulltext-search end, cost %d ms, doc keys found:%d",
-		time.Since(start).Milliseconds(), len(foundKeys)) // TODO 同一个name可能检索出多条数据，再根据import 过滤一遍。
-	return foundKeys, nil
+
+	// TODO 同一个name可能检索出多条数据，再根据import 过滤一遍。 namespace 要么用. 要么用/ 得判断
+	result := make([]*codegraphpb.KeyRange, 0, len(foundKeys))
+	for _, v := range foundKeys {
+		result = append(result, v...)
+	}
+	// TODO 根据 imports 过滤
+	tracer.WithTrace(ctx).Infof("codegraph symbol name search end, cost %d ms, names: %d, key found:%d",
+		time.Since(start).Milliseconds(), len(names), len(result))
+	return result, nil
 }

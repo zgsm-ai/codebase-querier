@@ -146,7 +146,7 @@ func TestQueryBadgerDB(t *testing.T) {
 	// 4. 执行查询
 	targetPath := "cmd/kubeadm/app/util/endpoint.go"
 	t.Logf("\nQuerying for file: %s\n", targetPath)
-	references, err := graph.QueryRelation(ctx, &types.RelationRequest{
+	references, err := graph.QueryRelations(ctx, &types.RelationRequest{
 		FilePath:   targetPath,
 		StartLine:  37,
 		EndLine:    37,

@@ -83,7 +83,7 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 	defer graphStore.Close()
 
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
-	nodes, err := graphStore.QueryDefinition(ctx, req)
+	nodes, err := graphStore.QueryDefinitions(ctx, req)
 	if err != nil {
 		return nil, err
 	}

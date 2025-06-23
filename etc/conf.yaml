@@ -2,7 +2,7 @@ Name: codebase-indexer
 Host: 0.0.0.0
 Port: 8888
 #Timeout: 30000 #ms
-Timeout: 3000000 #ms，debug使用，300s
+Timeout: 300000 #ms，debug使用，300s
 MaxBytes: 104857600 # 100MB
 MaxConns: 100
 Verbose: false
@@ -21,7 +21,8 @@ Database:
 IndexTask:
   Topic: "codebase_indexer:mq:sync"
   PoolSize: 20
-  LockTimeout: 300s
+  QueueSize: 100
+  LockTimeout: 310s
   EmbeddingTask:
     MaxConcurrency: 10
     Timeout: 300s

@@ -74,7 +74,7 @@ func (l *RelationLogic) Relation(req *types.RelationRequest) (resp *types.Relati
 	defer graphStore.Close()
 
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
-	nodes, err := graphStore.QueryRelation(ctx, req)
+	nodes, err := graphStore.QueryRelations(ctx, req)
 	if err != nil {
 		return nil, err
 	}

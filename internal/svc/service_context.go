@@ -141,7 +141,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	// 初始化协程池
 	taskPool, err := ants.NewPool(svcCtx.Config.IndexTask.PoolSize, ants.WithOptions(
 		ants.Options{
-			MaxBlockingTasks: 1000, // max queue tasks, if queue is full, will block
+			MaxBlockingTasks: svcCtx.Config.IndexTask.QueueSize, // max queue tasks, if queue is full, will block
 			Nonblocking:      false,
 		},
 	))

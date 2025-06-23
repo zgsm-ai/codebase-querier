@@ -21,8 +21,8 @@ data:
     Name: codebase-indexer
     Host: 0.0.0.0
     Port: 8888
-    Timeout: 30000 #ms
-    MaxConns: 100
+    Timeout: 120000 #ms
+    MaxConns: 500
     MaxBytes: 104857600 # 100MB
     DevServer:
       Enabled: true
@@ -38,18 +38,19 @@ data:
         enable: true    
     IndexTask:
       PoolSize: 50
-      LockTimeout: 300s
+      QueueSize: 100
+      LockTimeout: 610s
       Topic: "codebase_indexer:mq:sync"
       EmbeddingTask:
         PoolSize: 10
         MaxConcurrency: 10
-        Timeout: 120s
+        Timeout: 600s
         OverlapTokens: 100
         MaxTokensPerChunk: 1000
       GraphTask:
         PoolSize: 10
         MaxConcurrency: 10
-        Timeout: 180s
+        Timeout: 600s
         ConfFile: "/app/conf/codegraph.yaml"
     
     Cleaner:

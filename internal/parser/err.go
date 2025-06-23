@@ -13,7 +13,7 @@ var ErrQueryNotFound = errors.New("query not found")
 var (
 	ErrNoCaptures   = errors.New("no captures in match")
 	ErrMissingNode  = errors.New("captured def or name node is missing")
-	ErrNoDefinition = errors.New("no QueryDefinition node found")
+	ErrNoDefinition = errors.New("no QueryDefinitions node found")
 )
 
 // IsRealQueryErr prevent *sitter.QueryError(nil)

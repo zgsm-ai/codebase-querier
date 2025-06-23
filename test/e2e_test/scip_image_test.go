@@ -143,24 +143,24 @@ func TestCodegraphConfig(t *testing.T) {
 		Project  string
 		wantErr  error
 	}{
-		//{
-		//	Name:     "typescript",
-		//	Language: "typescript",
-		//	CodebasePath:  "vue-next",
-		//	wantErr:  nil,
-		//},
+		{
+			Name:     "typescript",
+			Language: "typescript",
+			Project:  "vue-next",
+			wantErr:  nil,
+		},
 		{
 			Name:     "javascript",
 			Language: "javascript",
 			Project:  "vue",
 			wantErr:  nil,
 		},
-		//{
-		//	Name:     "go",
-		//	Language: "go",
-		//	CodebasePath:  "kubernetes",
-		//	wantErr:  nil,
-		//},
+		{
+			Name:     "go",
+			Language: "go",
+			Project:  "kubernetes",
+			wantErr:  nil,
+		},
 		{
 			Name:     "java maven",
 			Language: "java",

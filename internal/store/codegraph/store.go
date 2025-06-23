@@ -24,10 +24,10 @@ type GraphStore interface {
 	BatchWriteDefSymbolKeysMap(ctx context.Context, symbolKeysMap map[string]*codegraphpb.KeySet) error
 
 	// QueryRelation 查询接口
-	QueryRelation(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)
+	QueryRelations(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)
 
-	// QueryDefinition 查询定义
-	QueryDefinition(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error)
+	// QueryDefinitions 查询定义
+	QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error)
 
 	// Close 数据库操作
 	Close() error
