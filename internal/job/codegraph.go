@@ -104,7 +104,7 @@ func (t *codegraphProcessor) Process(ctx context.Context) error {
 }
 
 func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
-	tracer.WithTrace(ctx).Infof("start to execute code structure task %v", t.params)
+	tracer.WithTrace(ctx).Info("start to execute code structure task.")
 	start := time.Now()
 
 	t.totalFileCnt = int32(len(t.syncFileModeMap))
@@ -196,6 +196,6 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 		}
 	}
 
-	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d ms, total:%d, success:%d, failed:%d, params: %+v,",
-		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt, t.params)
+	tracer.WithTrace(ctx).Infof("code structure end successfully, cost: %d ms, total: %d, success: %d, failed: %d",
+		time.Since(start).Milliseconds(), t.totalFileCnt, t.successFileCnt, t.failedFileCnt)
 }

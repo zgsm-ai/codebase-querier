@@ -229,7 +229,7 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 		}
 		imports := parsedData.Imports
 		elements := parsedData.Elements
-		// 找到所有的Call
+		// TODO 找到所有的Call, 当前只处理call
 		var callNames []string
 		for _, e := range elements {
 			if c, ok := e.(*parser.Call); ok {
@@ -250,7 +250,7 @@ func (b BadgerDBGraph) QueryDefinition(ctx context.Context, opts *types.Definiti
 			return nil, fmt.Errorf("failed to search function/method call names: %w", err)
 		}
 		if len(foundSymbolKeys) == 0 {
-			return nil, fmt.Errorf("failed to found function/method call names")
+			return nil, fmt.Errorf("failed to search symbol by function/method call names")
 		}
 		for _, key := range foundSymbolKeys {
 			var document codegraphpb.Document
@@ -790,6 +790,6 @@ func (b BadgerDBGraph) fullTextSearchSymbolName(ctx context.Context, names []str
 		return nil, err
 	}
 	tracer.WithTrace(ctx).Infof("codegraph symbol name fulltext-search end, cost %d ms, doc keys found:%d",
-		time.Since(start).Milliseconds(), len(foundKeys))
+		time.Since(start).Milliseconds(), len(foundKeys)) // TODO 同一个name可能检索出多条数据，再根据import 过滤一遍。
 	return foundKeys, nil
 }

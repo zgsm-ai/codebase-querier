@@ -132,7 +132,7 @@ func (p *baseProcessor) processFilesConcurrently(
 		select {
 		case <-ctx.Done():
 			duration := time.Since(start)
-			tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+			tracer.WithTrace(ctx).Infof("processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 			return errs.RunTimeout
 		default:
 			wg.Add(1)
@@ -162,11 +162,11 @@ func (p *baseProcessor) processFilesConcurrently(
 	select {
 	case <-ctx.Done():
 		duration := time.Since(start)
-		tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		tracer.WithTrace(ctx).Infof("processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 		return errs.RunTimeout
 	case <-done:
 		duration := time.Since(start)
-		tracer.WithTrace(ctx).Infof("Processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
+		tracer.WithTrace(ctx).Infof("processed %d files in %v (avg: %v/file)", totalFiles, duration.Round(time.Millisecond), (duration / time.Duration(totalFiles)).Round(time.Microsecond))
 		if len(runErrs) > 0 {
 			if len(runErrs) > 10 {
 				return fmt.Errorf("process files failed (showing last 10 errors): %w", errors.Join(runErrs[len(runErrs)-10:]...))

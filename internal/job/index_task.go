@@ -7,6 +7,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"time"
 )
 
 type IndexTask struct {
@@ -26,6 +27,7 @@ type IndexTaskParams struct {
 }
 
 func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool) {
+	start := time.Now()
 	tracer.WithTrace(ctx).Infof("start to run index task.")
 	// 解锁
 	defer func() {
@@ -48,7 +50,8 @@ func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool
 	if embedTaskOk && graphTaskOk {
 		i.cleanProcessedMetadataFile(ctx)
 	}
-	tracer.WithTrace(ctx).Infof("index task run end.")
+	tracer.WithTrace(ctx).Infof("index task end, cost %d ms. embedding ok ? %t, graph ? %t",
+		time.Since(start).Milliseconds(), embedTaskOk, graphTaskOk)
 	return
 }
 
@@ -57,6 +60,7 @@ func (i *IndexTask) buildCodeGraph(ctx context.Context) error {
 		tracer.WithTrace(ctx).Infof("codegraph build is disabled, not process.")
 		return nil
 	}
+	start := time.Now()
 	codegraphTimeout, graphTimeoutCancel := context.WithTimeout(ctx, i.SvcCtx.Config.IndexTask.GraphTask.Timeout)
 	defer graphTimeoutCancel()
 
@@ -68,17 +72,17 @@ func (i *IndexTask) buildCodeGraph(ctx context.Context) error {
 	if err = gProcessor.Process(codegraphTimeout); err != nil {
 		return fmt.Errorf("codegraph task failed, err:%w", err)
 	}
-	tracer.WithTrace(ctx).Infof("codegraph task successfully.")
+	tracer.WithTrace(ctx).Infof("codegraph task end successfully, cost %d ms.", time.Since(start).Milliseconds())
 	return nil
 }
 
 func (i *IndexTask) buildEmbedding(ctx context.Context) error {
-
 	if !i.Params.EnableEmbeddingBuild {
 		tracer.WithTrace(ctx).Infof("embedding build is disabled, not process.")
 		return nil
 	}
 
+	start := time.Now()
 	embeddingTimeout, embeddingTimeoutCancel := context.WithTimeout(ctx, i.SvcCtx.Config.IndexTask.EmbeddingTask.Timeout)
 	defer embeddingTimeoutCancel()
 	eProcessor, err := NewEmbeddingProcessor(i.SvcCtx, i.Params, i.Params.SyncMetaFiles.FileModelMap)
@@ -89,7 +93,7 @@ func (i *IndexTask) buildEmbedding(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("embedding task failed, err:%w", err)
 	}
-	tracer.WithTrace(ctx).Infof("embedding task successfully.")
+	tracer.WithTrace(ctx).Infof("embedding task end successfully, cost %d ms.", time.Since(start).Milliseconds())
 	return nil
 }
 
@@ -97,11 +101,13 @@ func (i *IndexTask) cleanProcessedMetadataFile(ctx context.Context) {
 	if len(i.Params.SyncMetaFiles.MetaFilePaths) == 0 {
 		tracer.WithTrace(ctx).Infof("sync meta file list is empty, not clean.")
 		return
-	}
-	tracer.WithTrace(ctx).Infof("start to clean sync meta file, codebasePath:%s, paths:%v", i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths)
+	} //TODO 改为rename成临时文件，然后定时清理。
+	tracer.WithTrace(ctx).Infof("start to clean sync meta file, codebasePath:%s, meta file cnt:%v",
+		i.Params.CodebasePath, len(i.Params.SyncMetaFiles.MetaFilePaths))
 	// TODO 当调用链和嵌入任务都成功时，清理元数据文件。改为移动到另一个隐藏文件夹中，每天定时清理，便于排查问题。
 	if err := i.SvcCtx.CodebaseStore.BatchDelete(ctx, i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths); err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to delete codebase %s metadata : %v, err: %v", i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths, err)
+		tracer.WithTrace(ctx).Errorf("failed to delete codebase %s metadata : %v, err: %v",
+			i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths, err)
 	}
 	tracer.WithTrace(ctx).Infof("clean %s sync meta files successfully.", i.Params.CodebasePath)
 }

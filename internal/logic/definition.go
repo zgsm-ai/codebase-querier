@@ -41,6 +41,11 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 	if req.CodebasePath == types.EmptyString {
 		return nil, errs.NewMissingParamError(types.CodebasePath)
 	}
+	// 支持三种检索方式：（FilePath 必传）
+	// 1. 根据行号
+	// 2. 根据代码片段模糊检索（解析出其中的符号）
+	// 3. 根据符号模糊搜索 （TODO，还未实现）
+
 	if req.StartLine <= 0 {
 		req.StartLine = 1
 	}

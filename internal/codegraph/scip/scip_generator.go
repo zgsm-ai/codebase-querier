@@ -72,7 +72,7 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, cmdLogger *tra
 	if build != nil {
 		buildToolName = build.Name
 	}
-	tracer.WithTrace(ctx).Infof("scip_generator detect language successfully, cost %d ms. [%s] index tool is [%s], build tool is [%s]",
+	tracer.WithTrace(ctx).Infof("scip_generator detect language successfully, cost %d ms. index tool is [%s], build tool is [%s]",
 		time.Since(start).Milliseconds(), index.Name, buildToolName)
 
 	placeHolders := map[string]string{
@@ -93,7 +93,7 @@ func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath
 	// 通过Walk统计文件频率
 	languageStats := make(map[string]int)
 	analyzedFiles := 0
-
+	start := time.Now()
 	err := c.codebaseStore.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
 
 		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
@@ -133,7 +133,8 @@ func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath
 	}, codebase.WalkOptions{
 		IgnoreError: true,
 	})
-
+	tracer.WithTrace(ctx).Infof("scip_generator detect language analyzed %d files, cost %d ms",
+		analyzedFiles, time.Since(start).Milliseconds())
 	if err != nil && !errors.Is(err, maxFileReached) {
 		tracer.WithTrace(ctx).Errorf("failed to analyze codebase: %v", err)
 	}

@@ -24,12 +24,12 @@ IndexTask:
   LockTimeout: 300s
   EmbeddingTask:
     MaxConcurrency: 10
-    Timeout: 120s
+    Timeout: 300s
     OverlapTokens: 100
     MaxTokensPerChunk: 1000
   GraphTask:
     MaxConcurrency: 10
-    Timeout: 180s
+    Timeout: 300s
     ConfFile: "etc/codegraph.yaml"
 
 Cleaner:

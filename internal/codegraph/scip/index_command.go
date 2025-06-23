@@ -121,10 +121,10 @@ func replacePlaceHolder(base string, placeHolders map[string]string) string {
 func (e *CommandExecutor) Execute(ctx context.Context) error {
 	start := time.Now()
 
-	tracer.WithTrace(ctx).Infof("[%s] scip index generator command is starting.", e.workDir)
+	tracer.WithTrace(ctx).Infof("[%s] scip index generator start to execute index commands.", e.workDir)
 	_, logErr := e.cmdLoggerWriter.Write([]byte(fmt.Sprintf("[%s] start to execute index command", e.workDir)))
 	if logErr != nil {
-		tracer.WithTrace(ctx).Errorf("[%s] scip index generator cmd write log err:%v", logErr)
+		tracer.WithTrace(ctx).Errorf("[%s] scip index generator command write log err:%v", logErr)
 	}
 
 	var err error
