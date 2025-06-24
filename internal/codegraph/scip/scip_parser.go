@@ -8,7 +8,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/sourcegraph/scip/bindings/go/scip"
@@ -206,10 +205,6 @@ func (i *IndexParser) prepareVisit(file io.Reader) (*ScipMetadata, error) {
 		},
 		VisitDocument: func(d *scip.Document) {
 			result.DocCountByPath[d.RelativePath]++
-			if strings.Contains(d.RelativePath, "webhook.go") {
-				logx.Infof("scip_parser prepareVisit file %s", d.RelativePath)
-			}
-
 			// 处理occurrences
 			for _, occ := range d.Occurrences {
 				// 跳过local

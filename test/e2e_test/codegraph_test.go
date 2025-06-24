@@ -93,7 +93,7 @@ func (c *CompletedConfig) NewCoreGenericConfig() *corerest.GenericConfig {
 func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryInterface) ([]RESTStorageProvider, error) {
 	// The order here is preserved in discovery.
 	// If resources with identical names exist in more than one of these groups (e.g. "deployments.apps"" and "deployments.extensions"),
-	// the order of this list determines which group an unqualified resource name (e.g. "deployments") should prefer.
+	// the order of this list determines which group an unqualified resource language (e.g. "deployments") should prefer.
 	// This priority order is used for local discovery, but it ends up aggregated in k8s.io/kubernetes/cmd/kube-apiserver/app/aggregator.go
 	// with specific priorities.
 	// TODO: describe the priority all the way down in the RESTStorageProviders and plumb it back through the various discovery
@@ -157,11 +157,11 @@ func (s *Server) InstallAPIs(restStorageProviders ...RESTStorageProvider) error 
 		klog.V(1).Infof("Enabling API group %q.", groupName)
 
 		if postHookProvider, ok := restStorageBuilder.(genericapiserver.PostStartHookProvider); ok {
-			name, hook, err := postHookProvider.PostStartHook()
+			language, hook, err := postHookProvider.PostStartHook()
 			if err != nil {
 				return fmt.Errorf("error building PostStartHook: %w", err)
 			}
-			s.GenericAPIServer.AddPostStartHookOrDie(name, hook)
+			s.GenericAPIServer.AddPostStartHookOrDie(language, hook)
 		}
 
 		if len(groupName) == 0 {
