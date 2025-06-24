@@ -1,7 +1,7 @@
 (using_directive
-  (identifier)* @using.name
-  (qualified_name name: (identifier)@using.name )*
-  ) @using
+  (identifier)* @import.name
+  (qualified_name name: (identifier)@import.name )*
+  ) @import
 
 (namespace_declaration
   name: (identifier) @namespace.name

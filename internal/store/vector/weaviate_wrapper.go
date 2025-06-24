@@ -292,7 +292,7 @@ func (r *weaviateWrapper) UpsertCodeChunks(ctx context.Context, docs []*types.Co
 		return nil
 	}
 	// TODO 事务保障
-	// 先删除已有的相同codebaseId和FilePath的数据，避免重复  TODO 启动一个定时任务，清理重复数据。根据CodebaseId、FilePath、Content 去重。
+	// 先删除已有的相同codebaseId和FilePath的数据，避免重复  TODO 启动一个定时任务，清理重复数据。根据CodebaseId、FilePaths、Content 去重。
 	err := r.DeleteCodeChunks(ctx, docs, options)
 	if err != nil {
 		tracer.WithTrace(ctx).Errorf("[%s]failed to delete existing code chunks before upsert: %v", docs[0].CodebasePath, err)
@@ -318,7 +318,7 @@ func (r *weaviateWrapper) InsertCodeChunks(ctx context.Context, docs []*types.Co
 	objs := make([]*models.Object, len(chunks), len(chunks))
 	for i, c := range chunks {
 		if c.FilePath == types.EmptyString || c.CodebaseId == 0 || c.CodebasePath == types.EmptyString {
-			return fmt.Errorf("invalid chunk to write: required fields: CodebaseId, CodebasePath, FilePath")
+			return fmt.Errorf("invalid chunk to write: required fields: CodebaseId, CodebasePath, FilePaths")
 		}
 		objs[i] = &models.Object{
 			ID:     strfmt.UUID(uuid.New().String()),

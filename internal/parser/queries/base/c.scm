@@ -1,7 +1,7 @@
 (preproc_include
-  path: (system_lib_string)* @include.name
-  path: (string_literal)* @include.name
-  ) @include
+  path: (system_lib_string)* @import.name
+  path: (string_literal)* @import.name
+  ) @import
 
 ;; Macro definitions
 (preproc_def

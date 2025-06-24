@@ -279,7 +279,7 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 			//symbolDef = &codegraphpb.Symbol{
 			//	Language: symbolName,
 			//	Role: codegraphpb.RelationType_RELATION_DEFINITION,
-			//	FilePath: relativePath,
+			//	FilePaths: relativePath,
 			//}
 		}
 	}
@@ -326,7 +326,7 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 				})
 				// 定义 -> 引用
 				symbolDef.Relations = append(symbolDef.Relations, &codegraphpb.Relation{
-					Name:         occurSymbol.Identifier,
+					Name:         occurSymbol.Name,
 					Identifier:   occurSymbol.Identifier,
 					FilePath:     relativePath,
 					Range:        occ.Range,

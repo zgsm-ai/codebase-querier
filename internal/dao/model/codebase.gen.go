@@ -18,7 +18,7 @@ type Codebase struct {
 	Name          string     `gorm:"column:name;not null;comment:Name of the project repository" json:"name"`                                // Name of the project repository
 	ClientPath    string     `gorm:"column:client_path;not null;comment:Local path of the project on the user's machine" json:"client_path"` // Local path of the project on the user's machine
 	Status        string     `gorm:"column:status;not null" json:"status"`
-	Path          string     `gorm:"column:path;not null;comment:FilePath of the codebase" json:"path"`                                               // Path of the codebase
+	Path          string     `gorm:"column:path;not null;comment:FilePaths of the codebase" json:"path"`                                               // Path of the codebase
 	FileCount     int32      `gorm:"column:file_count;not null;comment:Number of files in the project" json:"file_count"`                         // Number of files in the project
 	TotalSize     int64      `gorm:"column:total_size;not null;comment:Total size of the project (in bytes)" json:"total_size"`                   // Total size of the project (in bytes)
 	ExtraMetadata *string    `gorm:"column:extra_metadata;comment:Additional metadata about the project" json:"extra_metadata"`                   // Additional metadata about the project

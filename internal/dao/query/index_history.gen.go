@@ -56,7 +56,7 @@ type indexHistory struct {
 	ID                field.Int32   // Unique identifier for the index task history record
 	SyncID            field.Int32   // ID of the associated synchronization history record
 	CodebaseID        field.Int32   // ID of the associated project repository
-	CodebasePath      field.String  // FilePath of the project repository
+	CodebasePath      field.String  // FilePaths of the project repository
 	CodebaseName      field.String  // name of the project repository
 	TotalFileCount    field.Int32   // Total number of files
 	TotalSuccessCount field.Int32   // Total success number of files

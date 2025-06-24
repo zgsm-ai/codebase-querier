@@ -2,10 +2,11 @@ package parser
 
 import (
 	"context"
+	"strings"
+
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
-	"strings"
 )
 
 type ParsedSource struct {
@@ -42,17 +43,18 @@ type BaseElement struct {
 	Children         []CodeElement
 }
 
-// Package 表示代码包
-type Package struct {
-	*BaseElement
-}
-
 // Import 表示导入语句
 type Import struct {
 	*BaseElement
-	Source   string
-	Alias    string
-	FullName string
+	Source    string
+	Alias     string
+	FullName  string
+	FilePaths []string // 相对于项目root的路径（排除标准库/第三方包）
+}
+
+// Package 表示代码包
+type Package struct {
+	*BaseElement
 }
 
 // Function 表示函数

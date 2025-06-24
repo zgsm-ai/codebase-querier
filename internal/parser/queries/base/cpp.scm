@@ -1,11 +1,11 @@
 (preproc_include
-  path: (system_lib_string)* @include.name
-  path: (string_literal)* @include.name
-  ) @include
+  path: (system_lib_string)* @import.name
+  path: (string_literal)* @import.name
+  ) @import
 
 (using_declaration
-  (identifier) @using.name
-  ) @using
+  (identifier) @import.name
+  ) @import
 
 (namespace_definition
   name: (namespace_identifier) @namespace.name
