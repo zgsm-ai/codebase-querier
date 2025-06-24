@@ -4,8 +4,8 @@
 
 (import_declaration
   (scoped_identifier
-    name: (identifier) @import.name
-    ) @import.full_name
+    name: (identifier)
+    ) @import.name
   ) @import
 
 

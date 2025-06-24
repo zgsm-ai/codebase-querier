@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 
@@ -760,4 +762,78 @@ func (l *localCodebase) BatchDelete(ctx context.Context, codebasePath string, pa
 		return fmt.Errorf("batch delete errors: %v", errs)
 	}
 	return nil
+}
+
+func (l *localCodebase) ResolveSourceRoot(ctx context.Context, codebasePath string, language parser.Language) (string, error) {
+	// SourceRootResolver 默认 SourceRoot 配置（按优先级排序）
+	sourceRootResolver := getSourceRootResolver(ctx, codebasePath, l)
+	resolver, ok := sourceRootResolver[language]
+	if !ok {
+
+		return types.EmptyString, ErrSourceRootResolverNotFound
+	}
+	return resolver()
+
+}
+
+func (l *localCodebase) InferLanguage(ctx context.Context, codebasePath string) (parser.Language, error) {
+	start := time.Now()
+	languageStats := make(map[parser.Language]int)
+	analyzedFiles := 0
+	err := l.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *WalkContext, reader io.ReadCloser) error {
+
+		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
+		if analyzedFiles >= minFilesToAnalyze {
+			totalFiles := 0
+			maxCount := 0
+			for _, count := range languageStats {
+				totalFiles += count
+				if count > maxCount {
+					maxCount = count
+				}
+			}
+			if float64(maxCount)/float64(totalFiles) > 0.6 {
+				return maxFileReached
+			}
+		}
+
+		if analyzedFiles >= defaultMaxFiles {
+			return maxFileReached
+		}
+
+		ext := filepath.Ext(walkCtx.RelativePath)
+		if ext == types.EmptyString {
+			return nil
+		}
+
+		// 使用parser包中的语言配置
+		langConfig, _ := parser.GetLangConfigByFilePath(walkCtx.RelativePath)
+		if langConfig != nil {
+			languageStats[langConfig.Language]++
+		} else {
+			return nil
+		}
+
+		analyzedFiles++
+		return nil
+	}, WalkOptions{
+		IgnoreError: true,
+	})
+
+	tracer.WithTrace(ctx).Infof("scip_generator detect language analyzed %d files, cost %d ms",
+		analyzedFiles, time.Since(start).Milliseconds())
+	if err != nil && !errors.Is(err, maxFileReached) {
+		return types.EmptyString, fmt.Errorf("failed to analyze codebase language: %v", err)
+	}
+
+	// 5. 选择出现频率最高的语言
+	var dominantLanguage parser.Language
+	maxCount := 0
+	for lang, count := range languageStats {
+		if count > maxCount {
+			maxCount = count
+			dominantLanguage = lang
+		}
+	}
+	return dominantLanguage, nil
 }

@@ -2,11 +2,14 @@ package codebase
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
+	"golang.org/x/mod/modfile"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,7 +23,16 @@ const logicAnd = "&"
 const storeTypeLocal = "local"
 const storeTypeMinio = "minio"
 
+const (
+	// 基础限制
+	defaultMaxFiles   = 500 // 默认最大文件数
+	minFilesToAnalyze = 50  // 最少需要分析的文件数
+)
+
+var maxFileReached = errors.New("max files reached")
+
 var ErrStoreTypeNotSupported = errors.New("store type not supported")
+var ErrSourceRootResolverNotFound = errors.New("source root resolver not found")
 
 // generateUniquePath 使用 SHA-256 生成唯一的路径
 // clientId 和 codebasePath 使用 & 作为分隔符，确保不同组合生成不同的 hash
@@ -214,4 +226,50 @@ func CreateTestZip(opts ZipOptions) (string, error) {
 	}
 
 	return zipPath, nil
+}
+
+func getSourceRootResolver(ctx context.Context, codebasePath string, l Store) map[parser.Language]func() (string, error) {
+	sourceRootResolver := map[parser.Language]func() (string, error){
+		parser.Java: func() (string, error) {
+			return "src/main/java", nil
+		},
+		parser.Python: func() (string, error) {
+			return ".", nil
+		},
+		parser.Go: func() (string, error) {
+			goMod, err := l.Read(ctx, codebasePath, "go.mod", types.ReadOptions{})
+			if err != nil {
+				return types.EmptyString, fmt.Errorf("local codebase resolve source root failed: %v", err)
+			}
+			return modfile.ModulePath(goMod), nil
+		},
+		parser.C: func() (string, error) {
+			return "src", nil
+		},
+		parser.CPP: func() (string, error) {
+			return "src", nil
+		},
+		parser.JavaScript: func() (string, error) {
+			return ".", nil
+		},
+		parser.TypeScript: func() (string, error) {
+			return ".", nil
+		},
+		parser.Ruby: func() (string, error) {
+			return "src", nil
+		},
+		parser.Kotlin: func() (string, error) {
+			return "src/main/kotlin", nil
+		},
+		parser.PHP: func() (string, error) {
+			return "src", nil
+		},
+		parser.Scala: func() (string, error) {
+			return "src/main/kotlin", nil
+		},
+		parser.Rust: func() (string, error) {
+			return "src", nil
+		},
+	}
+	return sourceRootResolver
 }

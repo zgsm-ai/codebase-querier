@@ -1,12 +1,12 @@
 (use_declaration
   argument: (scoped_identifier
-              name: (identifier) @use.name) * @use.full_name
+              name: (identifier) ) * @use.name
   argument: (scoped_use_list
               list: (use_list
-                      (self)* @use.name
-                      (identifier) @use.name
-                      (self)* @use.name
-                      )) * @use.full_name
+                      (self)*
+                      (identifier)
+                      (self)*
+                      )) *@use.name
   ) @use
 
 ;; Rust structure query

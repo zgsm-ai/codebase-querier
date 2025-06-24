@@ -3,6 +3,7 @@ package codebase
 import (
 	"context"
 	"errors"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"io"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -72,6 +73,10 @@ type Store interface {
 	DeleteAll(ctx context.Context, codebasePath string) error
 
 	GetSyncFileListCollapse(ctx context.Context, codebasePath string) (file *types.CollapseSyncMetaFile, err error)
+
+	ResolveSourceRoot(ctx context.Context, codebasePath string, language parser.Language) (string, error)
+
+	InferLanguage(ctx context.Context, codebasePath string) (parser.Language, error)
 }
 
 // WalkContext provides context information during directory traversal

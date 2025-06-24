@@ -12,7 +12,6 @@ const (
 	dotOwner      = ".owner"
 	dotSource     = ".source"
 	dotAlias      = ".alias"
-	dotFullName   = ".full_name"
 )
 
 // ElementType 表示代码元素类型，使用字符串字面量作为枚举值
@@ -138,7 +137,6 @@ var (
 	isOwnerCapture      = createSuffixChecker(dotOwner)
 	isSourceCapture     = createSuffixChecker(dotSource)
 	isAliasCapture      = createSuffixChecker(dotAlias)
-	isFullNameCapture   = createSuffixChecker(dotFullName)
 )
 
 // 特殊函数（需要额外判断）保留

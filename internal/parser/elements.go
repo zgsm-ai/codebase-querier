@@ -46,9 +46,8 @@ type BaseElement struct {
 // Import 表示导入语句
 type Import struct {
 	*BaseElement
-	Source    string
-	Alias     string
-	FullName  string
+	Source    string   // from (xxx)
+	Alias     string   // as (xxx)
 	FilePaths []string // 相对于项目root的路径（排除标准库/第三方包）
 }
 
@@ -232,10 +231,6 @@ func (v *Import) Update(ctx context.Context, captureName string,
 
 	if v.Alias == types.EmptyString && isAliasCapture(captureName) {
 		v.Alias = node.Utf8Text(source)
-	}
-
-	if v.FullName == types.EmptyString && isFullNameCapture(captureName) {
-		v.FullName = node.Utf8Text(source)
 	}
 
 	return nil

@@ -48,7 +48,7 @@ type TreeNode struct {
 }
 
 type FileInfo struct {
-	Name    string    `json:"Language"`          // 节点名称
+	Name    string    `json:"language"`          // 节点名称
 	Path    string    `json:"path"`              // 节点路径
 	Size    int64     `json:"size,omitempty"`    // 文件大小（仅文件有）
 	ModTime time.Time `json:"modTime,omitempty"` // 修改时间（可选）

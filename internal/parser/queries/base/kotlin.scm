@@ -2,11 +2,11 @@
 ;; Captures class definitions, function definitions, variable definitions, and more
 
 (package_header
-  (qualified_identifier) @package.full_name
+  (qualified_identifier) @package.name
   ) @package
 
 (import
-  (qualified_identifier) @import.full_name
+  (qualified_identifier) @import.name
   ) @import
 
 ;; Class definitions

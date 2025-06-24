@@ -2,30 +2,21 @@ package scip
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
-	"io"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
 	"sort"
 	"time"
-
-	"github.com/zgsm-ai/codebase-indexer/internal/parser"
-	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
-	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
 const (
 	placeholderSourcePath = "__sourcePath__"
 	placeholderOutputPath = "__outputPath__"
 	indexFileName         = "index.scip"
-	// 基础限制
-	defaultMaxFiles   = 500 // 默认最大文件数
-	minFilesToAnalyze = 50  // 最少需要分析的文件数
 )
-
-var maxFileReached = errors.New("max files reached")
 
 // IndexGenerator represents the SCIP index generator
 type IndexGenerator struct {
@@ -91,69 +82,16 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, cmdLogger *tra
 // DetectLanguageAndTool detects the language and tool for a repository
 func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
 	// 通过Walk统计文件频率
-	languageStats := make(map[string]int)
-	analyzedFiles := 0
-	start := time.Now()
-	err := c.codebaseStore.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *codebase.WalkContext, reader io.ReadCloser) error {
-
-		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
-		if analyzedFiles >= minFilesToAnalyze {
-			totalFiles := 0
-			maxCount := 0
-			for _, count := range languageStats {
-				totalFiles += count
-				if count > maxCount {
-					maxCount = count
-				}
-			}
-			if float64(maxCount)/float64(totalFiles) > 0.6 {
-				return maxFileReached
-			}
-		}
-
-		if analyzedFiles >= defaultMaxFiles {
-			return maxFileReached
-		}
-
-		ext := filepath.Ext(walkCtx.RelativePath)
-		if ext == "" {
-			return nil
-		}
-
-		// 使用parser包中的语言配置
-		langConfig, _ := parser.GetLangConfigByFilePath(walkCtx.RelativePath)
-		if langConfig != nil {
-			languageStats[string(langConfig.Language)]++
-		} else {
-			return nil
-		}
-
-		analyzedFiles++
-		return nil
-	}, codebase.WalkOptions{
-		IgnoreError: true,
-	})
-	tracer.WithTrace(ctx).Infof("scip_generator detect language analyzed %d files, cost %d ms",
-		analyzedFiles, time.Since(start).Milliseconds())
-	if err != nil && !errors.Is(err, maxFileReached) {
-		tracer.WithTrace(ctx).Errorf("failed to analyze codebase: %v", err)
-	}
-
-	// 5. 选择出现频率最高的语言
-	var dominantLanguage string
-	maxCount := 0
-	for lang, count := range languageStats {
-		if count > maxCount {
-			maxCount = count
-			dominantLanguage = lang
-		}
+	dominantLanguage, err := c.codebaseStore.InferLanguage(ctx, codebasePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("scip generator infer language error:%w", err)
 	}
 
 	var langConfig *config.LanguageConfig
 	if dominantLanguage != "" {
 		// 查找对应的语言配置
 		for _, lang := range c.config.Languages {
-			if lang.Name == dominantLanguage {
+			if lang.Name == string(dominantLanguage) {
 				langConfig = lang
 			}
 		}

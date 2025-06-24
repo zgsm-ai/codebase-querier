@@ -277,7 +277,7 @@ func populateSymbolsAndOccurrences(doc *scip.Document, allSymbolDefinitions map[
 		} else { //TODO 带冒号的: scip-go gomod k8s.io/kubernetes . `k8s.io/kubernetes/cluster/images/etcd-version-monitor`/gatherer:MetricFamily. 项目内一些奇怪的东西，应该在prepareVisit中被访问的
 			//logx.Errorf("symbols defSymbol %s definition not found in allSymbolDefinitions", symbolName)
 			//symbolDef = &codegraphpb.Symbol{
-			//	Language: symbolName,
+			//	language: symbolName,
 			//	Role: codegraphpb.RelationType_RELATION_DEFINITION,
 			//	FilePaths: relativePath,
 			//}

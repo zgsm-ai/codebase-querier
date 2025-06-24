@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"io"
 	"path/filepath"
@@ -621,4 +622,20 @@ func (m *minioCodebase) BatchDelete(ctx context.Context, codebasePath string, pa
 		return fmt.Errorf("batch delete errors: %v", errs)
 	}
 	return nil
+}
+
+func (m *minioCodebase) ResolveSourceRoot(ctx context.Context, codebasePath string, language parser.Language) (string, error) {
+	// SourceRootResolver 默认 SourceRoot 配置（按优先级排序）
+	sourceRootResolver := getSourceRootResolver(ctx, codebasePath, m)
+	resolver, ok := sourceRootResolver[language]
+	if !ok {
+
+		return types.EmptyString, ErrSourceRootResolverNotFound
+	}
+	return resolver()
+
+}
+
+func (m *minioCodebase) InferLanguage(ctx context.Context, codebasePath string) (string, error) {
+	panic("implement me")
 }
