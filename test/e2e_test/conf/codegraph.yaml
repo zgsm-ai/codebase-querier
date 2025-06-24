@@ -87,6 +87,8 @@ languages:
               - "--rm"
               - "-v"
               - "__sourcePath__:__sourcePath__"
+              - "-v"
+              - "/root/projects/codebase-indexer/test/e2e_test/conf/settings.xml:/root/.m2/settings.xml"
               - "-w"
               - "__sourcePath__"
               - "__image__"
@@ -100,7 +102,7 @@ languages:
               - "__outputPath__/index.scip"
               - "--"
               - "verify"
-              - "--offline"
+              #- "--offline"
               - "--batch-mode"
               - "--fail-never"
               - "-DskipTests"
@@ -212,28 +214,28 @@ languages:
             - "--gem-metadata"
             - "ruby@v0.0.1"
 
-  - name: csharp
-    detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
-    index:
-      name: scip-dotnet
-      commands:
-        - base: "docker"
-          args:
-            - "run"
-            - "--rm"
-            - "-v"
-            - "__sourcePath__:__sourcePath__"
-            - "-w"
-            - "__sourcePath__"
-            - "__image__"
-            - "scip-dotnet"
-            - "index"
-            - "--output"
-            - "__outputPath__/index.scip"
-            - "--working-directory"
-            - "__sourcePath__"
-            - "--skip-dotnet-restore"
-            - "True"
+  # - name: csharp
+  #   detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
+  #   index:
+  #     name: scip-dotnet
+  #     commands:
+  #       - base: "docker"
+  #         args:
+  #           - "run"
+  #           - "--rm"
+  #           - "-v"
+  #           - "__sourcePath__:__sourcePath__"
+  #           - "-w"
+  #           - "__sourcePath__"
+  #           - "__image__"
+  #           - "scip-dotnet"
+  #           - "index"
+  #           - "--output"
+  #           - "__outputPath__/index.scip"
+  #           - "--working-directory"
+  #           - "__sourcePath__"
+  #           - "--skip-dotnet-restore"
+  #           - "True"
 
   - name: c
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]

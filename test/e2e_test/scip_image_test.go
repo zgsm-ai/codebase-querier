@@ -61,12 +61,12 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		//	Project:  "gin",
 		//	wantErr:  nil,
 		//},
-		//{
-		//	Name:     "java maven",
-		//	Language: "java",
-		//	Project:  "hadoop",
-		//	wantErr:  nil,
-		//},
+		{
+			Name:     "java maven",
+			Language: "java",
+			Project:  "mall",
+			wantErr:  nil,
+		},
 		//{
 		//	Name:     "java gradle",
 		//	Language: "java",
@@ -91,12 +91,12 @@ func TestScipBaseImage_WithOpenSourceProjects(t *testing.T) {
 		//	Project:  "mono",
 		//	wantErr:  nil,
 		//},
-		{
-			Name:     "c cmake",
-			Language: "c",
-			Project:  "netdata",
-			wantErr:  nil,
-		},
+		//{
+		//	Name:     "c make",
+		//	Language: "c",
+		//	Project:  "redis",
+		//	wantErr:  nil,
+		//},
 		//{
 		//	Name:     "cpp",
 		//	Language: "cpp",
