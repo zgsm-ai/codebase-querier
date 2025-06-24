@@ -358,6 +358,33 @@ data:
                 - "CARGO_BUILD_JOBS=32"
                 - "RUSTUP_AUTO_INSTALL=0"
                 - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"
+  settings.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  
+      <localRepository>/tmp/localRepository</localRepository>
+  
+      <pluginGroups>
+      </pluginGroups>
+  
+      <proxies>
+      </proxies>
+  
+      <servers>
+      </servers>
+  
+     <mirrors>
+      <mirror>
+        <id>mirror</id>
+        <mirrorOf>central,jcenter</mirrorOf>
+        <name>mirror</name>            
+       <url>https://maven.aliyun.com/nexus/content/groups/public</url>
+      </mirror>
+    </mirrors>
+  
+    </settings>
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -418,6 +445,9 @@ spec:
           mountPath: /mnt/codebase-store/
         - name: app-conf
           mountPath: /app/conf
+        - name: maven
+          mountPath: /root/.m2
+          subPath: settings.xml
       volumes:
         - name: logs
           emptyDir:
@@ -428,6 +458,12 @@ spec:
         - name: app-conf
           configMap:
             name: codebase-indexer-config
+        - name: maven
+          configMap:
+            name: codebase-indexer-config
+            items:
+              - key: "settings.xml"
+                path: "settings.xml"
 
 ---
 apiVersion: v1
