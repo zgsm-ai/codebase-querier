@@ -5,7 +5,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 // 项目基础配置信息
@@ -33,7 +32,7 @@ func (c *ProjectConfig) buildIndex(files []string) {
 	dirSet := make(map[string]struct{})
 
 	for _, f := range files {
-		dir := filepath.Dir(f)
+		dir := utils.ToUnixPath(filepath.Dir(f))
 		c.dirToFiles[dir] = append(c.dirToFiles[dir], f)
 		c.fileSet[f] = struct{}{}
 		dirSet[dir] = struct{}{}
@@ -55,7 +54,6 @@ type ImportResolver interface {
 // 解析器管理器
 type ResolverManager struct {
 	resolvers map[Language]ImportResolver
-	mu        sync.RWMutex
 }
 
 // 新建解析器管理器
@@ -67,16 +65,12 @@ func NewResolverManager() *ResolverManager {
 
 // 注册解析器
 func (rm *ResolverManager) Register(language Language, resolver ImportResolver) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
 	rm.resolvers[language] = resolver
 }
 
 // 解析导入语句
 func (rm *ResolverManager) ResolveImport(importStmt *Import, currentFilePath string, language Language) error {
-	rm.mu.RLock()
 	resolver, exists := rm.resolvers[language]
-	rm.mu.RUnlock()
 
 	if !exists {
 		return fmt.Errorf("import resolver unsupported language: %s", language)
@@ -164,14 +158,14 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 	if strings.HasPrefix(importName, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
 		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
-		currentDir := filepath.Dir(currentRelPath)
+		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		dots := strings.Count(importName, ".")
 		modulePath := strings.TrimPrefix(importName, strings.Repeat(".", dots))
 
 		// 向上移动目录层级
 		dir := currentDir
 		for i := 0; i < dots-1; i++ {
-			dir = filepath.Dir(dir)
+			dir = utils.ToUnixPath(filepath.Dir(dir))
 		}
 
 		// 构建完整路径
@@ -196,21 +190,18 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 	}
 
 	// 处理绝对导入
-	modulePath := strings.ReplaceAll(importName, ".", "/")
+	importPath := strings.ReplaceAll(importName, ".", "/")
 	foundPaths := []string{}
 
 	// 检查是否为包或模块
 	for _, ext := range []string{"__init__.py", ".py"} {
-		for _, relDir := range r.Config.Dirs {
-			dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-			fullPath := utils.ToUnixPath(filepath.Join(dir, modulePath, ext))
-			if containsFileIndex(r.Config, fullPath) {
-				foundPaths = append(foundPaths, fullPath)
-			}
-			fullPath = utils.ToUnixPath(filepath.Join(dir, modulePath+ext))
-			if containsFileIndex(r.Config, fullPath) {
-				foundPaths = append(foundPaths, fullPath)
-			}
+		fullPath := utils.ToUnixPath(filepath.Join(importPath, ext))
+		if containsFileIndex(r.Config, fullPath) {
+			foundPaths = append(foundPaths, fullPath)
+		}
+		fullPath = utils.ToUnixPath(filepath.Join(importPath + ext))
+		if containsFileIndex(r.Config, fullPath) {
+			foundPaths = append(foundPaths, fullPath)
 		}
 	}
 
@@ -219,7 +210,7 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 		return nil
 	}
 
-	return fmt.Errorf("未找到绝对导入对应的文件: %s", importName)
+	return fmt.Errorf("cannot find file which abs import belongs to: %s", importName)
 }
 
 // Go解析器（简化版）
@@ -235,29 +226,26 @@ func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string) error {
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
 
-	// 简化处理：假设非相对路径为项目内导入
+	// 移除mod，如果有
 	relPath := importName
-	if !strings.HasPrefix(importName, ".") {
-		relPath = strings.TrimPrefix(importName, "/") // 移除绝对路径前缀
+	if strings.HasPrefix(importName, r.Config.SourceRoot) {
+		relPath = strings.TrimPrefix(importName, r.Config.SourceRoot+"/")
 	}
 
 	// 尝试匹配 .go 文件
 	relPathWithExt := relPath + ".go"
-	fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relPathWithExt))
-	if containsFileIndex(r.Config, fullPath) {
-		importStmt.FilePaths = []string{fullPath}
+	if containsFileIndex(r.Config, relPathWithExt) {
+		importStmt.FilePaths = []string{relPathWithExt}
 		return nil
 	}
 
 	// 匹配包目录下所有 .go 文件
-	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		targetDir := utils.ToUnixPath(filepath.Join(dir, relPath))
-		filesInDir := findFilesInDirIndex(r.Config, targetDir, ".go")
-		if len(filesInDir) > 0 {
-			importStmt.FilePaths = append(importStmt.FilePaths, filesInDir...)
-		}
+
+	filesInDir := findFilesInDirIndex(r.Config, relPath, ".go")
+	if len(filesInDir) > 0 {
+		importStmt.FilePaths = append(importStmt.FilePaths, filesInDir...)
 	}
+
 	if len(importStmt.FilePaths) > 0 {
 		return nil
 	}
@@ -291,7 +279,7 @@ func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string) error 
 	if strings.HasPrefix(headerFile, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
 		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
-		currentDir := filepath.Dir(currentRelPath)
+		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		relPath := utils.ToUnixPath(filepath.Join(currentDir, headerFile))
 		fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relPath))
 		if containsFileIndex(r.Config, fullPath) {
@@ -301,8 +289,7 @@ func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 	// 在源目录中查找
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		fullPath := utils.ToUnixPath(filepath.Join(dir, headerFile))
+		fullPath := utils.ToUnixPath(filepath.Join(relDir, headerFile))
 		if containsFileIndex(r.Config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
@@ -333,7 +320,7 @@ func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string)
 	if strings.HasPrefix(importName, "./") || strings.HasPrefix(importName, "../") {
 		// 计算当前文件相对于 SourceRoot 的路径
 		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
-		currentDir := filepath.Dir(currentRelPath)
+		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		targetPath := utils.ToUnixPath(filepath.Join(currentDir, importName))
 		foundPaths := []string{}
 
@@ -356,9 +343,8 @@ func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string)
 	// 处理项目内绝对路径导入
 	foundPaths := []string{}
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
 		for _, ext := range []string{".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"} {
-			fullPath := utils.ToUnixPath(filepath.Join(dir, importName+ext))
+			fullPath := utils.ToUnixPath(filepath.Join(relDir, importName+ext))
 			if containsFileIndex(r.Config, fullPath) {
 				foundPaths = append(foundPaths, fullPath)
 			}
@@ -397,12 +383,11 @@ func (r *RustResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 	// 尝试查找.rs文件或模块目录
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		relPath := utils.ToUnixPath(filepath.Join(dir, modulePath+".rs"))
+		relPath := utils.ToUnixPath(filepath.Join(relDir, modulePath+".rs"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
-		modPath := utils.ToUnixPath(filepath.Join(dir, modulePath, "mod.rs"))
+		modPath := utils.ToUnixPath(filepath.Join(relDir, modulePath, "mod.rs"))
 		if containsFileIndex(r.Config, modPath) {
 			foundPaths = append(foundPaths, modPath)
 		}
@@ -433,7 +418,7 @@ func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error
 	if strings.HasPrefix(importName, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
 		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
-		currentDir := filepath.Dir(currentRelPath)
+		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		relPath := strings.TrimPrefix(importName, ".")
 		if relPath == "" {
 			return fmt.Errorf("invalid relative import: %s", importName)
@@ -456,12 +441,11 @@ func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error
 	// 处理项目内导入
 	foundPaths := []string{}
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		relPath := utils.ToUnixPath(filepath.Join(dir, importName+".rb"))
+		relPath := utils.ToUnixPath(filepath.Join(relDir, importName+".rb"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
-		relPath = utils.ToUnixPath(filepath.Join(dir, importName))
+		relPath = utils.ToUnixPath(filepath.Join(relDir, importName))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
@@ -499,13 +483,12 @@ func (r *KotlinResolver) Resolve(importStmt *Import, currentFilePath string) err
 
 	// 尝试Kotlin文件
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		relPath := utils.ToUnixPath(filepath.Join(dir, classPath+".kt"))
+		relPath := utils.ToUnixPath(filepath.Join(relDir, classPath+".kt"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		// 尝试Java文件
-		relPath = utils.ToUnixPath(filepath.Join(dir, classPath+".java"))
+		relPath = utils.ToUnixPath(filepath.Join(relDir, classPath+".java"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
@@ -543,8 +526,7 @@ func (r *PHPResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 	// 在源目录中查找
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		fullPath := utils.ToUnixPath(filepath.Join(dir, namespacePath+".php"))
+		fullPath := utils.ToUnixPath(filepath.Join(relDir, namespacePath+".php"))
 		if containsFileIndex(r.Config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
@@ -582,13 +564,12 @@ func (r *ScalaResolver) Resolve(importStmt *Import, currentFilePath string) erro
 
 	// 尝试Scala文件
 	for _, relDir := range r.Config.Dirs {
-		dir := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relDir))
-		relPath := utils.ToUnixPath(filepath.Join(dir, classPath+".scala"))
+		relPath := utils.ToUnixPath(filepath.Join(relDir, classPath+".scala"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		// 尝试Java文件
-		relPath = utils.ToUnixPath(filepath.Join(dir, classPath+".java"))
+		relPath = utils.ToUnixPath(filepath.Join(relDir, classPath+".java"))
 		if containsFileIndex(r.Config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}

@@ -30,7 +30,8 @@ func TestJavaResolver_Basic(t *testing.T) {
 }
 
 func TestGoResolver_Basic(t *testing.T) {
-	config := NewProjectConfig(Go, "github.com/zgsm-ai", []string{
+	sourceRoot := "github.com/zgsm-ai"
+	config := NewProjectConfig(Go, sourceRoot, []string{
 		"pkg/foo/bar.go",
 		"pkg/foo/baz.go",
 		"pkg/other.go",
@@ -39,14 +40,14 @@ func TestGoResolver_Basic(t *testing.T) {
 	resolver := &GoResolver{Config: config}
 
 	// 测试包导入
-	imp := &Import{BaseElement: &BaseElement{Name: "foo"}}
+	imp := &Import{BaseElement: &BaseElement{Name: sourceRoot + "/pkg/" + "foo"}}
 	err := resolver.Resolve(imp, "pkg/other.go")
 	if err != nil || !reflect.DeepEqual(imp.FilePaths, []string{"pkg/foo/bar.go", "pkg/foo/baz.go"}) {
 		t.Errorf("Go 包导入失败: %v, %v", err, imp.FilePaths)
 	}
 
 	// 测试文件导入
-	imp = &Import{BaseElement: &BaseElement{Name: "foo/bar"}}
+	imp = &Import{BaseElement: &BaseElement{Name: sourceRoot + "/pkg/" + "foo/bar"}}
 	err = resolver.Resolve(imp, "pkg/other.go")
 	if err != nil || !reflect.DeepEqual(imp.FilePaths, []string{"pkg/foo/bar.go"}) {
 		t.Errorf("Go 文件导入失败: %v, %v", err, imp.FilePaths)
@@ -62,7 +63,7 @@ func TestPythonResolver_Basic(t *testing.T) {
 	resolver := &PythonResolver{Config: cfg}
 
 	// 测试绝对导入
-	imp := &Import{BaseElement: &BaseElement{Name: "foo.bar"}}
+	imp := &Import{BaseElement: &BaseElement{Name: "src.foo.bar"}}
 	err := resolver.Resolve(imp, "src/main.py")
 	if err != nil || !reflect.DeepEqual(imp.FilePaths, []string{"src/foo/bar.py"}) {
 		t.Errorf("Python 绝对导入失败: %v, %v", err, imp.FilePaths)
