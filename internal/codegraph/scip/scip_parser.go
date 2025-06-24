@@ -30,14 +30,12 @@ type ScipMetadata struct {
 // IndexParser represents the SCIP index generator
 type IndexParser struct {
 	codebaseStore codebase.Store
-	graphStore    codegraph.GraphStore
 }
 
 // NewIndexParser creates a new SCIP index generator
-func NewIndexParser(codebaseStore codebase.Store, graphStore codegraph.GraphStore) *IndexParser {
+func NewIndexParser(codebaseStore codebase.Store) *IndexParser {
 	return &IndexParser{
 		codebaseStore: codebaseStore,
-		graphStore:    graphStore,
 	}
 }
 
@@ -78,12 +76,19 @@ func (i *IndexParser) ProcessScipIndexFile(ctx context.Context, codebasePath, sc
 		return fmt.Errorf("scip_parser parse index file %s err:%w", scipFilePath, err)
 	}
 
-	err = i.saveDocs(ctx, processedDocs)
+	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
+	if err != nil {
+		return err
+	}
+
+	defer graphStore.Close()
+
+	err = i.saveDocs(ctx, graphStore, processedDocs)
 	if err != nil {
 		return fmt.Errorf("scip_parser save docs err:%w", err)
 	}
 
-	err = i.saveSymbolKeysMap(ctx, metadata)
+	err = i.saveSymbolKeysMap(ctx, graphStore, metadata)
 	if err != nil {
 		return fmt.Errorf("scip_parser save symbol keys err:%w", err)
 	}
@@ -139,7 +144,7 @@ func (i *IndexParser) ParseScipIndexFile(ctx context.Context, codebasePath strin
 	return metadata, processedDocs, nil
 }
 
-func (i *IndexParser) saveSymbolKeysMap(ctx context.Context, metadata *ScipMetadata) error {
+func (i *IndexParser) saveSymbolKeysMap(ctx context.Context, graphStore codegraph.GraphStore, metadata *ScipMetadata) error {
 	start := time.Now()
 	tracer.WithTrace(ctx).Infof("scip_parser start to save symbol keys map")
 	symbolKeysMap := make(map[string]*codegraphpb.KeySet, len(metadata.AllDefinitionOccurrences))
@@ -164,7 +169,7 @@ func (i *IndexParser) saveSymbolKeysMap(ctx context.Context, metadata *ScipMetad
 	}
 
 	if len(symbolKeysMap) > 0 {
-		if err := i.graphStore.BatchWriteDefSymbolKeysMap(ctx, symbolKeysMap); err != nil {
+		if err := graphStore.BatchWriteDefSymbolKeysMap(ctx, symbolKeysMap); err != nil {
 			return fmt.Errorf("failed to batch write symbol keys map: %w", err)
 		}
 	}
@@ -173,12 +178,12 @@ func (i *IndexParser) saveSymbolKeysMap(ctx context.Context, metadata *ScipMetad
 	return nil
 }
 
-func (i *IndexParser) saveDocs(ctx context.Context, processedDocs []*codegraphpb.Document) error {
+func (i *IndexParser) saveDocs(ctx context.Context, graphStore codegraph.GraphStore, processedDocs []*codegraphpb.Document) error {
 	start := time.Now()
 	tracer.WithTrace(ctx).Infof("scip_parser start to save docs")
 	// todo 只能等处理完所有docs，才入库。否则信息不全
 	if len(processedDocs) > 0 {
-		if err := i.graphStore.BatchWrite(ctx, processedDocs); err != nil {
+		if err := graphStore.BatchWrite(ctx, processedDocs); err != nil {
 			return fmt.Errorf("failed to batch write remaining documents: %w", err)
 		}
 	}

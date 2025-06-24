@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
+	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"path/filepath"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/definition"
 	"github.com/zgsm-ai/codebase-indexer/internal/codegraph/scip"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
-	graphstore "github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -23,7 +23,6 @@ type codegraphProcessor struct {
 	baseProcessor
 	indexGenerator *scip.IndexGenerator
 	indexParser    *scip.IndexParser
-	graphStore     graphstore.GraphStore
 }
 
 func NewCodegraphProcessor(
@@ -31,13 +30,8 @@ func NewCodegraphProcessor(
 	params *IndexTaskParams,
 	syncFileModeMap map[string]string) (Processor, error) {
 
-	graphStore, err := graphstore.NewBadgerDBGraph(graphstore.WithPath(filepath.Join(params.CodebasePath, types.CodebaseIndexDir)))
-	if err != nil {
-		return nil, err
-	}
-
 	graphBuilder := scip.NewIndexGenerator(svcCtx.CmdLogger, svcCtx.CodegraphConf, svcCtx.CodebaseStore)
-	graphParser := scip.NewIndexParser(svcCtx.CodebaseStore, graphStore)
+	graphParser := scip.NewIndexParser(svcCtx.CodebaseStore)
 
 	return &codegraphProcessor{
 		baseProcessor: baseProcessor{
@@ -47,13 +41,11 @@ func NewCodegraphProcessor(
 		},
 		indexGenerator: graphBuilder,
 		indexParser:    graphParser,
-		graphStore:     graphStore,
 	}, nil
 }
 
 func (t *codegraphProcessor) Process(ctx context.Context) error {
 	tracer.WithTrace(ctx).Infof("start to execute codegraph task for params: %+v", t.params)
-	defer t.graphStore.Close()
 	var wait sync.WaitGroup
 	// 启动一个协程去将所有文件的结构提取处理
 	go func() {
@@ -175,10 +167,16 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 		return
 	}
 
+	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(t.params.CodebasePath, types.CodebaseIndexDir)))
+	if err != nil {
+		tracer.WithTrace(ctx).Errorf("code structure task open graph store failed: %v", err)
+		return
+	}
+	defer graphStore.Close()
 	// 批量处理结果
 	dataSize := int32(len(structureData))
 	if len(structureData) > 0 {
-		if err := t.graphStore.BatchWriteCodeStructures(ctx, structureData); err != nil {
+		if err := graphStore.BatchWriteCodeStructures(ctx, structureData); err != nil {
 			tracer.WithTrace(ctx).Errorf("save code structure data failed: %v", err)
 			t.failedFileCnt += dataSize
 		} else {
@@ -188,7 +186,7 @@ func (t *codegraphProcessor) parseCodeStructure(ctx context.Context) {
 
 	deleteSize := int32(len(deleteFiles))
 	if len(deleteFiles) > 0 {
-		if err := t.graphStore.Delete(ctx, deleteFiles); err != nil {
+		if err := graphStore.Delete(ctx, deleteFiles); err != nil {
 			tracer.WithTrace(ctx).Errorf("delete code structures failed: %v", err)
 			t.failedFileCnt += deleteSize
 		} else {

@@ -9,7 +9,7 @@ import (
 )
 
 func TestBaseParse(t *testing.T) {
-	parser := NewParser()
+	parser := NewBaseParser()
 	opts := ParseOptions{
 		IncludeContent: true,
 	}

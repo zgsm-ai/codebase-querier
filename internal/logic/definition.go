@@ -76,6 +76,7 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 	}
 	codebasePath := codebase.Path
 	// todo concurrency test
+
 	graphStore, err := codegraph.NewBadgerDBGraph(codegraph.WithPath(filepath.Join(codebasePath, types.CodebaseIndexDir)))
 	if err != nil {
 		return nil, err
@@ -87,6 +88,9 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 	if err != nil {
 		return nil, err
 	}
+	// close immediately to release lock
+	graphStore.Close()
+
 	// 填充content，控制层数和节点数
 	if err = l.fillContent(ctx, nodes, codebasePath, definitionFillContentNodeLimit); err != nil {
 		logx.Errorf("fill definition query contents err:%v", err)
