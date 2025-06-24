@@ -151,7 +151,7 @@ data:
                 - "-v"
     
       - name: java
-        detection_files: ["pom.xml", "build.gradle"]
+        detection_files: ["pom.xml"]
         build_tools:
           - name: maven
             detection_files: ["pom.xml"]
