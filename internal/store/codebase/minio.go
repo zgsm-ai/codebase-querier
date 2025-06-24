@@ -636,6 +636,6 @@ func (m *minioCodebase) ResolveSourceRoot(ctx context.Context, codebasePath stri
 
 }
 
-func (m *minioCodebase) InferLanguage(ctx context.Context, codebasePath string) (string, error) {
+func (m *minioCodebase) InferLanguage(ctx context.Context, codebasePath string) (parser.Language, error) {
 	panic("implement me")
 }

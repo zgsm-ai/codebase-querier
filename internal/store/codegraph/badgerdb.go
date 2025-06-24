@@ -217,7 +217,7 @@ func (b BadgerDBGraph) QueryRelations(ctx context.Context, opts *types.RelationR
 }
 
 // QueryDefinitions 查询定义
-func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error) {
+func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest, pc *parser.ProjectConfig) ([]*types.DefinitionNode, error) {
 	startTime := time.Now()
 	defer func() {
 		tracer.WithTrace(ctx).Infof("QueryDefinitions execution time: %d ms", time.Since(startTime).Milliseconds())
@@ -240,6 +240,7 @@ func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.Definit
 			Content: []byte(snippet),
 		}, parser.ParseOptions{
 			IncludeContent: false,
+			ProjectConfig:  pc,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("faled to parse code snippet for definition query: %w", err)
@@ -256,13 +257,9 @@ func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.Definit
 		if len(callNames) == 0 {
 			return nil, fmt.Errorf("no function/method call found in code snippet")
 		}
-		var importNames []string
-		for _, i := range imports {
-			importNames = append(importNames, i.Name)
-		}
 
 		// 根据所找到的call 的name + imports， 去模糊匹配symbol
-		foundSymbolKeys, err := b.searchSymbolNames(ctx, callNames, importNames)
+		foundSymbolKeys, err := b.searchSymbolNames(ctx, callNames, imports)
 		if err != nil {
 			return nil, fmt.Errorf("failed to search function/method call names: %w", err)
 		}
@@ -756,7 +753,7 @@ func (b BadgerDBGraph) BatchWriteDefSymbolKeysMap(ctx context.Context, defSymbol
 	return wb.Flush()
 }
 
-func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, imports []string) ([]*codegraphpb.KeyRange, error) {
+func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, imports []*parser.Import) ([]*codegraphpb.KeyRange, error) {
 	start := time.Now()
 	// 去重
 	names = utils.DeDuplicate(names)
@@ -816,8 +813,28 @@ func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, im
 	for _, v := range foundKeys {
 		result = append(result, v...)
 	}
+
+	filteredResult := make([]*codegraphpb.KeyRange, 0, len(result))
+
 	// TODO 根据 imports 过滤
-	tracer.WithTrace(ctx).Infof("codegraph symbol name search end, cost %d ms, names: %d, key found:%d",
-		time.Since(start).Milliseconds(), len(names), len(result))
+	if len(imports) > 0 {
+		for _, v := range result {
+			for _, imp := range imports {
+				for _, fp := range imp.FilePaths {
+					if strings.Contains(string(v.DocKey), fp) || strings.Contains(fp, string(v.DocKey)) { //TODO , go work ，多模块等特殊情况
+						filteredResult = append(filteredResult, v)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(filteredResult) == 0 {
+		tracer.WithTrace(ctx).Debugf("result after filter is empty, use origin result")
+		filteredResult = result
+	}
+	tracer.WithTrace(ctx).Infof("codegraph symbol name search end, cost %d ms, names: %d, key found:%d, filtered result:%d",
+		time.Since(start).Milliseconds(), len(names), len(result), len(filteredResult))
 	return result, nil
 }

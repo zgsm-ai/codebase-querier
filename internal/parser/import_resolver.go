@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
 	"strings"
@@ -30,7 +32,9 @@ func (c *ProjectConfig) buildIndex(files []string) {
 	c.dirToFiles = make(map[string][]string)
 	c.fileSet = make(map[string]struct{})
 	dirSet := make(map[string]struct{})
-
+	if files == nil {
+		return
+	}
 	for _, f := range files {
 		dir := utils.ToUnixPath(filepath.Dir(f))
 		c.dirToFiles[dir] = append(c.dirToFiles[dir], f)
@@ -48,7 +52,7 @@ func (c *ProjectConfig) buildIndex(files []string) {
 
 // 导入解析器接口
 type ImportResolver interface {
-	Resolve(importStmt *Import, currentFilePath string) error
+	Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error
 }
 
 // 解析器管理器
@@ -58,59 +62,64 @@ type ResolverManager struct {
 
 // 新建解析器管理器
 func NewResolverManager() *ResolverManager {
-	return &ResolverManager{
+	manager := &ResolverManager{
 		resolvers: make(map[Language]ImportResolver),
 	}
+
+	manager.register(Java, &JavaResolver{})
+	manager.register(Python, &PythonResolver{})
+	manager.register(Go, &GoResolver{})
+	manager.register(C, &CppResolver{})
+	manager.register(CPP, &CppResolver{})
+	manager.register(JavaScript, &JavaScriptResolver{})
+	manager.register(TypeScript, &JavaScriptResolver{})
+	manager.register(Ruby, &RubyResolver{})
+	manager.register(Kotlin, &KotlinResolver{})
+	manager.register(PHP, &PHPResolver{})
+	manager.register(Scala, &ScalaResolver{})
+	manager.register(Rust, &RustResolver{})
+
+	return manager
+
 }
 
 // 注册解析器
-func (rm *ResolverManager) Register(language Language, resolver ImportResolver) {
+func (rm *ResolverManager) register(language Language, resolver ImportResolver) {
 	rm.resolvers[language] = resolver
 }
 
 // 解析导入语句
-func (rm *ResolverManager) ResolveImport(importStmt *Import, currentFilePath string, language Language) error {
-	resolver, exists := rm.resolvers[language]
+func (rm *ResolverManager) ResolveImport(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	resolver, exists := rm.resolvers[config.language]
 
 	if !exists {
-		return fmt.Errorf("import resolver unsupported language: %s", language)
+		return fmt.Errorf("import resolver unsupported language: %s", config.language)
 	}
 
-	return resolver.Resolve(importStmt, currentFilePath)
-}
-
-// 初始化所有解析器
-func InitResolvers(config *ProjectConfig) *ResolverManager {
-	manager := NewResolverManager()
-
-	manager.Register(Java, &JavaResolver{Config: config})
-	manager.Register(Python, &PythonResolver{Config: config})
-	manager.Register(Go, &GoResolver{Config: config})
-	manager.Register(C, &CppResolver{Config: config})
-	manager.Register(CPP, &CppResolver{Config: config})
-	manager.Register(JavaScript, &JavaScriptResolver{Config: config})
-	manager.Register(TypeScript, &JavaScriptResolver{Config: config})
-	manager.Register(Ruby, &RubyResolver{Config: config})
-	manager.Register(Kotlin, &KotlinResolver{Config: config})
-	manager.Register(PHP, &PHPResolver{Config: config})
-	manager.Register(Scala, &ScalaResolver{Config: config})
-	manager.Register(Rust, &RustResolver{Config: config})
-
-	return manager
+	return resolver.Resolve(importStmt, currentFilePath, config)
 }
 
 // Java解析器
 type JavaResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *JavaResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *JavaResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
+
+	// 处理类导入
+	classPath := strings.ReplaceAll(importName, ".", "/") + ".java"
+	fullPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, classPath))
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{fullPath}
+		return nil
+	}
 
 	// 处理静态导入
 	if strings.HasPrefix(importName, "static ") {
@@ -120,8 +129,8 @@ func (r *JavaResolver) Resolve(importStmt *Import, currentFilePath string) error
 	// 处理包导入
 	if strings.HasSuffix(importName, ".*") {
 		pkgPath := strings.ReplaceAll(strings.TrimSuffix(importName, ".*"), ".", "/")
-		fullPkgPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, pkgPath))
-		files := findFilesInDirIndex(r.Config, fullPkgPath, ".java")
+		fullPkgPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, pkgPath))
+		files := findFilesInDirIndex(config, fullPkgPath, ".java")
 		importStmt.FilePaths = files
 		if len(importStmt.FilePaths) == 0 {
 			return fmt.Errorf("cannot find file which package belongs to: %s", importName)
@@ -129,10 +138,7 @@ func (r *JavaResolver) Resolve(importStmt *Import, currentFilePath string) error
 		return nil
 	}
 
-	// 处理类导入
-	classPath := strings.ReplaceAll(importName, ".", "/") + ".java"
-	fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, classPath))
-	importStmt.FilePaths = findMatchingFiles(r.Config, fullPath)
+	importStmt.FilePaths = findMatchingFiles(config, fullPath)
 
 	if len(importStmt.FilePaths) == 0 {
 		return fmt.Errorf("cannot find file which import belongs to: %s", importName)
@@ -143,21 +149,27 @@ func (r *JavaResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 // Python解析器
 type PythonResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
 
+	importPath := strings.ReplaceAll(importName, ".", "/")
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{importPath}
+		return nil
+	}
+
 	// 处理相对导入
 	if strings.HasPrefix(importName, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
-		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
+		currentRelPath, _ := filepath.Rel(config.SourceRoot, currentFilePath)
 		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		dots := strings.Count(importName, ".")
 		modulePath := strings.TrimPrefix(importName, strings.Repeat(".", dots))
@@ -176,8 +188,8 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 
 		// 检查是否为包或模块
 		for _, ext := range []string{"__init__.py", ".py"} {
-			fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, dir, ext))
-			if containsFileIndex(r.Config, fullPath) {
+			fullPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, dir, ext))
+			if containsFileIndex(config, fullPath) {
 				importStmt.FilePaths = append(importStmt.FilePaths, fullPath)
 			}
 		}
@@ -190,17 +202,16 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 	}
 
 	// 处理绝对导入
-	importPath := strings.ReplaceAll(importName, ".", "/")
 	foundPaths := []string{}
 
 	// 检查是否为包或模块
 	for _, ext := range []string{"__init__.py", ".py"} {
 		fullPath := utils.ToUnixPath(filepath.Join(importPath, ext))
-		if containsFileIndex(r.Config, fullPath) {
+		if containsFileIndex(config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
 		fullPath = utils.ToUnixPath(filepath.Join(importPath + ext))
-		if containsFileIndex(r.Config, fullPath) {
+		if containsFileIndex(config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
 	}
@@ -215,11 +226,10 @@ func (r *PythonResolver) Resolve(importStmt *Import, currentFilePath string) err
 
 // Go解析器（简化版）
 type GoResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -228,20 +238,26 @@ func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string) error {
 
 	// 移除mod，如果有
 	relPath := importName
-	if strings.HasPrefix(importName, r.Config.SourceRoot) {
-		relPath = strings.TrimPrefix(importName, r.Config.SourceRoot+"/")
+	if strings.HasPrefix(importName, config.SourceRoot) {
+		relPath = strings.TrimPrefix(importName, config.SourceRoot+"/")
+	}
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{relPath}
+		return nil
 	}
 
 	// 尝试匹配 .go 文件
 	relPathWithExt := relPath + ".go"
-	if containsFileIndex(r.Config, relPathWithExt) {
+	if containsFileIndex(config, relPathWithExt) {
 		importStmt.FilePaths = []string{relPathWithExt}
 		return nil
 	}
 
 	// 匹配包目录下所有 .go 文件
 
-	filesInDir := findFilesInDirIndex(r.Config, relPath, ".go")
+	filesInDir := findFilesInDirIndex(config, relPath, ".go")
 	if len(filesInDir) > 0 {
 		importStmt.FilePaths = append(importStmt.FilePaths, filesInDir...)
 	}
@@ -255,11 +271,10 @@ func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string) error {
 
 // C/C++解析器
 type CppResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -273,24 +288,31 @@ func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 	// 移除引号
 	headerFile := strings.Trim(importName, "\"")
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{headerFile}
+		return nil
+	}
+
 	foundPaths := []string{}
 
 	// 相对路径导入
 	if strings.HasPrefix(headerFile, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
-		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
+		currentRelPath, _ := filepath.Rel(config.SourceRoot, currentFilePath)
 		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		relPath := utils.ToUnixPath(filepath.Join(currentDir, headerFile))
-		fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, relPath))
-		if containsFileIndex(r.Config, fullPath) {
+		fullPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, relPath))
+		if containsFileIndex(config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
 	}
 
 	// 在源目录中查找
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		fullPath := utils.ToUnixPath(filepath.Join(relDir, headerFile))
-		if containsFileIndex(r.Config, fullPath) {
+		if containsFileIndex(config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
 	}
@@ -305,29 +327,35 @@ func (r *CppResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 // JavaScript/TypeScript解析器
 type JavaScriptResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
 
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		cleanedPath := strings.ReplaceAll(strings.ReplaceAll(importName, "./", ""), "../", "")
+		importStmt.FilePaths = []string{cleanedPath}
+		return nil
+	}
+
 	// 处理相对路径
 	if strings.HasPrefix(importName, "./") || strings.HasPrefix(importName, "../") {
 		// 计算当前文件相对于 SourceRoot 的路径
-		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
+		currentRelPath, _ := filepath.Rel(config.SourceRoot, currentFilePath)
 		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		targetPath := utils.ToUnixPath(filepath.Join(currentDir, importName))
 		foundPaths := []string{}
 
 		// 尝试不同的文件扩展名
 		for _, ext := range []string{".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"} {
-			fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, targetPath+ext))
-			if containsFileIndex(r.Config, fullPath) {
+			fullPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, targetPath+ext))
+			if containsFileIndex(config, fullPath) {
 				foundPaths = append(foundPaths, fullPath)
 			}
 		}
@@ -342,10 +370,10 @@ func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string)
 
 	// 处理项目内绝对路径导入
 	foundPaths := []string{}
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		for _, ext := range []string{".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"} {
 			fullPath := utils.ToUnixPath(filepath.Join(relDir, importName+ext))
-			if containsFileIndex(r.Config, fullPath) {
+			if containsFileIndex(config, fullPath) {
 				foundPaths = append(foundPaths, fullPath)
 			}
 		}
@@ -361,11 +389,10 @@ func (r *JavaScriptResolver) Resolve(importStmt *Import, currentFilePath string)
 
 // Rust解析器
 type RustResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *RustResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *RustResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -379,16 +406,23 @@ func (r *RustResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 	// 将::转换为路径分隔符
 	modulePath := strings.ReplaceAll(importName, "::", "/")
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{modulePath}
+		return nil
+	}
+
 	foundPaths := []string{}
 
 	// 尝试查找.rs文件或模块目录
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		relPath := utils.ToUnixPath(filepath.Join(relDir, modulePath+".rs"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		modPath := utils.ToUnixPath(filepath.Join(relDir, modulePath, "mod.rs"))
-		if containsFileIndex(r.Config, modPath) {
+		if containsFileIndex(config, modPath) {
 			foundPaths = append(foundPaths, modPath)
 		}
 	}
@@ -403,21 +437,27 @@ func (r *RustResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 // Ruby解析器
 type RubyResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
 
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		cleanedPath := strings.ReplaceAll(strings.ReplaceAll(importName, "./", ""), "../", "")
+		importStmt.FilePaths = []string{cleanedPath}
+		return nil
+	}
+
 	// 处理相对导入
 	if strings.HasPrefix(importName, ".") {
 		// 计算当前文件相对于 SourceRoot 的路径
-		currentRelPath, _ := filepath.Rel(r.Config.SourceRoot, currentFilePath)
+		currentRelPath, _ := filepath.Rel(config.SourceRoot, currentFilePath)
 		currentDir := utils.ToUnixPath(filepath.Dir(currentRelPath))
 		relPath := strings.TrimPrefix(importName, ".")
 		if relPath == "" {
@@ -429,8 +469,8 @@ func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error
 			relPath += ".rb"
 		}
 
-		fullPath := utils.ToUnixPath(filepath.Join(r.Config.SourceRoot, currentDir, relPath))
-		if containsFileIndex(r.Config, fullPath) {
+		fullPath := utils.ToUnixPath(filepath.Join(config.SourceRoot, currentDir, relPath))
+		if containsFileIndex(config, fullPath) {
 			importStmt.FilePaths = []string{fullPath}
 			return nil
 		}
@@ -440,13 +480,13 @@ func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 	// 处理项目内导入
 	foundPaths := []string{}
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		relPath := utils.ToUnixPath(filepath.Join(relDir, importName+".rb"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		relPath = utils.ToUnixPath(filepath.Join(relDir, importName))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 	}
@@ -461,11 +501,10 @@ func (r *RubyResolver) Resolve(importStmt *Import, currentFilePath string) error
 
 // Kotlin解析器
 type KotlinResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *KotlinResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *KotlinResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -479,17 +518,24 @@ func (r *KotlinResolver) Resolve(importStmt *Import, currentFilePath string) err
 
 	// 处理类导入
 	classPath := strings.ReplaceAll(importName, ".", "/")
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{classPath}
+		return nil
+	}
+
 	foundPaths := []string{}
 
 	// 尝试Kotlin文件
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		relPath := utils.ToUnixPath(filepath.Join(relDir, classPath+".kt"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		// 尝试Java文件
 		relPath = utils.ToUnixPath(filepath.Join(relDir, classPath+".java"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 	}
@@ -504,11 +550,10 @@ func (r *KotlinResolver) Resolve(importStmt *Import, currentFilePath string) err
 
 // PHP解析器（简化版）
 type PHPResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *PHPResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *PHPResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -522,12 +567,19 @@ func (r *PHPResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 	// 将命名空间分隔符转换为路径分隔符
 	namespacePath := strings.ReplaceAll(importName, "\\", "/")
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{namespacePath}
+		return nil
+	}
+
 	foundPaths := []string{}
 
 	// 在源目录中查找
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		fullPath := utils.ToUnixPath(filepath.Join(relDir, namespacePath+".php"))
-		if containsFileIndex(r.Config, fullPath) {
+		if containsFileIndex(config, fullPath) {
 			foundPaths = append(foundPaths, fullPath)
 		}
 	}
@@ -542,11 +594,10 @@ func (r *PHPResolver) Resolve(importStmt *Import, currentFilePath string) error 
 
 // Scala解析器
 type ScalaResolver struct {
-	Config *ProjectConfig
 }
 
-func (r *ScalaResolver) Resolve(importStmt *Import, currentFilePath string) error {
-	if importStmt.Name == "" {
+func (r *ScalaResolver) Resolve(importStmt *Import, currentFilePath string, config *ProjectConfig) error {
+	if importStmt.Name == types.EmptyString {
 		return fmt.Errorf("import is empty")
 	}
 
@@ -560,17 +611,24 @@ func (r *ScalaResolver) Resolve(importStmt *Import, currentFilePath string) erro
 
 	// 处理类导入
 	classPath := strings.ReplaceAll(importName, ".", "/")
+
+	if len(config.fileSet) == 0 {
+		logx.Debugf("not support project file list, use default resolve")
+		importStmt.FilePaths = []string{classPath}
+		return nil
+	}
+
 	foundPaths := []string{}
 
 	// 尝试Scala文件
-	for _, relDir := range r.Config.Dirs {
+	for _, relDir := range config.Dirs {
 		relPath := utils.ToUnixPath(filepath.Join(relDir, classPath+".scala"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 		// 尝试Java文件
 		relPath = utils.ToUnixPath(filepath.Join(relDir, classPath+".java"))
-		if containsFileIndex(r.Config, relPath) {
+		if containsFileIndex(config, relPath) {
 			foundPaths = append(foundPaths, relPath)
 		}
 	}

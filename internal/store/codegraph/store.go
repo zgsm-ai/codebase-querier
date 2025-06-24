@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sourcegraph/scip/bindings/go/scip"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph/codegraphpb"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"google.golang.org/protobuf/proto"
@@ -27,7 +28,7 @@ type GraphStore interface {
 	QueryRelations(ctx context.Context, opts *types.RelationRequest) ([]*types.GraphNode, error)
 
 	// QueryDefinitions 查询定义
-	QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest) ([]*types.DefinitionNode, error)
+	QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest, pc *parser.ProjectConfig) ([]*types.DefinitionNode, error)
 
 	// Close 数据库操作
 	Close() error

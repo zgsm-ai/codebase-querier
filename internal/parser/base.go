@@ -9,14 +9,20 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 )
 
-type BaseParser struct{}
+type BaseParser struct {
+	resolveManager *ResolverManager
+}
 
 type ParseOptions struct {
 	IncludeContent bool
+	ProjectConfig  *ProjectConfig
 }
 
 func NewBaseParser() *BaseParser {
-	return &BaseParser{}
+	resolveManager := NewResolverManager()
+	return &BaseParser{
+		resolveManager: resolveManager,
+	}
 }
 
 func (p *BaseParser) Parse(ctx context.Context, sourceFile *types.SourceFile, opts ParseOptions) (*ParsedSource, error) {
@@ -102,6 +108,14 @@ func (p *BaseParser) Parse(ctx context.Context, sourceFile *types.SourceFile, op
 		}
 
 		elements = append(elements, element)
+	}
+	// 处理imports
+	for _, imp := range imports {
+		// 处理imports
+		if err = p.resolveManager.ResolveImport(imp, sourceFile.Path, opts.ProjectConfig); err != nil {
+			tracer.WithTrace(ctx).Errorf("tree_sitter base_processor resolve imports error: %v", err)
+			continue
+		}
 	}
 
 	// 返回结构信息，包含处理后的定义

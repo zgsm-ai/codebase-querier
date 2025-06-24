@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/stretchr/testify/assert"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"path/filepath"
@@ -187,7 +188,7 @@ func (s *Server) InstallAPIs(restStorageProviders ...RESTStorageProvider) error 
 	}
 	for _, tt := range testCases {
 		t.Run(tt.Name, func(t *testing.T) {
-			definitions, err := graphStore.QueryDefinitions(ctx, tt.req)
+			definitions, err := graphStore.QueryDefinitions(ctx, tt.req, parser.NewProjectConfig(parser.Go, "k8s.io/kubernetes", nil))
 			assert.NoError(t, err)
 			assert.NotEmpty(t, definitions)
 		})

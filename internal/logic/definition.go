@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/errs"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codegraph"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"gorm.io/gorm"
@@ -84,7 +85,18 @@ func (l *DefinitionQueryLogic) QueryDefinition(req *types.DefinitionRequest) (re
 	defer graphStore.Close()
 
 	ctx := context.WithValue(l.ctx, tracer.Key, tracer.RequestTraceId(int(codebase.ID)))
-	nodes, err := graphStore.QueryDefinitions(ctx, req)
+
+	langConf, err := parser.GetLangConfigByFilePath(req.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("unsuported language file: %s, err:%v", req.FilePath, err)
+	}
+
+	sourceRoot, err := l.svcCtx.CodebaseStore.ResolveSourceRoot(ctx, codebasePath, langConf.Language)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project source root failed, err:%v", err)
+	}
+
+	nodes, err := graphStore.QueryDefinitions(ctx, req, parser.NewProjectConfig(langConf.Language, sourceRoot, nil))
 	if err != nil {
 		return nil, err
 	}

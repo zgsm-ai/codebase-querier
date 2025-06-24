@@ -12,6 +12,7 @@ func TestBaseParse(t *testing.T) {
 	parser := NewBaseParser()
 	opts := ParseOptions{
 		IncludeContent: true,
+		ProjectConfig:  NewProjectConfig(Go, "github.com/hashicorp", []string{"pkg/go-uuid/uuid.go"}),
 	}
 
 	testCases := []struct {
