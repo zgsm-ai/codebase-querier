@@ -99,7 +99,7 @@ func NewServiceContext(ctx context.Context, c config.Config) (*ServiceContext, e
 	svcCtx.redisClient = client
 
 	// 创建各个组件，共用Redis客户端
-	messageQueue, err := mq.NewRedisMQ(client)
+	messageQueue, err := mq.NewRedisMQ(ctx, client, c.MessageQueue)
 	if err != nil {
 		return nil, err
 	}

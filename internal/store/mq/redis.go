@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"strconv"
 	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 
 	"github.com/redis/go-redis/v9"
 
@@ -14,46 +17,114 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 )
 
+const topicField = "topic"
+const timestampField = "timestamp"
+const bodyField = "body"
+
 // redisMQ Redis消息队列实现（基于原生redis/go-redis/v9 和 Streams）
 type redisMQ struct {
 	client *redis.Client // 原生Redis客户端
+	conf   config.MessageQueueConf
 }
 
 // NewRedisMQ 创建Redis消息队列实例
 // consumerGroup 参数指定消费者组的名称
-func NewRedisMQ(client *redis.Client) (MessageQueue, error) {
-	// 可以在这里检查或创建消费者组，但为了简化，我们在Consume中按需创建
-	return &redisMQ{
+func NewRedisMQ(ctx context.Context, client *redis.Client, conf config.MessageQueueConf) (MessageQueue, error) {
+	mq := &redisMQ{
 		client: client,
-	}, nil
+		conf:   conf,
+	}
+	go mq.deadLetterConsumer(ctx, conf)
+	return mq, nil
 }
-func (r *redisMQ) CreateTopic(ctx context.Context, topic string, opts types.TopicOptions) error {
+
+func (mq *redisMQ) deadLetterConsumer(ctx context.Context, conf config.MessageQueueConf) {
+	logx.Infof("dead_letter_consumer started, dead_letter_topic: %s, internal: %f min", conf.DeadLetterTopic, mq.conf.DeadLetterInterval.Minutes())
+	ticker := time.NewTicker(mq.conf.DeadLetterInterval)
+	defer ticker.Stop()
+	deadLetterTopic := conf.DeadLetterTopic
+	consumerGroup := "codebase-indexer-dead-letter-consumer"
+	for {
+		select {
+		case <-ctx.Done():
+			logx.Info("dead_letter_consumer exited.")
+			return
+		case <-ticker.C:
+			logx.Info("dead_letter_consumer starting batch processing")
+			processedCount := 0
+			for {
+				msg, err := mq.Consume(ctx, deadLetterTopic, consumerGroup, types.ConsumeOptions{
+					ReadTimeout: time.Second, // 1秒超时，避免阻塞
+				})
+
+				if err != nil {
+					if errors.Is(err, errs.ReadTimeout) {
+						logx.Infof("dead_letter_consumer exited, batch processed %d messages", processedCount)
+						break // 没有更多消息
+					}
+					logx.Errorf("dead_letter_consumer read dead letter topic failed: %v", err)
+					break
+				}
+
+				// 原始topic
+				originTopic := msg.Topic // 假设topic是字符串键
+
+				if originTopic == deadLetterTopic || originTopic == types.EmptyString {
+					logx.Errorf("dead_letter_consumer invalid original topic: %v, message ID: %s", originTopic, msg.ID)
+					if ackErr := mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); ackErr != nil {
+						logx.Errorf("dead_letter_consumer failed to ack message with invalid topic: %v", ackErr)
+					}
+					continue
+				}
+
+				// 复用 Produce 方法重投递
+				err = mq.Produce(ctx, originTopic, msg.Body, types.ProduceOptions{})
+				if err != nil {
+					logx.Errorf("dead_letter_consumer redeliver to %s failed: %v, message ID: %s", originTopic, err, msg.ID)
+					// 重投递失败，不确认消息，让消息继续留在队列中
+					continue
+				}
+
+				if err = mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); err != nil {
+					logx.Errorf("dead_letter_consumer failed to ack redelivered message: %v, message ID: %s", err, msg.ID)
+				} else {
+					processedCount++
+					logx.Infof("dead_letter_consumer redelivered to topic %s successfully, message ID: %s", originTopic, msg.ID)
+				}
+			}
+		}
+	}
+}
+
+func (mq *redisMQ) CreateTopic(ctx context.Context, topic string, opts types.TopicOptions) error {
 	// Redis Streams 在第一次XAdd时自动创建，无需显式创建
 	// 可以在这里选择预先创建消费者组，以便在Consume时少一步检查
 	// 为了简化，我们仍然在Consume时按需创建消费者组
 	return nil
 }
 
-func (r *redisMQ) DeleteTopic(ctx context.Context, topic string) error {
+func (mq *redisMQ) DeleteTopic(ctx context.Context, topic string) error {
 	// 删除Stream使用DEL命令
-	_, err := r.client.Del(ctx, topic).Result()
+	_, err := mq.client.Del(ctx, topic).Result()
 	return err
 }
 
 // Produce 实现MessageQueue接口的Publish方法
 // 使用 XAdd 命令将消息添加到 Stream
-func (r *redisMQ) Produce(ctx context.Context, topic string, message []byte, opts types.ProduceOptions) error {
-	// 将消息体和时间戳作为 Streams entry 的字段存储
+func (mq *redisMQ) Produce(ctx context.Context, topic string, message []byte, opts types.ProduceOptions) error {
+	// 将消息体、topic和时间戳作为 Streams entry 的字段存储
 	values := map[string]interface{}{
 		"body":      message,
-		"timestamp": time.Now().UnixNano(), // 存储纳秒时间戳
+		"topic":     topic,
+		"timestamp": time.Now().UnixNano(),
 	}
 
 	// 使用 XAdd 添加消息到 Stream
 	// "*" 表示让 Redis 自动生成消息 ID
-	_, err := r.client.XAdd(ctx, &redis.XAddArgs{
+	_, err := mq.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: topic,
 		Values: values,
+		MaxLen: mq.conf.SingleMsgQueueMaxLen,
 	}).Result()
 
 	if err != nil {
@@ -65,13 +136,13 @@ func (r *redisMQ) Produce(ctx context.Context, topic string, message []byte, opt
 // Consume 实现MessageQueue接口的Subscribe方法
 // 使用 XReadGroup 命令从 Streams 消费者组中读取消息
 // 并使用 XAck 确认消息
-func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup string, opts types.ConsumeOptions) (*types.Message, error) {
+func (mq *redisMQ) Consume(ctx context.Context, topic string, consumerGroup string, opts types.ConsumeOptions) (*types.Message, error) {
 	if consumerGroup == types.EmptyString {
 		return nil, fmt.Errorf("consumerGroup cannot be empty")
 	}
 	// 确保消费者组存在，如果不存在则创建
 	// 使用 MKSTREAM 选项可以在 Stream 不存在时同时创建 Stream
-	err := r.client.XGroupCreateMkStream(ctx, topic, consumerGroup, "0").Err()
+	err := mq.client.XGroupCreateMkStream(ctx, topic, consumerGroup, "0").Err()
 	if err != nil && !errors.Is(err, redis.Nil) && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		// 忽略 BUSYGROUP 错误，表示组已存在
 		return nil, fmt.Errorf("failed to create consumer group %s for stream %s: %w", consumerGroup, topic, err)
@@ -81,9 +152,9 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup strin
 	// ">" 表示从该消费者组上次读取的位置之后开始读
 	// Count 设置每次最多读取一条消息
 	// Block 设置阻塞时间，与 opts.ReadTimeout 对应
-	streams, err := r.client.XReadGroup(ctx, &redis.XReadGroupArgs{
+	streams, err := mq.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    consumerGroup,
-		Consumer: "consumer-" + r.client.ClientID(ctx).String(), // 使用客户端ID作为消费者名称
+		Consumer: "consumer-" + mq.client.ClientID(ctx).String(), // 使用客户端ID作为消费者名称
 		Streams:  []string{topic, ">"},
 		Count:    1,
 		Block:    opts.ReadTimeout,
@@ -107,16 +178,25 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup strin
 	msg := streams[0].Messages[0]
 
 	// 解析消息体 ("body" 字段)
-	body, ok := msg.Values["body"].(string)
+	body, ok := msg.Values[bodyField].(string)
 	if !ok {
 		// TODO: Handle malformed message - maybe move to a dead-letter stream?
 		// For now, we continue without acknowledging.
-		tracer.WithTrace(ctx).Errorf("received message %s with invalid body format from stream %s, group %s: %v", msg.ID, topic, consumerGroup, msg.Values["body"])
+		tracer.WithTrace(ctx).Errorf("received message %s with invalid body format from stream %s, group %s: %v", msg.ID, topic, consumerGroup, msg.Values[bodyField])
 		return nil, fmt.Errorf("received message %s with invalid body format", msg.ID)
 	}
 
+	// 解析消息体 ("topic" 字段)
+	msgTopic, ok := msg.Values[topicField].(string)
+	if !ok {
+		// TODO: Handle malformed message - maybe move to a dead-letter stream?
+		// For now, we continue without acknowledging.
+		tracer.WithTrace(ctx).Errorf("received message %s with invalid msgTopic format from stream %s, group %s: %v", msg.ID, topic, consumerGroup, msg.Values[topicField])
+		return nil, fmt.Errorf("received message %s with invalid msgTopic format", msg.ID)
+	}
+
 	// 解析时间戳 ("timestamp" 字段)
-	timestampVal, ok := msg.Values["timestamp"].(string)
+	timestampVal, ok := msg.Values[timestampField].(string)
 	if !ok {
 		// 如果时间戳字段不存在或格式错误，记录错误并使用当前时间
 		tracer.WithTrace(ctx).Errorf("received message %s without valid timestamp field from stream %s, group %s", msg.ID, topic, consumerGroup)
@@ -124,7 +204,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup strin
 		return &types.Message{
 			ID:        msg.ID,
 			Body:      []byte(body),
-			Topic:     topic,
+			Topic:     msgTopic,
 			Timestamp: time.Now(),
 		}, nil
 	}
@@ -137,7 +217,7 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup strin
 		return &types.Message{
 			ID:        msg.ID,
 			Body:      []byte(body),
-			Topic:     topic,
+			Topic:     msgTopic,
 			Timestamp: time.Now(),
 		}, nil
 	}
@@ -145,15 +225,15 @@ func (r *redisMQ) Consume(ctx context.Context, topic string, consumerGroup strin
 	return &types.Message{
 		ID:        msg.ID, // Streams 消息有唯一的 ID
 		Body:      []byte(body),
-		Topic:     topic,
+		Topic:     msgTopic,
 		Timestamp: time.Unix(0, nanoTimestamp), // 从纳秒时间戳转换
 	}, nil
 }
 
 // Ack 实现MessageQueue接口的Ack方法
 // 使用 XAck 命令确认 Streams 消息
-func (r *redisMQ) Ack(ctx context.Context, stream, group string, id string) error {
-	_, err := r.client.XAck(ctx, stream, group, id).Result()
+func (mq *redisMQ) Ack(ctx context.Context, stream, group string, id string) error {
+	_, err := mq.client.XAck(ctx, stream, group, id).Result()
 	if err != nil {
 		return fmt.Errorf("failed to XAck message %s in stream %s, group %s: %w", id, stream, group, err)
 	}
@@ -161,39 +241,56 @@ func (r *redisMQ) Ack(ctx context.Context, stream, group string, id string) erro
 }
 
 // Nack 实现MessageQueue接口的Nack方法
-// 在Streams实现中，通过重新将消息添加到流中使其可以被再次消费
-func (r *redisMQ) Nack(ctx context.Context, topic, consumerGroup string, msgId string, message []byte, opts types.NackOptions) error {
+// 发送到死信队列，避免消息循环
+func (mq *redisMQ) Nack(ctx context.Context, topic, consumerGroup string, msgId string, message []byte, opts types.NackOptions) error {
+	values := map[string]interface{}{
+		"body":      message,
+		"topic":     topic, // 新增topic字段，便于死信队列重发
+		"timestamp": time.Now().UnixNano(),
+	}
 
-	// 发布新消息
-	if err := r.Produce(ctx, topic, message, types.ProduceOptions{}); err != nil {
+	// 使用 XAdd 添加消息到 Stream
+	// "*" 表示让 Redis 自动生成消息 ID
+	_, err := mq.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: mq.conf.DeadLetterTopic,
+		Values: values,
+		MaxLen: mq.conf.SingleMsgQueueMaxLen,
+	}).Result()
+	if err != nil {
 		return fmt.Errorf("nack failed to readd message to stream %s: %w", topic, err)
 	}
 
-	// 确认原消息，避免重复
-	if err := r.client.XAck(ctx, topic, consumerGroup, msgId).Err(); err != nil {
-		tracer.WithTrace(ctx).Errorf("nack failed to ack original message %s: %v", msgId, err)
+	// 删除消息
+	if err := mq.client.XDel(ctx, topic, msgId).Err(); err != nil {
+		tracer.WithTrace(ctx).Errorf("nack failed to del original message %s: %v", msgId, err)
 		return err
 	}
 
-	tracer.WithTrace(ctx).Debugf("nacked message %s in stream %s, group %s successfully.", msgId, topic, consumerGroup)
+	tracer.WithTrace(ctx).Debugf("nack message %s in stream %s, group %s successfully.", msgId, topic, consumerGroup)
 	return nil
 }
 
-// ReclaimPendingMessages 可以用于处理消费者崩溃后未 ACK 的消息
+func (mq *redisMQ) Close(ctx context.Context) error {
+	logx.Infof("redis message queue exited.")
+	return nil
+}
+
+// TODO
+// reclaimPendingMessages 可以用于处理消费者崩溃后未 ACK 的消息
 // 通常需要在消费者启动时调用，或者通过一个独立的监控进程来处理
-func (r *redisMQ) ReclaimPendingMessages(ctx context.Context, topic string, consumerGroup string, idleTime time.Duration, count int) ([]*types.Message, error) {
+func (mq *redisMQ) reclaimPendingMessages(ctx context.Context, topic string, consumerGroup string, idleTime time.Duration, count int) ([]*types.Message, error) {
 	// 查找处于 Pending 상태且超时未处理的消息
 	// 使用 XPENDING 命令获取 Pending 消息的详细信息
 	// 注意：XPENDING 不直接返回消息体，需要通过 XCLAIM 或 XAUTOCLAIM 获取
 
 	// 转移这些 Pending 消息的所有权给当前消费者实例，并获取消息体
-	claimedStreams, _, err := r.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+	claimedStreams, _, err := mq.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
 		Stream:   topic,
 		Group:    consumerGroup,
 		MinIdle:  idleTime, // 使用 MinIdle 字段
 		Start:    "0-0",    // 从 Streams 的开始位置查找
 		Count:    int64(count),
-		Consumer: "consumer-" + r.client.ClientID(ctx).String(), // 将消息转移给当前消费者
+		Consumer: "consumer-" + mq.client.ClientID(ctx).String(), // 将消息转移给当前消费者
 	}).Result()
 
 	if err != nil {

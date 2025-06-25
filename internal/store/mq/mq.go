@@ -21,6 +21,7 @@ type MessageQueue interface {
 	Ack(ctx context.Context, topic, consumerGroup string, msgId string) error
 	// Nack 消息处理失败，不确认消息，使其保留在Pending状态以便重试或其他消费者认领
 	Nack(ctx context.Context, topic, consumerGroup string, msgId string, message []byte, opts types.NackOptions) error
+	Close(ctx context.Context) error
 }
 
 // Status 队列状态

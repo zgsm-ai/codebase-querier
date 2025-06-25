@@ -101,6 +101,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	lockKey := IndexJobKey(syncMsg.CodebaseID)
 	mux, locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, i.svcCtx.Config.IndexTask.LockTimeout)
 	if err != nil || !locked {
+		// 这里出现不停地nack，不停刷屏，不停往redis 生产
 		tracer.WithTrace(ctx).Debugf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
 		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body) //nack
 		return
@@ -127,7 +128,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 		i.ackSilently(ctx, msg)
 		return
 	}
-
+	// TODO 上面出现不停 nack
 	// 设置本次任务的trace_id
 	traceCtx := context.WithValue(i.ctx, tracer.Key, tracer.TaskTraceId(int(syncMsg.SyncID)))
 
@@ -135,7 +136,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 
 	isEmbedTaskSuccess := syncMsg.IsEmbedTaskSuccess
 	isGraphTaskSuccess := syncMsg.IsGraphTaskSuccess
-	// 提交失败, nack; TODO处理失败，得看下怎么做，不行放在一个协程池里面处理，
+	// 提交失败, nack;
 	if isEmbedTaskSuccess && isGraphTaskSuccess {
 		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because params isEmbedTaskSuccess is %t, isGraphTaskSuccess is %t ",
 			isEmbedTaskSuccess, isGraphTaskSuccess)
@@ -165,20 +166,20 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 }
 
 func (i *IndexTaskScheduler) nackSilently(ctx context.Context, topic string, consumerGroup string, msgId string, body []byte) {
-	tracer.WithTrace(ctx).Debugf("start to nack message %s", msgId)
+	tracer.WithTrace(ctx).WithCallerSkip(1).Debugf("start to nack message %s", msgId)
 	if ackErr := i.messageQueue.Nack(i.ctx, topic, consumerGroup, msgId, body, types.NackOptions{}); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to nack message %s from stream %s, group %s, err: %v", msgId, topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
 	}
-	tracer.WithTrace(ctx).Debugf("nack message %s successfully.", msgId)
+	tracer.WithTrace(ctx).WithCallerSkip(1).Debugf("nack message %s successfully.", msgId)
 }
 
 func (i *IndexTaskScheduler) ackSilently(ctx context.Context, msg *types.Message) {
-	tracer.WithTrace(ctx).Debugf("start to ack message %s", msg.ID)
+	tracer.WithTrace(ctx).WithCallerSkip(1).Debugf("start to ack message %s", msg.ID)
 	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to ack message %s from stream %s, group %s, err: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
 	}
-	tracer.WithTrace(ctx).Debugf("ack message %s successfully.", msg.ID)
+	tracer.WithTrace(ctx).WithCallerSkip(1).Debugf("ack message %s successfully.", msg.ID)
 }
 
 func (i *IndexTaskScheduler) Submit(ctx context.Context, taskRun func()) error {

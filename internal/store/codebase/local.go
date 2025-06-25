@@ -725,6 +725,9 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 }
 
 func (l *localCodebase) BatchDelete(ctx context.Context, codebasePath string, paths []string) error {
+	if codebasePath == types.EmptyString {
+		return errors.New("codebasePath cannot be empty")
+	}
 	exists, err := l.Exists(ctx, codebasePath, types.EmptyString)
 	if err != nil {
 		return err

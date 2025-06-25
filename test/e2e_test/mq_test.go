@@ -90,7 +90,7 @@ func TestNack(t *testing.T) {
 	}
 
 	// 等待消息重新入队（Redis需要时间处理重新Produce）
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(5 * time.Second)
 
 	// 再次消费，验证消息内容一致性
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
