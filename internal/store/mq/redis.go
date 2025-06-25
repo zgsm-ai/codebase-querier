@@ -44,53 +44,51 @@ func (mq *redisMQ) deadLetterConsumer(ctx context.Context, conf config.MessageQu
 	defer ticker.Stop()
 	deadLetterTopic := conf.DeadLetterTopic
 	consumerGroup := "codebase-indexer-dead-letter-consumer"
+	processedCount := 0
 	for {
 		select {
 		case <-ctx.Done():
+			logx.Infof("dead_letter_consumer exited, processed %d messages", processedCount)
 			logx.Info("dead_letter_consumer exited.")
 			return
 		case <-ticker.C:
 			logx.Info("dead_letter_consumer starting batch processing")
-			processedCount := 0
-			for {
-				msg, err := mq.Consume(ctx, deadLetterTopic, consumerGroup, types.ConsumeOptions{
-					ReadTimeout: time.Second, // 1秒超时，避免阻塞
-				})
+			msg, err := mq.Consume(ctx, deadLetterTopic, consumerGroup, types.ConsumeOptions{
+				ReadTimeout: time.Second, // 1秒超时，避免阻塞
+			})
 
-				if err != nil {
-					if errors.Is(err, errs.ReadTimeout) {
-						logx.Infof("dead_letter_consumer exited, batch processed %d messages", processedCount)
-						break // 没有更多消息
-					}
-					logx.Errorf("dead_letter_consumer read dead letter topic failed: %v", err)
-					break
+			if err != nil {
+				if errors.Is(err, errs.ReadTimeout) {
+					break // 没有更多消息
 				}
+				logx.Errorf("dead_letter_consumer read dead letter topic failed: %v", err)
+				break
+			}
 
-				// 原始topic
-				originTopic := msg.Topic // 假设topic是字符串键
+			// 原始topic
+			originTopic := msg.Topic // 假设topic是字符串键
 
-				if originTopic == deadLetterTopic || originTopic == types.EmptyString {
-					logx.Errorf("dead_letter_consumer invalid original topic: %v, message ID: %s", originTopic, msg.ID)
-					if ackErr := mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); ackErr != nil {
-						logx.Errorf("dead_letter_consumer failed to ack message with invalid topic: %v", ackErr)
-					}
-					continue
+			if originTopic == deadLetterTopic || originTopic == types.EmptyString {
+				logx.Errorf("dead_letter_consumer invalid original topic: %v, message ID: %s", originTopic, msg.ID)
+				if ackErr := mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); ackErr != nil {
+					logx.Errorf("dead_letter_consumer failed to ack message with invalid topic: %v", ackErr)
 				}
+				continue
+			}
 
-				// 复用 Produce 方法重投递
-				err = mq.Produce(ctx, originTopic, msg.Body, types.ProduceOptions{})
-				if err != nil {
-					logx.Errorf("dead_letter_consumer redeliver to %s failed: %v, message ID: %s", originTopic, err, msg.ID)
-					// 重投递失败，不确认消息，让消息继续留在队列中
-					continue
-				}
+			// 复用 Produce 方法重投递
+			err = mq.Produce(ctx, originTopic, msg.Body, types.ProduceOptions{})
+			if err != nil {
+				logx.Errorf("dead_letter_consumer redeliver to %s failed: %v, message ID: %s", originTopic, err, msg.ID)
+				// 重投递失败，不确认消息，让消息继续留在队列中
+				continue
+			}
 
-				if err = mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); err != nil {
-					logx.Errorf("dead_letter_consumer failed to ack redelivered message: %v, message ID: %s", err, msg.ID)
-				} else {
-					processedCount++
-					logx.Infof("dead_letter_consumer redelivered to topic %s successfully, message ID: %s", originTopic, msg.ID)
-				}
+			if err = mq.Ack(ctx, deadLetterTopic, consumerGroup, msg.ID); err != nil {
+				logx.Errorf("dead_letter_consumer failed to ack redelivered message: %v, message ID: %s", err, msg.ID)
+			} else {
+				processedCount++
+				logx.Infof("dead_letter_consumer redelivered to topic %s successfully, message ID: %s", originTopic, msg.ID)
 			}
 		}
 	}
