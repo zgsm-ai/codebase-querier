@@ -3,8 +3,10 @@ package config
 // CodeBaseStoreConf 代码库存储配置
 type CodeBaseStoreConf struct {
 	// 具体存储类型的配置，使用内嵌结构实现
-	Local LocalStoreConf `json:",optional"`
-	Minio MinioStoreConf `json:",optional"`
+	Local             LocalStoreConf `json:",optional"`
+	Minio             MinioStoreConf `json:",optional"`
+	MinFilesToAnalyze int            `json:",default=50"`
+	MaxFilesToAnalyze int            `json:",default=500"`
 }
 
 // LocalStoreConf 本地文件系统存储配置

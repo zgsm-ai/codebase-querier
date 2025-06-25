@@ -374,7 +374,7 @@ func (m *minioCodebase) Tree(ctx context.Context, codebasePath string, dir strin
 		}
 
 		// Skip hidden files
-		if strings.HasPrefix(filepath.Base(relPath), ".") {
+		if utils.IsHiddenFile(filepath.Base(relPath)) {
 			continue
 		}
 

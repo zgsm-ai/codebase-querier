@@ -437,7 +437,7 @@ func (l *localCodebase) Tree(ctx context.Context, codebasePath string, subDir st
 		}
 
 		// 跳过隐藏文件和目录
-		if strings.HasPrefix(info.Name(), ".") {
+		if utils.IsHiddenFile(info.Name()) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -654,7 +654,7 @@ func (l *localCodebase) Walk(ctx context.Context, codebasePath string, dir strin
 		}
 
 		// 跳过隐藏文件和目录
-		if strings.HasPrefix(info.Name(), ".") {
+		if utils.IsHiddenFile(info.Name()) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -783,10 +783,11 @@ func (l *localCodebase) InferLanguage(ctx context.Context, codebasePath string) 
 	start := time.Now()
 	languageStats := make(map[parser.Language]int)
 	analyzedFiles := 0
+
 	err := l.Walk(ctx, codebasePath, types.EmptyString, func(walkCtx *WalkContext, reader io.ReadCloser) error {
 
 		// 如果已经分析了足够多的文件，且某个语言占比超过60%，可以提前结束
-		if analyzedFiles >= minFilesToAnalyze {
+		if analyzedFiles >= l.cfg.MinFilesToAnalyze {
 			totalFiles := 0
 			maxCount := 0
 			for _, count := range languageStats {
@@ -800,8 +801,12 @@ func (l *localCodebase) InferLanguage(ctx context.Context, codebasePath string) 
 			}
 		}
 
-		if analyzedFiles >= defaultMaxFiles {
+		if analyzedFiles >= l.cfg.MaxFilesToAnalyze {
 			return maxFileReached
+		}
+		// 跳过隐藏文件和目录
+		if utils.IsHiddenFile(walkCtx.RelativePath) {
+			return nil
 		}
 
 		ext := filepath.Ext(walkCtx.RelativePath)

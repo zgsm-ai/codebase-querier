@@ -81,7 +81,7 @@ func (p *baseProcessor) updateTaskSuccess(ctx context.Context) error {
 // handleIfTaskFailed 处理任务失败情况
 func (p *baseProcessor) handleIfTaskFailed(ctx context.Context, err error) bool {
 	if err != nil {
-		tracer.WithTrace(ctx).Errorf("failed to process file, err: %v, file:%v ", err, p.params)
+		tracer.WithTrace(ctx).Errorf("index task failed, err: %v, file:%v ", err, p.params)
 		if errors.Is(err, errs.InsertDatabaseFailed) {
 			return true
 		}

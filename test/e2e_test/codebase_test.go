@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"github.com/zgsm-ai/codebase-indexer/test/api_test"
@@ -104,4 +105,29 @@ func TestReadFile(t *testing.T) {
 		assert.True(t, len(read) > 0)
 	}
 
+}
+
+func TestInferLanguage(t *testing.T) {
+	ctx := context.Background()
+	svcCtx := api.InitSvcCtx(ctx, nil)
+	testcases := []struct {
+		Name         string
+		codebasePath string
+		wantErr      error
+		wantResult   parser.Language
+	}{
+		{
+			Name:         "typescript",
+			codebasePath: "G:\\projects\\zgsm",
+			wantErr:      nil,
+			wantResult:   parser.TSX,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.Name, func(t *testing.T) {
+			language, err := svcCtx.CodebaseStore.InferLanguage(ctx, tt.codebasePath)
+			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantResult, language)
+		})
+	}
 }

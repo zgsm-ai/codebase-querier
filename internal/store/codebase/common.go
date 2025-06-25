@@ -23,12 +23,6 @@ const logicAnd = "&"
 const storeTypeLocal = "local"
 const storeTypeMinio = "minio"
 
-const (
-	// 基础限制
-	defaultMaxFiles   = 500 // 默认最大文件数
-	minFilesToAnalyze = 50  // 最少需要分析的文件数
-)
-
 var maxFileReached = errors.New("max files reached")
 
 var ErrStoreTypeNotSupported = errors.New("store type not supported")

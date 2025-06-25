@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
+	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/store/codebase"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
@@ -86,37 +87,39 @@ func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath
 	if err != nil {
 		return nil, nil, fmt.Errorf("scip generator infer language error:%w", err)
 	}
-
-	var langConfig *config.LanguageConfig
-	if dominantLanguage != "" {
-		// 查找对应的语言配置
-		for _, lang := range c.config.Languages {
-			if lang.Name == string(dominantLanguage) {
-				langConfig = lang
-			}
+	if dominantLanguage == types.EmptyString {
+		return nil, nil, fmt.Errorf("scip generator infer language is empty, codebase path is %s", codebasePath)
+	}
+	indexLanguage := languageIndexToolMapping(dominantLanguage)
+	tracer.WithTrace(ctx).Infof("scip_generator inferred language is %s, mapping to %s", dominantLanguage, indexLanguage)
+	var langIndexConfig *config.LanguageConfig
+	// 查找对应的语言配置
+	for _, conf := range c.config.Languages {
+		if conf.Name == string(indexLanguage) {
+			langIndexConfig = conf
 		}
 	}
-	if langConfig == nil {
-		return nil, nil, fmt.Errorf("no matching language configuration found")
+	if langIndexConfig == nil {
+		return nil, nil, fmt.Errorf("no matching language index config found")
 	}
-	if len(langConfig.BuildTools) == 0 {
-		return langConfig.Index, nil, nil
+	if len(langIndexConfig.BuildTools) == 0 {
+		return langIndexConfig.Index, nil, nil
 	}
 
 	// 按优先级排序构建工具
-	sort.Slice(langConfig.BuildTools, func(i, j int) bool {
-		return langConfig.BuildTools[i].Priority < langConfig.BuildTools[j].Priority
+	sort.Slice(langIndexConfig.BuildTools, func(i, j int) bool {
+		return langIndexConfig.BuildTools[i].Priority < langIndexConfig.BuildTools[j].Priority
 	})
 
-	for _, tool := range langConfig.BuildTools {
+	for _, tool := range langIndexConfig.BuildTools {
 		for _, detectFile := range tool.DetectionFiles {
 			if _, err := c.codebaseStore.Stat(ctx, codebasePath, detectFile); err == nil {
-				return langConfig.Index, tool, nil
+				return langIndexConfig.Index, tool, nil
 			}
 		}
 	}
 
-	return nil, nil, fmt.Errorf("no matching language configuration found")
+	return nil, nil, fmt.Errorf("no matching language index config found")
 }
 
 // Cleanup removes the output directory and releases any locks
@@ -126,4 +129,13 @@ func (e *IndexGenerator) Cleanup() error {
 
 func indexOutputDir(codebasePath string) string {
 	return filepath.Join(codebasePath, types.CodebaseIndexDir)
+}
+
+func languageIndexToolMapping(lang parser.Language) parser.Language {
+	switch lang {
+	case parser.TSX:
+		return parser.TypeScript
+	default:
+		return lang
+	}
 }
