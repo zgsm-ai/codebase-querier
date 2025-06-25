@@ -48,13 +48,14 @@ func (mq *redisMQ) deadLetterConsumer(ctx context.Context, conf config.MessageQu
 	for {
 		select {
 		case <-ctx.Done():
-			logx.Infof("dead_letter_consumer exited, processed %d messages", processedCount)
+			logx.Infof("dead_letter_consumer exited, processed %d messages.", processedCount)
 			logx.Info("dead_letter_consumer exited.")
 			return
 		case <-ticker.C:
-			logx.Info("dead_letter_consumer starting batch processing")
+			logx.Infof("dead_letter_consumer start to consume with interval %f min, has processed %d messages",
+				mq.conf.DeadLetterInterval.Minutes(), processedCount)
 			msg, err := mq.Consume(ctx, deadLetterTopic, consumerGroup, types.ConsumeOptions{
-				ReadTimeout: time.Second, // 1秒超时，避免阻塞
+				ReadTimeout: 3 * time.Second, // 3秒超时，避免阻塞
 			})
 
 			if err != nil {
