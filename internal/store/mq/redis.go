@@ -59,10 +59,10 @@ func (mq *redisMQ) deadLetterConsumer(ctx context.Context, conf config.MessageQu
 
 			if err != nil {
 				if errors.Is(err, errs.ReadTimeout) {
-					break // 没有更多消息
+					continue // 没有更多消息
 				}
 				logx.Errorf("dead_letter_consumer read dead letter topic failed: %v", err)
-				break
+				continue
 			}
 
 			// 原始topic
