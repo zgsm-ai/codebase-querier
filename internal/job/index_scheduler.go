@@ -102,7 +102,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	mux, locked, err := i.svcCtx.DistLock.TryLock(i.ctx, lockKey, i.svcCtx.Config.IndexTask.LockTimeout)
 	if err != nil || !locked {
 		tracer.WithTrace(ctx).Debugf("failed to acquire lock, nack message %s, err:%v", msg.ID, err)
-		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body)
+		i.nackSilently(ctx, msg.Topic, i.consumerGroup, msg.ID, msg.Body) //nack
 		return
 	}
 
