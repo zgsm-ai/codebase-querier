@@ -40,8 +40,8 @@ func TestQueryDefinitionByCodeSnippet(t *testing.T) {
 		"clientId":     clientId,
 		"codebasePath": "G:\\tmp\\projects\\go\\kubernetes",
 		"filePath":     "pkg/auth/authorizer/abac/abac.go",
-		"startLine":    "0",
-		"endLine":      "0",
+		"startLine":    "1",
+		"endLine":      "2",
 		"codeSnippet": `
 package abac
 

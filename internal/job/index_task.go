@@ -7,6 +7,8 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
+	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"path/filepath"
 	"time"
 )
 
@@ -50,7 +52,7 @@ func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool
 	if embedTaskOk && graphTaskOk {
 		i.cleanProcessedMetadataFile(ctx)
 	}
-	tracer.WithTrace(ctx).Infof("index task end, cost %d ms. embedding ok ? %t, graph ? %t",
+	tracer.WithTrace(ctx).Infof("index task end, cost %d ms. embedding ok? %t, graph ok? %t",
 		time.Since(start).Milliseconds(), embedTaskOk, graphTaskOk)
 	return
 }
@@ -104,8 +106,15 @@ func (i *IndexTask) cleanProcessedMetadataFile(ctx context.Context) {
 	} //TODO 改为rename成临时文件，然后定时清理。
 	tracer.WithTrace(ctx).Infof("start to clean sync meta file, codebasePath:%s, meta file cnt:%v",
 		i.Params.CodebasePath, len(i.Params.SyncMetaFiles.MetaFilePaths))
+	metaFiles := make([]string, len(i.Params.SyncMetaFiles.MetaFilePaths))
+	for l, v := range i.Params.SyncMetaFiles.MetaFilePaths {
+		if utils.IsChild(types.SyncMedataDir, v) {
+			v = utils.ToUnixPath(filepath.Join(types.SyncMedataDir, v))
+		}
+		metaFiles[l] = v
+	}
 	// TODO 当调用链和嵌入任务都成功时，清理元数据文件。改为移动到另一个隐藏文件夹中，每天定时清理，便于排查问题。
-	if err := i.SvcCtx.CodebaseStore.BatchDelete(ctx, i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths); err != nil {
+	if err := i.SvcCtx.CodebaseStore.BatchDelete(ctx, i.Params.CodebasePath, metaFiles); err != nil {
 		tracer.WithTrace(ctx).Errorf("failed to delete codebase %s metadata : %v, err: %v",
 			i.Params.CodebasePath, i.Params.SyncMetaFiles.MetaFilePaths, err)
 	}

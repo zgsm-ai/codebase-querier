@@ -5,6 +5,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"golang.org/x/tools/go/packages"
 	"path/filepath"
 	"strings"
 )
@@ -236,6 +237,11 @@ func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string, config 
 	importStmt.FilePaths = []string{}
 	importName := importStmt.Name
 
+	// 标准库，直接排除
+	if yes, _ := r.isStandardLibrary(importName); yes {
+		logx.Debugf("import_resolver import %s is stantdard lib, skip", importName)
+		return nil
+	}
 	// 移除mod，如果有
 	relPath := importName
 	if strings.HasPrefix(importName, config.SourceRoot) {
@@ -267,6 +273,24 @@ func (r *GoResolver) Resolve(importStmt *Import, currentFilePath string, config 
 	}
 
 	return fmt.Errorf("cannot find file which import belongs to: %s", importName)
+}
+
+func (g *GoResolver) isStandardLibrary(pkgPath string) (bool, error) {
+	cfg := &packages.Config{
+		Mode: packages.NeedName,
+	}
+
+	pkgs, err := packages.Load(cfg, pkgPath)
+	if err != nil {
+		return false, fmt.Errorf("import_resolver load package: %v", err)
+	}
+
+	if len(pkgs) == 0 {
+		return false, fmt.Errorf("import_resolver package not found: %s", pkgPath)
+	}
+
+	// 标准库包的PkgPath以"internal/"或非模块路径开头
+	return !strings.Contains(pkgs[0].PkgPath, "."), nil
 }
 
 // C/C++解析器

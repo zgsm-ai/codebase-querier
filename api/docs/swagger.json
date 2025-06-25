@@ -723,18 +723,11 @@
             "allowEmptyValue": true
           },
           {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "codeSnippet": {
-                  "description": "代码内容",
-                  "type": "string"
-                }
-              }
-            }
+            "type": "string",
+            "description": "代码内容",
+            "name": "codeSnippet",
+            "in": "query",
+            "allowEmptyValue": true
           }
         ],
         "responses": {
@@ -1104,7 +1097,7 @@
       }
     }
   },
-  "x-date": "2025-06-19 19:55:50",
+  "x-date": "2025-06-25 11:36:45",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

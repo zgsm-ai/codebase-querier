@@ -105,15 +105,12 @@ func (i *IndexParser) ParseScipIndexFile(ctx context.Context, codebasePath strin
 		return nil, nil, err
 	}
 	if fileStat == nil || fileStat.IsDir {
-		return nil, nil, fmt.Errorf("SCIP file does not exist: %s", scipFilePath)
+		return nil, nil, fmt.Errorf("scip file does not exist: %s", scipFilePath)
 	}
-	if fileStat.Size == 0 {
-		return nil, nil, fmt.Errorf("empty SCIP file: %s", scipFilePath)
-	}
-
+	// 空index file，大小大概在几十字节
 	file, err := i.codebaseStore.Open(ctx, codebasePath, scipFilePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open SCIP file: %w", err)
+		return nil, nil, fmt.Errorf("failed to open scip file: %w", err)
 	}
 	defer file.Close()
 
@@ -122,6 +119,10 @@ func (i *IndexParser) ParseScipIndexFile(ctx context.Context, codebasePath strin
 	metadata, err := i.prepareVisit(file)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to collect metadata and symbols: %w", err)
+	}
+	// empty index file
+	if len(metadata.DocCountByPath) == 0 {
+		return nil, nil, fmt.Errorf("scip index file exists, but it is empty")
 	}
 
 	if _, err := file.Seek(0, 0); err != nil {
@@ -136,9 +137,9 @@ func (i *IndexParser) ParseScipIndexFile(ctx context.Context, codebasePath strin
 	}
 
 	if err := visitor.ParseStreaming(file); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse SCIP file: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse scip file: %w", err)
 	}
-	tracer.WithTrace(ctx).Infof("scip_parser parsed index %s %d files successfully, cost %d ms ", scipFilePath,
+	tracer.WithTrace(ctx).Infof("scip_parser parsed index %s successfully, %d docs found, cost %d ms ", scipFilePath,
 		len(processedDocs), time.Since(start).Milliseconds())
 	return metadata, processedDocs, nil
 }
@@ -372,7 +373,7 @@ func addMissingExternalSymbols(doc *scip.Document, externalSymbolsByName map[str
 	}
 	refSet := make(map[string]struct{})
 	for _, occ := range doc.Occurrences {
-		if occ.Symbol != "" {
+		if occ.Symbol != types.EmptyString {
 			refSet[occ.Symbol] = struct{}{}
 		}
 	}

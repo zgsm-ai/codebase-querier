@@ -23,8 +23,9 @@ import (
 
 const dbName = "badger.db"
 
-const openMaxRetries = 3
+const openMaxRetries = 5
 const openRetryInterval = time.Second
+const eachSymbolKeepResult = 2
 
 // BadgerDBGraph implements GraphStore using BadgerDB
 type BadgerDBGraph struct {
@@ -220,7 +221,7 @@ func (b BadgerDBGraph) QueryRelations(ctx context.Context, opts *types.RelationR
 func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.DefinitionRequest, pc *parser.ProjectConfig) ([]*types.DefinitionNode, error) {
 	startTime := time.Now()
 	defer func() {
-		tracer.WithTrace(ctx).Infof("QueryDefinitions execution time: %d ms", time.Since(startTime).Milliseconds())
+		tracer.WithTrace(ctx).Infof("query definitions cost %d ms", time.Since(startTime).Milliseconds())
 	}()
 
 	var res []*types.DefinitionNode
@@ -247,7 +248,7 @@ func (b BadgerDBGraph) QueryDefinitions(ctx context.Context, opts *types.Definit
 		}
 		imports := parsedData.Imports
 		elements := parsedData.Elements
-		// TODO 找到所有的Call, 当前只处理call
+		// TODO 找到所有的外部依赖, 当前只处理call
 		var callNames []string
 		for _, e := range elements {
 			if c, ok := e.(*parser.Call); ok {
@@ -809,21 +810,23 @@ func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, im
 	}
 
 	// TODO 同一个name可能检索出多条数据，再根据import 过滤一遍。 namespace 要么用. 要么用/ 得判断
-	result := make([]*codegraphpb.KeyRange, 0, len(foundKeys))
+	total := 0
 	for _, v := range foundKeys {
-		result = append(result, v...)
+		total += len(v)
 	}
 
-	filteredResult := make([]*codegraphpb.KeyRange, 0, len(result))
+	filteredResult := make([]*codegraphpb.KeyRange, 0, total)
 
 	// TODO 根据 imports 过滤
 	if len(imports) > 0 {
-		for _, v := range result {
-			for _, imp := range imports {
-				for _, fp := range imp.FilePaths {
-					if strings.Contains(string(v.DocKey), fp) || strings.Contains(fp, string(v.DocKey)) { //TODO , go work ，多模块等特殊情况
-						filteredResult = append(filteredResult, v)
-						break
+		for _, v := range foundKeys {
+			for _, doc := range v {
+				for _, imp := range imports {
+					for _, fp := range imp.FilePaths {
+						if strings.Contains(string(doc.DocKey), fp) || strings.Contains(fp, string(doc.DocKey)) { //TODO , go work ，多模块等特殊情况
+							filteredResult = append(filteredResult, doc)
+							break
+						}
 					}
 				}
 			}
@@ -831,10 +834,16 @@ func (b BadgerDBGraph) searchSymbolNames(ctx context.Context, names []string, im
 	}
 
 	if len(filteredResult) == 0 {
-		tracer.WithTrace(ctx).Debugf("result after filter is empty, use origin result")
-		filteredResult = result
+		tracer.WithTrace(ctx).Debugf("result after filter is empty, use origin result ans keep 2 with each symbol")
+		// 每个仅保留2个
+		for _, v := range foundKeys {
+			if len(v) > eachSymbolKeepResult {
+				v = v[:eachSymbolKeepResult]
+			}
+			filteredResult = append(filteredResult, v...)
+		}
 	}
 	tracer.WithTrace(ctx).Infof("codegraph symbol name search end, cost %d ms, names: %d, key found:%d, filtered result:%d",
-		time.Since(start).Milliseconds(), len(names), len(result), len(filteredResult))
-	return result, nil
+		time.Since(start).Milliseconds(), len(names), total, len(filteredResult))
+	return filteredResult, nil
 }

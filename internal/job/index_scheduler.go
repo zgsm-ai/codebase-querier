@@ -123,6 +123,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 
 	// 判断消息是否是最新消息，如果不是最新消息，跳过
 	if !i.IsCurrentLatestVersion(ctx, syncMsg) {
+		tracer.WithTrace(ctx).Debugf("syncMsg syncId %d is not the latest version, ack it", syncMsg.SyncID)
 		i.ackSilently(ctx, msg)
 		return
 	}
@@ -164,20 +165,20 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 }
 
 func (i *IndexTaskScheduler) nackSilently(ctx context.Context, topic string, consumerGroup string, msgId string, body []byte) {
-	tracer.WithTrace(ctx).Infof("start to nack message %s", msgId)
+	tracer.WithTrace(ctx).Debugf("start to nack message %s", msgId)
 	if ackErr := i.messageQueue.Nack(i.ctx, topic, consumerGroup, msgId, body, types.NackOptions{}); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to nack message %s from stream %s, group %s, err: %v", msgId, topic, i.consumerGroup, ackErr)
 		// TODO: Handle ACK failure - this is rare, but might require logging or alerting
 	}
-	tracer.WithTrace(ctx).Infof("nack message %s successfully.", msgId)
+	tracer.WithTrace(ctx).Debugf("nack message %s successfully.", msgId)
 }
 
 func (i *IndexTaskScheduler) ackSilently(ctx context.Context, msg *types.Message) {
-	tracer.WithTrace(ctx).Infof("start to ack message %s", msg.ID)
+	tracer.WithTrace(ctx).Debugf("start to ack message %s", msg.ID)
 	if ackErr := i.messageQueue.Ack(i.ctx, msg.Topic, i.consumerGroup, msg.ID); ackErr != nil {
 		tracer.WithTrace(ctx).Errorf("failed to ack message %s from stream %s, group %s, err: %v", msg.ID, msg.Topic, i.consumerGroup, ackErr)
 	}
-	tracer.WithTrace(ctx).Infof("ack message %s successfully.", msg.ID)
+	tracer.WithTrace(ctx).Debugf("ack message %s successfully.", msg.ID)
 }
 
 func (i *IndexTaskScheduler) Submit(ctx context.Context, taskRun func()) error {
