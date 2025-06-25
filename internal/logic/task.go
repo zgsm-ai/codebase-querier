@@ -59,6 +59,7 @@ func (l *TaskLogic) SubmitTask(req *types.IndexTaskRequest) (resp *types.IndexTa
 	if err != nil || !locked {
 		return nil, fmt.Errorf("failed to acquire lock %s to sumit index task, err:%w", lockKey, err)
 	}
+	defer l.svcCtx.DistLock.Unlock(ctx, mux)
 
 	tracer.WithTrace(ctx).Infof("acquire lock %s successfully, start to submit index task.", lockKey)
 
@@ -78,7 +79,7 @@ func (l *TaskLogic) SubmitTask(req *types.IndexTaskRequest) (resp *types.IndexTa
 		tracer.WithTrace(ctx).Infof("index task submit without file map, find them from codebase store.")
 		medataFiles, err = l.svcCtx.CodebaseStore.GetSyncFileListCollapse(ctx, codebase.Path)
 		if err != nil {
-			tracer.WithTrace(ctx).Errorf("failed to get sync file list err:%w", err)
+			tracer.WithTrace(ctx).Errorf("failed to get sync file list err:%v", err)
 			return nil, err
 		}
 
