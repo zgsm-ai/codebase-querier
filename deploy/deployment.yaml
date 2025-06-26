@@ -149,22 +149,9 @@ data:
                 - "--output"
                 - "__outputPath__/index.scip"
                 - "-v"
-    
+
       - name: java
         detection_files: ["pom.xml"]
-        build_tools:
-          - name: maven
-            detection_files: ["pom.xml"]
-            priority: 10 # Maven priority (lower number is higher priority)
-            build_commands:
-              - base: "mvn"
-                args: ["verify", "--batch-mode", "--fail-never", "-DskipTests", "-T", "8"]
-          # - name: gradle
-          #   detection_files: ["build.gradle"]
-          #   priority: 20 # Gradle priority
-          #   build_commands:
-          #     - base: "gradle"
-          #       args: ["--offline", "--continue", "--no-tests", "--parallel", "--max-workers", "8", "--no-interactive"]
         index:
           name: scip-java
           commands:
@@ -178,8 +165,13 @@ data:
                 - "--output"
                 - "__outputPath__/index.scip"
                 - "--"
-                - "__buildArgs__"
-    
+                - "verify"
+                - "--batch-mode"
+                - "--fail-never"
+                - "-DskipTests"
+                - "-T"
+                - "8"
+      
       - name: python
         detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
         build_tools:
