@@ -124,6 +124,8 @@ languages:
               - "__sourcePath__"
               - "-B"
               - "__outputPath__/build/"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - name: make
         detection_files: ["Makefile"]
         priority: 20
@@ -138,6 +140,8 @@ languages:
               - "__sourcePath__"
               - "-j"
               - "16"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - name: autoconf
         detection_files: ["configure", "Configure"]
         priority: 30
@@ -145,7 +149,9 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "chmod +x -R . && (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     index:
       name: scip-clang
       commands:
@@ -157,6 +163,8 @@ languages:
             - "__outputPath__/index.scip"
             - "-j"
             - "16"
+          env:
+            - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   - name: cpp
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
@@ -174,6 +182,8 @@ languages:
               - "__sourcePath__"
               - "-B"
               - "__outputPath__/build/"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - name: make
         detection_files: ["Makefile"]
         priority: 20 # Make second priority
@@ -188,6 +198,8 @@ languages:
               - "__sourcePath__"
               - "-j"
               - "16"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       - name: autoconf
         detection_files: ["configure", "Configure"]
         priority: 30
@@ -195,7 +207,9 @@ languages:
           - base: "bash"
             args:
               - "-c"
-              - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+              - "chmod +x -R . &&  (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+            env:
+              - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     index:
       name: scip-clang
       commands:
@@ -207,6 +221,8 @@ languages:
             - "__outputPath__/index.scip"
             - "-j"
             - "16"
+          env:
+            - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   - name: rust
     detection_files: ["Cargo.toml"]

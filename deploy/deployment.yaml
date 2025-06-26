@@ -83,7 +83,7 @@ data:
         StripNewLines: true
         Model: gte-modernbert-base
         ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
-        ApiBase: https://zgsm.sangfor.com/v1/
+        ApiBase: https://zgsm.sangfor.com/v1/embeddings
       Reranker:
         Timeout: 10s
         MaxRetries: 3
@@ -205,8 +205,7 @@ data:
                 - "__outputPath__/index.scip"
                 - "--gem-metadata"
                 - "ruby@v0.0.1"
-  
-    
+                
       - name: c
         detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
         build_tools:
@@ -223,6 +222,8 @@ data:
                   - "__sourcePath__"
                   - "-B"
                   - "__outputPath__/build/"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           - name: make
             detection_files: ["Makefile"]
             priority: 20
@@ -236,7 +237,9 @@ data:
                   - "-C"
                   - "__sourcePath__"
                   - "-j"
-                  - "$(nproc)"
+                  - "16"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           - name: autoconf
             detection_files: ["configure", "Configure"]
             priority: 30
@@ -244,7 +247,9 @@ data:
               - base: "bash"
                 args:
                   - "-c"
-                  - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+                  - "chmod +x -R . && (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         index:
           name: scip-clang
           commands:
@@ -255,8 +260,11 @@ data:
                 - "--index-output-path"
                 - "__outputPath__/index.scip"
                 - "-j"
-                - "$(nproc)"
-    
+                - "16"
+              env:
+                - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+      
       - name: cpp
         detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
         build_tools:
@@ -273,6 +281,8 @@ data:
                   - "__sourcePath__"
                   - "-B"
                   - "__outputPath__/build/"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           - name: make
             detection_files: ["Makefile"]
             priority: 20 # Make second priority
@@ -286,7 +296,9 @@ data:
                   - "-C"
                   - "__sourcePath__"
                   - "-j"
-                  - "$(nproc)"
+                  - "16"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           - name: autoconf
             detection_files: ["configure", "Configure"]
             priority: 30
@@ -294,7 +306,9 @@ data:
               - base: "bash"
                 args:
                   - "-c"
-                  - "./configure || ./Configure && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j $(nproc)"
+                  - "chmod +x -R . &&  (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
+                env:
+                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         index:
           name: scip-clang
           commands:
@@ -305,7 +319,9 @@ data:
                 - "--index-output-path"
                 - "__outputPath__/index.scip"
                 - "-j"
-                - "$(nproc)"
+                - "16"
+              env:
+                - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     
       - name: rust
         detection_files: ["Cargo.toml"]
@@ -415,6 +431,8 @@ spec:
         - name: maven
           mountPath: /root/.m2
           subPath: settings.xml
+        - mountPath: /dev/shm
+          name: dshm
       volumes:
         - name: logs
           emptyDir:
@@ -431,7 +449,10 @@ spec:
             items:
               - key: "settings.xml"
                 path: "settings.xml"
-
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -448,51 +469,3 @@ spec:
     name: metrics
   selector:
     app: codebase-indexer
-
-#---
-#
-#apiVersion: autoscaling/v2
-#kind: HorizontalPodAutoscaler
-#metadata:
-#  name: codebase-indexer-hpa-c
-#  namespace: shenma
-#  labels:
-#    app: codebase-indexer-hpa-c
-#spec:
-#  scaleTargetRef:
-#    apiVersion: apps/v1
-#    kind: Deployment
-#    name: codebase-indexer
-#  minReplicas: 3
-#  maxReplicas: 10
-#  metrics:
-#  - type: Resource
-#    resource:
-#      name: cpu
-#      target:
-#        type: Utilization
-#        averageUtilization: 80
-#
-#---
-#
-#apiVersion: autoscaling/v2
-#kind: HorizontalPodAutoscaler
-#metadata:
-#  name: codebase-indexer-hpa-m
-#  namespace: shenma
-#  labels:
-#    app: codebase-indexer-hpa-m
-#spec:
-#  scaleTargetRef:
-#    apiVersion: apps/v1
-#    kind: Deployment
-#    name: codebase-indexer
-#  minReplicas: 3
-#  maxReplicas: 10
-#  metrics:
-#  - type: Resource
-#    resource:
-#      name: memory
-#      target:
-#        type: Utilization
-#        averageUtilization: 80
