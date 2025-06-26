@@ -108,35 +108,6 @@ languages:
               - "-DskipTests"
               - "-T"
               - "8"
-      # - name: gradle
-      #   detection_files: ["build.gradle"]
-      #   priority: 20
-      #   build_commands:
-      #     - base: "docker"
-      #       args:
-      #         - "run"
-      #         - "--rm"
-      #         - "-v"
-      #         - "__sourcePath__:__sourcePath__"
-      #         - "-w"
-      #         - "__sourcePath__"
-      #         - "__image__"
-      #         - "scip-java"
-      #         - "index"
-      #         - "--cwd"
-      #         - "__sourcePath__"
-      #         - "--targetroot"
-      #         - "__outputPath__/build"
-      #         - "--output"
-      #         - "__outputPath__/index.scip"
-      #         - "--"
-      #         - "--offline"
-      #         - "--continue"
-      #         - "--no-tests"
-      #         - "--parallel"
-      #         - "--max-workers"
-      #         - "8"
-      #         - "--no-interactive"
     index:
       name: scip-java
       commands:
@@ -154,19 +125,6 @@ languages:
 
   - name: python
     detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
-    build_tools:
-      - name: poetry
-        detection_files: ["poetry.lock", "pyproject.toml"]
-        priority: 10
-        build_commands: []
-      - name: pipenv
-        detection_files: ["Pipfile"]
-        priority: 20
-        build_commands: []
-      - name: pip
-        detection_files: ["requirements.txt"]
-        priority: 30
-        build_commands: []
     index:
       name: scip-python
       commands:
@@ -213,29 +171,6 @@ languages:
             - "__outputPath__/index.scip"
             - "--gem-metadata"
             - "ruby@v0.0.1"
-
-  # - name: csharp
-  #   detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
-  #   index:
-  #     name: scip-dotnet
-  #     commands:
-  #       - base: "docker"
-  #         args:
-  #           - "run"
-  #           - "--rm"
-  #           - "-v"
-  #           - "__sourcePath__:__sourcePath__"
-  #           - "-w"
-  #           - "__sourcePath__"
-  #           - "__image__"
-  #           - "scip-dotnet"
-  #           - "index"
-  #           - "--output"
-  #           - "__outputPath__/index.scip"
-  #           - "--working-directory"
-  #           - "__sourcePath__"
-  #           - "--skip-dotnet-restore"
-  #           - "True"
 
   - name: c
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]

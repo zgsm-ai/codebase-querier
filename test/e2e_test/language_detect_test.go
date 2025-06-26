@@ -89,10 +89,10 @@ func TestLanguageDetect(t *testing.T) {
 		//	wantBuildTool: "",
 		//},
 		{
-			Name:          "go",
-			CodebasePath:  "G:\\tmp\\projects\\go\\docker-ce",
+			Name:          "python",
+			CodebasePath:  "G:\\projects\\aider",
 			wantErr:       nil,
-			wantIndexTool: "scip-go",
+			wantIndexTool: "scip-python",
 			wantBuildTool: "",
 		},
 	}
@@ -106,9 +106,7 @@ func TestLanguageDetect(t *testing.T) {
 			generator := scip.NewIndexGenerator(serviceContext.CmdLogger, conf, serviceContext.CodebaseStore)
 			indexTool, buildTool, err := generator.DetectLanguageAndTool(ctx, tc.CodebasePath)
 			var buildToolName string
-			if buildTool == nil {
-				buildToolName = ""
-			} else {
+			if buildTool.Name != "" {
 				buildToolName = buildTool.Name
 			}
 			assert.NoError(t, err)

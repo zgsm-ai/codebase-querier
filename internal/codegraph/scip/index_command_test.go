@@ -257,14 +257,26 @@ func TestCommandExecutor_Execute(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "go",
+			indexCmds: []config.Command{
+				{
+					Base: "cmd",
+					Args: []string{"/C", "echo", "%X%"},
+					Env:  []string{"X=Y"},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := &CommandExecutor{
-				workDir:         tmpDir,
-				BuildCmds:       buildBuildCmds(config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
-				IndexCmds:       buildIndexCmds(config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+				workDir:   tmpDir,
+				BuildCmds: buildBuildCmds(config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
+				IndexCmds: buildIndexCmds(config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+
 				cmdLoggerWriter: os.Stdout,
 			}
 			defer executor.Close()

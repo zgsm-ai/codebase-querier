@@ -100,7 +100,7 @@ func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath
 		}
 	}
 	if index.Name == types.EmptyString {
-		return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language index config found")
+		return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language index tool found")
 	}
 	if len(index.BuildTools) == 0 {
 		return index.Index, config.BuildTool{}, nil
@@ -119,7 +119,7 @@ func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath
 		}
 	}
 
-	return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language index config found")
+	return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language build tool found")
 }
 
 // Cleanup removes the output directory and releases any locks

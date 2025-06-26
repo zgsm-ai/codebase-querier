@@ -40,11 +40,17 @@ languages:
     index:
       name: scip-go
       commands:
-        - base: "scip-go"
+        - base: "bash"
           args:
-            - "--output"
-            - "__outputPath__/index.scip"
-            - "-v"
+            - "-c"
+            - "scip-go --output __outputPath__/index.scip -v"
+          env:
+            - "PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"
+            - "GOPATH=/root/gopath"
+            - "GOROOT=/usr/local/go"
+            - "GOPROXY=https://goproxy.cn,direct"
+            - "GOSUMDB=off"
+            - "GOCACHE=/tmp"
 
   - name: java
     detection_files: ["pom.xml"]
@@ -70,19 +76,6 @@ languages:
 
   - name: python
     detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
-    build_tools:
-      - name: poetry
-        detection_files: ["poetry.lock", "pyproject.toml"]
-        priority: 10
-        build_commands: []
-      - name: pipenv
-        detection_files: ["Pipfile"]
-        priority: 20
-        build_commands: []
-      - name: pip
-        detection_files: ["requirements.txt"]
-        priority: 30
-        build_commands: []
     index:
       name: scip-python
       commands:
@@ -114,20 +107,6 @@ languages:
             - "--gem-metadata"
             - "ruby@v0.0.1"
 
-  # - name: csharp
-  #   detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
-  #   index:
-  #     name: scip-dotnet
-  #     commands:
-  #       - base: "scip-dotnet"
-  #         args:
-  #           - "index"
-  #           - "--output"
-  #           - "__outputPath__/index.scip"
-  #           - "--working-directory"
-  #           - "__sourcePath__"
-  #           - "--skip-dotnet-restore"
-  #           - "True"
 
   - name: c
     detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]

@@ -111,7 +111,7 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 	// 元数据列表
 	medataFiles, err := i.svcCtx.CodebaseStore.GetSyncFileListCollapse(i.ctx, syncMsg.CodebasePath)
 	if err != nil {
-		tracer.WithTrace(ctx).Errorf("index job GetSyncFileListCollapse err:%w", err)
+		tracer.WithTrace(ctx).Errorf("index job GetSyncFileListCollapse err:%v", err)
 		i.ackSilently(ctx, msg)
 		return
 	}

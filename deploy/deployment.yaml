@@ -144,49 +144,37 @@ data:
         index:
           name: scip-go
           commands:
-            - base: "scip-go"
+            - base: "bash"
               args:
-                - "--output"
-                - "__outputPath__/index.scip"
-                - "-v"
+                - "-c"
+                - "scip-go --output __outputPath__/index.scip -v"
+              env:
+                - "PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"
+                - "GOPATH=/root/gopath"
+                - "GOROOT=/usr/local/go"
+                - "GOPROXY=https://goproxy.cn,direct"
+                - "GOSUMDB=off"
+                - "GOCACHE=/tmp"
 
       - name: java
         detection_files: ["pom.xml"]
         index:
           name: scip-java
           commands:
-            - base: "scip-java"
+            - base: "bash"
               args:
-                - "index"
-                - "--cwd"
-                - "__sourcePath__"
-                - "--targetroot"
-                - "__outputPath__/build"
-                - "--output"
-                - "__outputPath__/index.scip"
-                - "--"
-                - "verify"
-                - "--batch-mode"
-                - "--fail-never"
-                - "-DskipTests"
-                - "-T"
-                - "8"
+                - "-c"
+                - "scip-java index --cwd __sourcePath__ --targetroot __outputPath__/build --output __outputPath__/index.scip -- verify --batch-mode --fail-never -DskipTests -T 8"
+              env:
+                - "JAVA_HOME=/opt/jdk-11.0.18"
+                - "JAVA_BUILD=10"
+                - "JAVA_VERSION=11.0.18"
+                - "MAVEN_VERSION=3.9.6"
+                - "MAVEN_HOME=/opt/apache-maven-3.9.6"
+                - "PATH=PATH=/usr/local/go/bin:/opt/jdk-11.0.18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/apache-maven-3.9.6/bin"
       
       - name: python
         detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
-        build_tools:
-          - name: poetry
-            detection_files: ["poetry.lock", "pyproject.toml"]
-            priority: 10
-            build_commands: []
-          - name: pipenv
-            detection_files: ["Pipfile"]
-            priority: 20
-            build_commands: []
-          - name: pip
-            detection_files: ["requirements.txt"]
-            priority: 30
-            build_commands: []
         index:
           name: scip-python
           commands:
@@ -217,21 +205,7 @@ data:
                 - "__outputPath__/index.scip"
                 - "--gem-metadata"
                 - "ruby@v0.0.1"
-    
-      # - name: csharp
-      #   detection_files: [".sln", ".csproj", ".fsproj", ".vbproj"]
-      #   index:
-      #     name: scip-dotnet
-      #     commands:
-      #       - base: "scip-dotnet"
-      #         args:
-      #           - "index"
-      #           - "--output"
-      #           - "__outputPath__/index.scip"
-      #           - "--working-directory"
-      #           - "__sourcePath__"
-      #           - "--skip-dotnet-restore"
-      #           - "True"
+  
     
       - name: c
         detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
@@ -338,18 +312,19 @@ data:
         index:
           name: scip-rust
           commands:
-            - base: "rust-analyzer"
+            - base: "bash"
               args:
-                - "scip"
-                - "__sourcePath__"
-                - "--output"
-                - "__outputPath__/index.scip"
+                - "-c"
+                - "rust-analyzer scip __sourcePath__ --output __outputPath__/index.scip"
               env:
                 - "CARGO_NET_OFFLINE=true"
                 - "NUM_JOBS=32"
                 - "CARGO_BUILD_JOBS=32"
                 - "RUSTUP_AUTO_INSTALL=0"
                 - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"
+                - "PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                - "CARGOPATH=/root/.cargo"
+
   settings.xml: |
     <?xml version="1.0" encoding="UTF-8"?>
     <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
