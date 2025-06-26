@@ -9,6 +9,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -30,7 +31,8 @@ type IndexTaskParams struct {
 
 func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool) {
 	start := time.Now()
-	tracer.WithTrace(ctx).Infof("start to run index task.")
+	tracer.WithTrace(ctx).Infof("index task started, task params:%+v", i.Params)
+
 	// 解锁
 	defer func() {
 		if err := i.SvcCtx.DistLock.Unlock(ctx, i.LockMux); err != nil {
@@ -38,20 +40,38 @@ func (i *IndexTask) Run(ctx context.Context) (embedTaskOk bool, graphTaskOk bool
 		}
 	}()
 
-	embedErr := i.buildEmbedding(ctx)
-	if embedErr != nil {
-		tracer.WithTrace(ctx).Errorf("embedding task failed:%v", embedErr)
-	}
-	graphErr := i.buildCodeGraph(ctx)
-	if graphErr != nil {
-		tracer.WithTrace(ctx).Errorf("graph task failed:%v", graphErr)
-	}
+	var wg sync.WaitGroup
+	wg.Add(2) // 两个待等待的任务
+
+	var embedErr, graphErr error
+
+	// 启动嵌入任务
+	go func() {
+		defer wg.Done()
+		embedErr = i.buildEmbedding(ctx)
+		if embedErr != nil {
+			tracer.WithTrace(ctx).Errorf("embedding task failed:%v", embedErr)
+		}
+	}()
+
+	// 启动图构建任务
+	go func() {
+		defer wg.Done()
+		graphErr = i.buildCodeGraph(ctx)
+		if graphErr != nil {
+			tracer.WithTrace(ctx).Errorf("graph task failed:%v", graphErr)
+		}
+	}()
+
+	// 等待两个任务完成
+	wg.Wait()
 
 	embedTaskOk, graphTaskOk = embedErr == nil, graphErr == nil
 
 	if embedTaskOk && graphTaskOk {
 		i.cleanProcessedMetadataFile(ctx)
 	}
+
 	tracer.WithTrace(ctx).Infof("index task end, cost %d ms. embedding ok? %t, graph ok? %t",
 		time.Since(start).Milliseconds(), embedTaskOk, graphTaskOk)
 	return

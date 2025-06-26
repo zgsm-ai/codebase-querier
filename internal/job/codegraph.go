@@ -45,7 +45,7 @@ func NewCodegraphProcessor(
 }
 
 func (t *codegraphProcessor) Process(ctx context.Context) error {
-	tracer.WithTrace(ctx).Infof("start to execute codegraph task for params: %+v", t.params)
+	tracer.WithTrace(ctx).Infof("start to execute codegraph task, codebase: %s", t.params.CodebaseName)
 	var wait sync.WaitGroup
 	// 启动一个协程去将所有文件的结构提取处理
 	go func() {

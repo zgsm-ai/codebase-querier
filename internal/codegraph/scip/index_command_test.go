@@ -19,8 +19,8 @@ func TestNewCommandExecutor(t *testing.T) {
 	tests := []struct {
 		name         string
 		workDir      string
-		indexTool    *config.IndexTool
-		buildTool    *config.BuildTool
+		indexTool    config.IndexTool
+		buildTool    config.BuildTool
 		placeHolders map[string]string
 		wantErr      bool
 		errContains  string
@@ -40,9 +40,9 @@ func TestNewCommandExecutor(t *testing.T) {
 		{
 			name:    "empty index commands",
 			workDir: "/tmp",
-			indexTool: &config.IndexTool{
+			indexTool: config.IndexTool{
 				Name:     "test",
-				Commands: []*config.Command{},
+				Commands: []config.Command{},
 			},
 			wantErr:     true,
 			errContains: "index commands are required",
@@ -50,9 +50,9 @@ func TestNewCommandExecutor(t *testing.T) {
 		{
 			name:    "valid config",
 			workDir: "/tmp",
-			indexTool: &config.IndexTool{
+			indexTool: config.IndexTool{
 				Name: "test",
-				Commands: []*config.Command{
+				Commands: []config.Command{
 					{
 						Base: "test-cmd",
 						Args: []string{"arg1", "arg2"},
@@ -129,13 +129,13 @@ func TestReplacePlaceHolder(t *testing.T) {
 func TestRenderCommand(t *testing.T) {
 	tests := []struct {
 		name         string
-		command      *config.Command
+		command      config.Command
 		placeHolders map[string]string
-		expected     *config.Command
+		expected     config.Command
 	}{
 		{
 			name: "render all fields",
-			command: &config.Command{
+			command: config.Command{
 				Base: "${BASE}",
 				Args: []string{"${ARG1}", "${ARG2}"},
 				Env:  []string{"${ENV1}=value1", "${ENV2}=value2"},
@@ -147,7 +147,7 @@ func TestRenderCommand(t *testing.T) {
 				"${ENV1}": "ENV1",
 				"${ENV2}": "ENV2",
 			},
-			expected: &config.Command{
+			expected: config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1", "ENV2=value2"},
@@ -155,13 +155,13 @@ func TestRenderCommand(t *testing.T) {
 		},
 		{
 			name: "no placeholders",
-			command: &config.Command{
+			command: config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1"},
 			},
 			placeHolders: map[string]string{},
-			expected: &config.Command{
+			expected: config.Command{
 				Base: "test-cmd",
 				Args: []string{"arg1", "arg2"},
 				Env:  []string{"ENV1=value1"},
@@ -205,19 +205,19 @@ func TestCommandExecutor_Execute(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		buildCmds []*config.Command
-		indexCmds []*config.Command
+		buildCmds []config.Command
+		indexCmds []config.Command
 		wantErr   bool
 	}{
 		{
 			name: "all commands succeed",
-			buildCmds: []*config.Command{
+			buildCmds: []config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*config.Command{
+			indexCmds: []config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
@@ -227,13 +227,13 @@ func TestCommandExecutor_Execute(t *testing.T) {
 		},
 		{
 			name: "build command fails",
-			buildCmds: []*config.Command{
+			buildCmds: []config.Command{
 				{
 					Base: failScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*config.Command{
+			indexCmds: []config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
@@ -243,13 +243,13 @@ func TestCommandExecutor_Execute(t *testing.T) {
 		},
 		{
 			name: "index command fails",
-			buildCmds: []*config.Command{
+			buildCmds: []config.Command{
 				{
 					Base: successScript,
 					Args: []string{},
 				},
 			},
-			indexCmds: []*config.Command{
+			indexCmds: []config.Command{
 				{
 					Base: failScript,
 					Args: []string{},
@@ -263,8 +263,8 @@ func TestCommandExecutor_Execute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			executor := &CommandExecutor{
 				workDir:         tmpDir,
-				BuildCmds:       buildBuildCmds(&config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
-				IndexCmds:       buildIndexCmds(&config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
+				BuildCmds:       buildBuildCmds(config.BuildTool{Commands: tt.buildCmds}, tmpDir, nil, nil),
+				IndexCmds:       buildIndexCmds(config.IndexTool{Commands: tt.indexCmds}, tmpDir, nil, nil),
 				cmdLoggerWriter: os.Stdout,
 			}
 			defer executor.Close()

@@ -61,7 +61,7 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, cmdLogger *tra
 		return nil, fmt.Errorf("scip_generator failed to detect [%s] launguage index tool, err: %w", codebasePath, err)
 	}
 	buildToolName := types.EmptyString
-	if build != nil {
+	if build.Name != types.EmptyString {
 		buildToolName = build.Name
 	}
 	tracer.WithTrace(ctx).Infof("scip_generator detect language successfully, cost %d ms. index tool is [%s], build tool is [%s]",
@@ -81,45 +81,45 @@ func (g *IndexGenerator) InitCommandExecutor(ctx context.Context, cmdLogger *tra
 }
 
 // DetectLanguageAndTool detects the language and tool for a repository
-func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath string) (*config.IndexTool, *config.BuildTool, error) {
+func (c *IndexGenerator) DetectLanguageAndTool(ctx context.Context, codebasePath string) (config.IndexTool, config.BuildTool, error) {
 	// 通过Walk统计文件频率
 	dominantLanguage, err := c.codebaseStore.InferLanguage(ctx, codebasePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("scip generator infer language error:%w", err)
+		return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("scip generator infer language error:%w", err)
 	}
 	if dominantLanguage == types.EmptyString {
-		return nil, nil, fmt.Errorf("scip generator infer language is empty, codebase path is %s", codebasePath)
+		return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("scip generator infer language is empty, codebase path is %s", codebasePath)
 	}
 	indexLanguage := languageIndexToolMapping(dominantLanguage)
 	tracer.WithTrace(ctx).Infof("scip_generator inferred language is %s, mapping to %s", dominantLanguage, indexLanguage)
-	var langIndexConfig *config.LanguageConfig
+	var index config.ScipIndexConfig
 	// 查找对应的语言配置
 	for _, conf := range c.config.Languages {
 		if conf.Name == string(indexLanguage) {
-			langIndexConfig = conf
+			index = conf
 		}
 	}
-	if langIndexConfig == nil {
-		return nil, nil, fmt.Errorf("no matching language index config found")
+	if index.Name == types.EmptyString {
+		return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language index config found")
 	}
-	if len(langIndexConfig.BuildTools) == 0 {
-		return langIndexConfig.Index, nil, nil
+	if len(index.BuildTools) == 0 {
+		return index.Index, config.BuildTool{}, nil
 	}
 
 	// 按优先级排序构建工具
-	sort.Slice(langIndexConfig.BuildTools, func(i, j int) bool {
-		return langIndexConfig.BuildTools[i].Priority < langIndexConfig.BuildTools[j].Priority
+	sort.Slice(index.BuildTools, func(i, j int) bool {
+		return index.BuildTools[i].Priority < index.BuildTools[j].Priority
 	})
 
-	for _, tool := range langIndexConfig.BuildTools {
+	for _, tool := range index.BuildTools {
 		for _, detectFile := range tool.DetectionFiles {
 			if _, err := c.codebaseStore.Stat(ctx, codebasePath, detectFile); err == nil {
-				return langIndexConfig.Index, tool, nil
+				return index.Index, tool, nil
 			}
 		}
 	}
 
-	return nil, nil, fmt.Errorf("no matching language index config found")
+	return config.IndexTool{}, config.BuildTool{}, fmt.Errorf("no matching language index config found")
 }
 
 // Cleanup removes the output directory and releases any locks

@@ -42,7 +42,7 @@ type fileProcessResult struct {
 }
 
 func (t *embeddingProcessor) Process(ctx context.Context) error {
-	tracer.WithTrace(ctx).Infof("start to execute embedding task, params: %+v", t.params)
+	tracer.WithTrace(ctx).Infof("start to execute embedding task, codebase: %s", t.params.CodebaseName)
 	start := time.Now()
 
 	err := func(t *embeddingProcessor) error {

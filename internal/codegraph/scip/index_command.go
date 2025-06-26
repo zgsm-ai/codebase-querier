@@ -30,12 +30,12 @@ type CommandExecutor struct {
 func newCommandExecutor(
 	cmdLogger *tracer.CmdLogger,
 	workDir string,
-	indexTool *config.IndexTool,
-	buildTool *config.BuildTool, placeHolders map[string]string) (*CommandExecutor, error) {
+	indexTool config.IndexTool,
+	buildTool config.BuildTool, placeHolders map[string]string) (*CommandExecutor, error) {
 	if workDir == types.EmptyString {
 		return nil, fmt.Errorf(" scip index generator working dir is required")
 	}
-	if indexTool == nil || len(indexTool.Commands) == 0 {
+	if indexTool.Name == types.EmptyString || len(indexTool.Commands) == 0 {
 		return nil, fmt.Errorf("[%s] scip index generator index commands are required", workDir)
 	}
 	hostname, err := os.Hostname()
@@ -63,12 +63,12 @@ func newCommandExecutor(
 	}, nil
 }
 
-func buildBuildCmds(buildTool *config.BuildTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
+func buildBuildCmds(buildTool config.BuildTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
 	if logFileWriter == nil {
 		logFileWriter = os.Stdout
 	}
 	var buildCmds []*exec.Cmd
-	if buildTool != nil && len(buildTool.Commands) > 0 {
+	if buildTool.Name != types.EmptyString && len(buildTool.Commands) > 0 {
 		for _, v := range buildTool.Commands {
 			renderedCmd := renderCommand(v, placeHolders)
 			cmd := exec.Command(renderedCmd.Base, renderedCmd.Args...)
@@ -82,7 +82,7 @@ func buildBuildCmds(buildTool *config.BuildTool, workDir string, logFileWriter i
 	return buildCmds
 }
 
-func buildIndexCmds(indexTool *config.IndexTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
+func buildIndexCmds(indexTool config.IndexTool, workDir string, logFileWriter io.Writer, placeHolders map[string]string) []*exec.Cmd {
 	if logFileWriter == nil {
 		logFileWriter = os.Stdout
 	}
@@ -99,7 +99,7 @@ func buildIndexCmds(indexTool *config.IndexTool, workDir string, logFileWriter i
 	return indexCmds
 }
 
-func renderCommand(v *config.Command, placeHolders map[string]string) *config.Command {
+func renderCommand(v config.Command, placeHolders map[string]string) config.Command {
 	v.Base = replacePlaceHolder(v.Base, placeHolders)
 	for i, arg := range v.Args {
 		v.Args[i] = replacePlaceHolder(arg, placeHolders)

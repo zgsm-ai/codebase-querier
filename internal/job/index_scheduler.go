@@ -188,7 +188,7 @@ func (i *IndexTaskScheduler) Submit(ctx context.Context, taskRun func()) error {
 
 func (i *IndexTaskScheduler) submitIndexTask(ctx context.Context, lockMux *redsync.Mutex, msg *types.Message, syncMsg *types.CodebaseSyncMessage,
 	syncMetaFiles *types.CollapseSyncMetaFile) error {
-	tracer.WithTrace(ctx).Infof("start to submit task for params:%s", msg.ID)
+	tracer.WithTrace(ctx).Infof("start to submit task for codebase: %s", syncMsg.CodebaseName)
 	taskRun := func() {
 		task := &IndexTask{
 			SvcCtx:  i.svcCtx,
@@ -213,7 +213,7 @@ func (i *IndexTaskScheduler) submitIndexTask(ctx context.Context, lockMux *redsy
 
 		syncMsg.FailedTimes++
 
-		tracer.WithTrace(ctx).Errorf("index task failed, embedOk:%t, graphOk: %t, failedTimes: %d reproduce params.",
+		tracer.WithTrace(ctx).Errorf("index task failed, embedOk:%t, graphOk: %t, failedTimes: %d, nack msg for retry.",
 			embedOk, graphOk, syncMsg.FailedTimes)
 
 		if embedOk {

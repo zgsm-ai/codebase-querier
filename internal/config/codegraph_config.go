@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/types"
 	"gopkg.in/yaml.v3"
 	"os"
 )
@@ -11,29 +12,29 @@ type CodegraphConfig struct {
 	LogDir        string            `yaml:"log_dir"`
 	RetentionDays int               `yaml:"retention_days"`
 	Variables     map[string]string `yaml:"variables"`
-	Languages     []*LanguageConfig `yaml:"languages"`
+	Languages     []ScipIndexConfig `yaml:"languages"`
 }
 
-// LanguageConfig represents a language configuration
-type LanguageConfig struct {
-	Name           string       `yaml:"name"`
-	DetectionFiles []string     `yaml:"detection_files"`
-	BuildTools     []*BuildTool `yaml:"build_tools,omitempty"`
-	Index          *IndexTool   `yaml:"index"`
+// ScipIndexConfig represents a language configuration
+type ScipIndexConfig struct {
+	Name           string      `yaml:"name"`
+	DetectionFiles []string    `yaml:"detection_files"`
+	BuildTools     []BuildTool `yaml:"build_tools,omitempty"`
+	Index          IndexTool   `yaml:"index"`
 }
 
 // BuildTool represents a build tool configuration
 type BuildTool struct {
-	Name           string     `yaml:"name"`
-	DetectionFiles []string   `yaml:"detection_files"`
-	Priority       int        `yaml:"priority"`
-	Commands       []*Command `yaml:"build_commands"`
+	Name           string    `yaml:"name"`
+	DetectionFiles []string  `yaml:"detection_files"`
+	Priority       int       `yaml:"priority"`
+	Commands       []Command `yaml:"build_commands"`
 }
 
 // IndexTool represents a tool configuration
 type IndexTool struct {
-	Name     string     `yaml:"name"`
-	Commands []*Command `yaml:"commands"`
+	Name     string    `yaml:"name"`
+	Commands []Command `yaml:"commands"`
 }
 
 // Command represents a command configuration
@@ -65,14 +66,17 @@ func (c *CodegraphConfig) Validate() error {
 	}
 
 	for _, lang := range c.Languages {
-		if lang.Name == "" {
+		if lang.Name == types.EmptyString {
 			return fmt.Errorf("CONFIG_ERROR: language name is required")
 		}
 		if len(lang.DetectionFiles) == 0 {
 			return fmt.Errorf("CONFIG_ERROR: detection files are required for language %s", lang.Name)
 		}
-		if lang.Index == nil {
+		if lang.Index.Name == types.EmptyString {
 			return fmt.Errorf("CONFIG_ERROR: index are required for language %s", lang.Name)
+		}
+		if len(lang.Index.Commands) == 0 {
+			return fmt.Errorf("CONFIG_ERROR: index commands are required for language %s", lang.Name)
 		}
 	}
 
