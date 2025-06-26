@@ -45,7 +45,7 @@ type Command struct {
 }
 
 // MustLoadCodegraphConfig loads the SCIP configuration from a file
-func MustLoadCodegraphConfig(path string) *CodegraphConfig {
+func MustLoadCodegraphConfig(path string) CodegraphConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		panic(fmt.Sprintf("CONFIG_ERROR: failed to read config file: %v", err))
@@ -56,7 +56,7 @@ func MustLoadCodegraphConfig(path string) *CodegraphConfig {
 		panic(fmt.Sprintf("CONFIG_ERROR: failed to parse config file: %v", err))
 	}
 
-	return &config
+	return config
 }
 
 // Validate validates the configuration

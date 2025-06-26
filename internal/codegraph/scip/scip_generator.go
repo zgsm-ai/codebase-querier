@@ -22,12 +22,12 @@ const (
 // IndexGenerator represents the SCIP index generator
 type IndexGenerator struct {
 	codebaseStore codebase.Store
-	config        *config.CodegraphConfig
+	config        config.CodegraphConfig
 	cmdLogger     *tracer.CmdLogger
 }
 
 // NewIndexGenerator creates a new SCIP index generator
-func NewIndexGenerator(cmdLogger *tracer.CmdLogger, config *config.CodegraphConfig, codebaseStore codebase.Store) *IndexGenerator {
+func NewIndexGenerator(cmdLogger *tracer.CmdLogger, config config.CodegraphConfig, codebaseStore codebase.Store) *IndexGenerator {
 	return &IndexGenerator{
 		cmdLogger:     cmdLogger,
 		config:        config,

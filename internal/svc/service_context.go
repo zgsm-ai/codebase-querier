@@ -21,7 +21,7 @@ import (
 
 type ServiceContext struct {
 	Config               config.Config
-	CodegraphConf        *config.CodegraphConfig
+	CodegraphConf        config.CodegraphConfig
 	db                   *gorm.DB
 	Querier              *query.Query
 	CodebaseStore        codebase.Store
