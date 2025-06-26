@@ -20,7 +20,6 @@ const indexNodeEnableVal = "1"
 const indexNodeEnv = "INDEX_NODE"
 const lockKeyPrefixFmt = "codebase_indexer:lock:index:%d"
 const DistLockTimeout = time.Minute * 3
-const msgFailedThreshold = 10
 
 type IndexTaskScheduler struct {
 	svcCtx     *svc.ServiceContext
@@ -144,9 +143,9 @@ func (i *IndexTaskScheduler) processMessage(ctx context.Context, msg *types.Mess
 		return
 	}
 	// 失败次数
-	if syncMsg.FailedTimes >= msgFailedThreshold {
+	if syncMsg.FailedTimes >= i.svcCtx.Config.IndexTask.MsgMaxFailedTimes {
 		tracer.WithTrace(ctx).Debugf("not submit embedding task, just ack ,because params reached failed times limit: %d ",
-			msgFailedThreshold)
+			i.svcCtx.Config.IndexTask.MsgMaxFailedTimes)
 		i.ackSilently(ctx, msg)
 		return
 	}

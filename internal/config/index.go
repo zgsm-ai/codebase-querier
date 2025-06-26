@@ -3,13 +3,14 @@ package config
 import "time"
 
 type IndexTaskConf struct {
-	Topic         string
-	ConsumerGroup string `json:",default=codebase_indexer"` // 消费者组名称（用于Streams）
-	PoolSize      int
-	QueueSize     int
-	LockTimeout   time.Duration `json:",default=300s"`
-	EmbeddingTask EmbeddingTaskConf
-	GraphTask     GraphTaskConf
+	Topic             string
+	ConsumerGroup     string `json:",default=codebase_indexer"` // 消费者组名称（用于Streams）
+	PoolSize          int
+	QueueSize         int
+	LockTimeout       time.Duration `json:",default=300s"`
+	EmbeddingTask     EmbeddingTaskConf
+	GraphTask         GraphTaskConf
+	MsgMaxFailedTimes int `json:",default=3"`
 }
 
 type EmbeddingTaskConf struct {
