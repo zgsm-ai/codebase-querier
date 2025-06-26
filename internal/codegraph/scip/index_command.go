@@ -100,15 +100,24 @@ func buildIndexCmds(indexTool config.IndexTool, workDir string, logFileWriter io
 }
 
 func renderCommand(v config.Command, placeHolders map[string]string) config.Command {
-	v.Base = replacePlaceHolder(v.Base, placeHolders)
-	for i, arg := range v.Args {
-		v.Args[i] = replacePlaceHolder(arg, placeHolders)
+	args := make([]string, len(v.Args))
+	copy(args, v.Args)
+	envs := make([]string, len(v.Env))
+	copy(envs, v.Env)
+	cmd := config.Command{
+		Base: v.Base,
+		Args: args,
+		Env:  envs,
+	}
+	cmd.Base = replacePlaceHolder(cmd.Base, placeHolders)
+	for i, arg := range cmd.Args {
+		cmd.Args[i] = replacePlaceHolder(arg, placeHolders)
 	}
 
-	for i, env := range v.Env {
-		v.Env[i] = replacePlaceHolder(env, placeHolders)
+	for i, env := range cmd.Env {
+		cmd.Env[i] = replacePlaceHolder(env, placeHolders)
 	}
-	return v
+	return cmd
 }
 
 func replacePlaceHolder(base string, placeHolders map[string]string) string {
