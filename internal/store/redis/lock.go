@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"time"
 
 	redsync "github.com/go-redsync/redsync/v4"
@@ -28,7 +29,8 @@ type DistributedLock interface {
 
 // redisDistLock 是基于 Redsync 的分布式锁管理器
 type redisDistLock struct {
-	rs *redsync.Redsync
+	rs     *redsync.Redsync
+	client *goredis.Client
 }
 
 // NewRedisDistributedLock 创建一个新的 Redsync 分布式锁管理器实例。
@@ -40,7 +42,10 @@ func NewRedisDistributedLock(redisClient *goredis.Client) (DistributedLock, erro
 	rs := redsync.New(pool)
 
 	// 返回包装了 Redsync 客户端的分布式锁管理器
-	return &redisDistLock{rs: rs}, nil
+	return &redisDistLock{
+		rs:     rs,
+		client: redisClient,
+	}, nil
 }
 
 // TryLock 实现 DistributedLock 接口的 TryLock 方法
@@ -112,6 +117,14 @@ func (m *redisDistLock) Unlock(ctx context.Context, mutex *redsync.Mutex) error 
 
 	// 释放锁。Redsync 会检查当前实例是否持有该锁。
 	unlocked, err := mutex.UnlockContext(ctx)
+	if errors.Is(err, redsync.ErrLockAlreadyExpired) {
+		// 强行释放
+		tracer.WithTrace(ctx).Debugf("redis_lock unlock failed with ErrLockAlreadyExpired, delete lock key %s force.", mutex.Name())
+		if err = m.client.Del(ctx, mutex.Name()).Err(); err != nil {
+			tracer.WithTrace(ctx).Errorf("redis_lock unlock force unlock failed, lock key %s.", mutex.Name())
+		}
+		return nil
+	}
 
 	if err != nil {
 		return fmt.Errorf("release lock failed: %w", err)
