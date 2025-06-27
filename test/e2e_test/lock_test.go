@@ -31,5 +31,15 @@ func TestLockExpire(t *testing.T) {
 	time.Sleep(time.Second * 15)
 	err = lock.Unlock(ctx, mutex)
 	assert.NoError(t, err)
+}
 
+func TestLockFailed(t *testing.T) {
+	ctx := context.Background()
+	svcCtx := api.InitSvcCtx(ctx, nil)
+	lock := svcCtx.DistLock
+	key := "test-" + uuid.New().String()
+	_, err := lock.Lock(ctx, key, time.Second*10)
+	assert.NoError(t, err)
+	_, err = lock.Lock(ctx, key, time.Second*10)
+	assert.NotNil(t, err)
 }

@@ -724,7 +724,7 @@ func (b BadgerDBGraph) GetIndexSummary(ctx context.Context, codebaseId int32, co
 			} else if isStructKey(key) {
 				definitionFileCount++
 			} else {
-				tracer.WithTrace(ctx).Debugf("GetIndexSummary unknown key type:%s", string(key))
+				//tracer.WithTrace(ctx).Debugf("GetIndexSummary unknown key type:%s", string(key))
 			}
 		}
 		return nil
