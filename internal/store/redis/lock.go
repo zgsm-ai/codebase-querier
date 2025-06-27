@@ -118,7 +118,7 @@ func (m *redisDistLock) Unlock(ctx context.Context, mutex *redsync.Mutex) error 
 	// 释放锁。Redsync 会检查当前实例是否持有该锁。
 	unlocked, err := mutex.UnlockContext(ctx)
 	if errors.Is(err, redsync.ErrLockAlreadyExpired) {
-		// 强行释放
+		// 强行释放 TODO
 		tracer.WithTrace(ctx).Debugf("redis_lock unlock failed with ErrLockAlreadyExpired, delete lock key %s force.", mutex.Name())
 		if err = m.client.Del(ctx, mutex.Name()).Err(); err != nil {
 			tracer.WithTrace(ctx).Errorf("redis_lock unlock force unlock failed, lock key %s.", mutex.Name())
