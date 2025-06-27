@@ -33,7 +33,7 @@ data:
       UserInfoHeader: "x-userinfo"
     Database:
       Driver: postgres
-      DataSource: postgres://shenma:${DB_PASSWORD}@localhost:5432/codebase_indexer?sslmode=disable
+      DataSource: postgres://shenma:${DB_PASSWORD}@postgres.shenma:5432/codebase_indexer?sslmode=disable
       AutoMigrate:
         enable: true    
     IndexTask:
@@ -92,7 +92,7 @@ data:
         ApiBase: https://zgsm.sangfor.com/v1/rerank
     
     Log:
-      Mode: volume # console,file,volume
+      Mode: console # console,file,volume
       ServiceName: "codebase-indexer"
       Encoding: plain # json,plain
       Path: "/app/logs"
@@ -388,7 +388,7 @@ spec:
     spec:
       containers:
       - name: codebase-indexer
-        image: zgsm/codebase-indexer:latest
+        image: zgsm/codebase-indexer:2025.06.26.5
         imagePullPolicy: IfNotPresent
         command:
           - /app/server
