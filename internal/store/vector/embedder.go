@@ -3,6 +3,7 @@ package vector
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
@@ -47,6 +48,7 @@ func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.Co
 
 	embeds := make([]*CodeChunkEmbedding, 0, len(chunks))
 	batchSize := e.config.BatchSize
+	start := time.Now()
 	tracer.WithTrace(ctx).Infof("start to embedding %d chunks for codebase:%s, batchSize: %d ", len(chunks), chunks[0].CodebasePath, batchSize)
 
 	for start := 0; start < len(chunks); start += batchSize {
@@ -75,7 +77,8 @@ func (e *customEmbedder) EmbedCodeChunks(ctx context.Context, chunks []*types.Co
 			})
 		}
 	}
-	tracer.WithTrace(ctx).Infof("embedding %d chunks for codebase:%s successfully", len(chunks), chunks[0].CodebasePath)
+	tracer.WithTrace(ctx).Infof("embedding %d chunks for codebase:%s successfully, cost %d ms", len(chunks),
+		chunks[0].CodebasePath, time.Since(start).Milliseconds())
 
 	return embeds, nil
 }
