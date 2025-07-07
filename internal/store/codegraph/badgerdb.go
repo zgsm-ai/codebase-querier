@@ -8,6 +8,7 @@ import (
 	"github.com/zgsm-ai/codebase-indexer/internal/parser"
 	"github.com/zgsm-ai/codebase-indexer/internal/tracer"
 	"github.com/zgsm-ai/codebase-indexer/pkg/utils"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -38,9 +39,9 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 	for _, opt := range opts {
 		opt(b)
 	}
-
+	dbPath := filepath.Join(b.basePath, dbName)
 	// 自定义 BadgerDB 配置
-	badgerOpts := badger.DefaultOptions(filepath.Join(b.basePath, dbName))
+	badgerOpts := badger.DefaultOptions(dbPath)
 
 	// 值日志配置
 	badgerOpts.ValueLogFileSize = 1 << 30 // 512 << 20 512MB // 1 << 30 1GB
@@ -66,7 +67,7 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 
 	badgerOpts = badgerOpts.WithLoggingLevel(badger.WARNING)
 
-	badgerDB, err := openWithRetry(badgerOpts)
+	badgerDB, err := openWithRetry(badgerOpts, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open graph database:%w", err)
 	}
@@ -75,15 +76,25 @@ func NewBadgerDBGraph(opts ...GraphOption) (GraphStore, error) {
 	return b, nil
 }
 
-func openWithRetry(badgerOpts badger.Options) (*badger.DB, error) {
+func openWithRetry(badgerOpts badger.Options, dbPath string) (*badger.DB, error) {
 	var badgerDB *badger.DB
 	var err error
 	for i := 1; i <= openMaxRetries; i++ {
+
 		badgerDB, err = badger.Open(badgerOpts)
 		if err == nil {
 			break
 		}
 		logx.Errorf("badger db  open failed, retrying %d/%d", i, openMaxRetries)
+		// （1）获取锁失败；（2）Manifest文件损坏；（3）table不存在；（4）打开内存表失败；
+		//  file does not exist for table (recreate)
+		if strings.Contains(err.Error(), "file does not exist for table") ||
+			strings.Contains(err.Error(), "Manifest file might be corrupted") {
+			logx.Errorf("start to delete badgerdb path %s for recreate.", dbPath)
+			if rErr := os.RemoveAll(dbPath); rErr != nil {
+				logx.Errorf("delete badgerdb path %s for recreate, err:%v", dbPath, rErr)
+			}
+		}
 		time.Sleep(openRetryInterval)
 	}
 	return badgerDB, err
