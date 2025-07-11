@@ -22,18 +22,8 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodGet,
-				Path:    "/api/v1/codebases/hash",
-				Handler: getCodebaseHashHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
 				Path:    "/api/v1/files/content",
 				Handler: getFileContentHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/v1/files/upload",
-				Handler: syncFilesHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),
@@ -75,24 +65,9 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
-				Method:  http.MethodDelete,
-				Path:    "/api/v1/codebase",
-				Handler: deleteCodebaseHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/api/v1/index",
-				Handler: indexHandler(serverCtx),
-			},
-			{
 				Method:  http.MethodGet,
 				Path:    "/api/v1/index/summary",
 				Handler: summaryHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/v1/index/task",
-				Handler: taskHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),

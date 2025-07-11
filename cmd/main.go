@@ -8,9 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zgsm-ai/codebase-indexer/internal/config"
 	"github.com/zgsm-ai/codebase-indexer/internal/handler"
-	"github.com/zgsm-ai/codebase-indexer/internal/job"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
-	"github.com/zgsm-ai/codebase-indexer/migrations"
 	"net/http"
 )
 
@@ -24,9 +22,6 @@ func main() {
 
 	logx.MustSetup(c.Log)
 	logx.DisableStat()
-	if err := migrations.AutoMigrate(c.Database); err != nil {
-		panic(err)
-	}
 
 	server := rest.MustNewServer(c.RestConf, rest.WithFileServer("/swagger/", http.Dir("api/docs/")))
 	defer server.Stop()
@@ -39,13 +34,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	jobScheduler, err := job.NewScheduler(serverCtx, svcCtx)
-	if err != nil {
-		panic(err)
-	}
-	jobScheduler.Schedule()
-	defer jobScheduler.Close()
 
 	handler.RegisterHandlers(server, svcCtx)
 

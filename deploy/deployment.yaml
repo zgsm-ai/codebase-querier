@@ -1,24 +1,11 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: codebase-indexer-pvc
-  namespace: shenma
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 500Gi
-  storageClassName: nfs-client
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: codebase-indexer-config
+  name: codebase-querier-config
   namespace: shenma
 data:
   conf.yaml: |
-    Name: codebase-indexer
+    Name: codebase-querier
     Host: 0.0.0.0
     Port: 8888
     Timeout: 120000 #ms
@@ -31,364 +18,37 @@ data:
       
     Auth:
       UserInfoHeader: "x-userinfo"
-    Database:
-      Driver: postgres
-      DataSource: postgres://shenma:${DB_PASSWORD}@postgres.shenma:5432/codebase_indexer?sslmode=disable
-      AutoMigrate:
-        enable: true    
-    IndexTask:
-      PoolSize: 50
-      QueueSize: 100
-      LockTimeout: 610s
-      Topic: "codebase_indexer:mq:sync"
-      EmbeddingTask:
-        PoolSize: 10
-        MaxConcurrency: 10
-        Timeout: 600s
-        OverlapTokens: 100
-        MaxTokensPerChunk: 1000
-      GraphTask:
-        PoolSize: 10
-        MaxConcurrency: 10
-        Timeout: 600s
-        ConfFile: "/app/conf/codegraph.yaml"
-    
-    Cleaner:
-      Cron: "0 0 * * *"
-      CodebaseExpireDays: 3
-    
-    Redis:
-      Addr: redis:6379
-    
-    MessageQueue:
-      Type: redis
-    
-    CodeBaseStore:
-      local:
-        BasePath: /mnt/codebase-store
-    
-    VectorStore:
-      Type: weaviate
-      Timeout: 60s
-      MaxRetries: 5
-      Weaviate:
-        MaxDocuments: 20
-        Endpoint: "weaviate.shenma:8080"
-        BatchSize: 100
-        ClassName: "CodebaseIndex"
-      Embedder:
-        Timeout: 30s
-        MaxRetries: 3
-        BatchSize: 10
-        StripNewLines: true
-        Model: gte-modernbert-base
-        ApiKey: "aee59212-46c5-4726-807a-cb9121c2ab5f&code=5650566a-626c-4fcb-a490-f3f3099b7105.aee59212-46c5-4726-807a-cb9121c2ab5f.6aa578f3-e98d-40b7-bbdd-c344bc4861e0"
-        ApiBase: https://zgsm.sangfor.com/v1/embeddings
-      Reranker:
-        Timeout: 10s
-        MaxRetries: 3
-        Model: gte-reranker-modernbert-base
-        ApiKey: "123"
-        ApiBase: https://zgsm.sangfor.com/v1/rerank
     
     Log:
       Mode: console # console,file,volume
-      ServiceName: "codebase-indexer"
+      ServiceName: "codebase-querier"
       Encoding: plain # json,plain
       Path: "/app/logs"
       Level: info # debug,info,error,severe
       KeepDays: 7
       MaxSize: 100 # MB per file, take affect when Rotation is size.
       Rotation: daily # split by day or size
-
-  codegraph.yaml: |
-    log_dir: "/app/logs/index"
-    retention_days: 7
-    languages:
-      - name: typescript
-        detection_files: ["tsconfig.json"]
-        index:
-          name: scip-typescript
-          commands:
-            - base: "node"
-              args:
-                - "--max-old-space-size=16000"
-                - "/usr/bin/scip-typescript"
-                - "index"
-                - "--cwd"
-                - "__sourcePath__"
-                - "--output"
-                - "__outputPath__/index.scip"
-                - "--infer-tsconfig"
-              env:
-                - "key=value"
-    
-      - name: javascript
-        detection_files: ["package.json"]
-        index:
-          name: scip-typescript
-          commands:
-            - base: "node"
-              args:
-                - "--max-old-space-size=16000"
-                - "/usr/bin/scip-typescript"
-                - "index"
-                - "--cwd"
-                - "__sourcePath__"
-                - "--output"
-                - "__outputPath__/index.scip"
-                - "--infer-tsconfig"
-    
-      - name: go
-        detection_files: ["go.mod", "go.work"]
-        index:
-          name: scip-go
-          commands:
-            - base: "bash"
-              args:
-                - "-c"
-                - "scip-go --output __outputPath__/index.scip -v"
-              env:
-                - "PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"
-                - "GOPATH=/root/gopath"
-                - "GOROOT=/usr/local/go"
-                - "GOPROXY=https://goproxy.cn,direct"
-                - "GOSUMDB=off"
-                - "GOCACHE=/tmp"
-
-      - name: java
-        detection_files: ["pom.xml"]
-        index:
-          name: scip-java
-          commands:
-            - base: "bash"
-              args:
-                - "-c"
-                - "scip-java index --cwd __sourcePath__ --targetroot __outputPath__/build --output __outputPath__/index.scip -- verify --batch-mode --fail-never -DskipTests -T 8"
-              env:
-                - "JAVA_HOME=/opt/jdk-11.0.18"
-                - "JAVA_BUILD=10"
-                - "JAVA_VERSION=11.0.18"
-                - "MAVEN_VERSION=3.9.6"
-                - "MAVEN_HOME=/opt/apache-maven-3.9.6"
-                - "PATH=PATH=/usr/local/go/bin:/opt/jdk-11.0.18/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/apache-maven-3.9.6/bin"
-      
-      - name: python
-        detection_files: ["pyproject.toml", "requirements.txt", "setup.py", "Pipfile", "poetry.lock", "environment.yml"]
-        index:
-          name: scip-python
-          commands:
-            - base: "node"
-              args:
-                - "--max-old-space-size=16000"
-                - "/usr/bin/scip-python"
-                - "index"
-                - "--output"
-                - "__outputPath__/index.scip"
-                - "--cwd"
-                - "__sourcePath__"
-                - "--project-version"
-                - "1"
-    
-      - name: ruby
-        detection_files: ["Gemfile"]
-        index:
-          name: scip-ruby
-          commands:
-            - base: "scip-ruby"
-              args:
-                - "--dir"
-                - "__sourcePath__"
-                - "--max-threads"
-                - "32"
-                - "--index-file"
-                - "__outputPath__/index.scip"
-                - "--gem-metadata"
-                - "ruby@v0.0.1"
-                
-      - name: c
-        detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"]
-        build_tools:
-          - name: cmake
-            detection_files: ["CMakeLists.txt"]
-            priority: 10
-            build_commands:
-              - base: "cmake"
-                args:
-                  - "-B"
-                  - "build"
-                  - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-                  - "-S"
-                  - "__sourcePath__"
-                  - "-B"
-                  - "__outputPath__/build/"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-          - name: make
-            detection_files: ["Makefile"]
-            priority: 20
-            build_commands:
-              - base: "bear"
-                args:
-                  - "--output"
-                  - "__outputPath__/build/compile_commands.json"
-                  - "--"
-                  - "make"
-                  - "-C"
-                  - "__sourcePath__"
-                  - "-j"
-                  - "16"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-          - name: autoconf
-            detection_files: ["configure", "Configure"]
-            priority: 30
-            build_commands:
-              - base: "bash"
-                args:
-                  - "-c"
-                  - "chmod +x -R . && (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        index:
-          name: scip-clang
-          commands:
-            - base: "scip-clang"
-              args:
-                - "--compdb-path"
-                - "__outputPath__/build/compile_commands.json"
-                - "--index-output-path"
-                - "__outputPath__/index.scip"
-                - "-j"
-                - "16"
-              env:
-                - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-      
-      - name: cpp
-        detection_files: ["CMakeLists.txt", "configure", "Configure", "Makefile"] # Same detection files as C
-        build_tools:
-          - name: cmake
-            detection_files: ["CMakeLists.txt"]
-            priority: 10 # CMake preferred for C/C++
-            build_commands:
-              - base: "cmake"
-                args:
-                  - "-B"
-                  - "build"
-                  - "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-                  - "-S"
-                  - "__sourcePath__"
-                  - "-B"
-                  - "__outputPath__/build/"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-          - name: make
-            detection_files: ["Makefile"]
-            priority: 20 # Make second priority
-            build_commands:
-              - base: "bear"
-                args:
-                  - "--output"
-                  - "__outputPath__/build/compile_commands.json"
-                  - "--"
-                  - "make"
-                  - "-C"
-                  - "__sourcePath__"
-                  - "-j"
-                  - "16"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-          - name: autoconf
-            detection_files: ["configure", "Configure"]
-            priority: 30
-            build_commands:
-              - base: "bash"
-                args:
-                  - "-c"
-                  - "chmod +x -R . &&  (./configure || ./Configure) && make clean && bear --output __outputPath__/build/compile_commands.json -- make -C __sourcePath__ -j 16"
-                env:
-                  - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        index:
-          name: scip-clang
-          commands:
-            - base: "scip-clang"
-              args:
-                - "--compdb-path"
-                - "__outputPath__/build/compile_commands.json"
-                - "--index-output-path"
-                - "__outputPath__/index.scip"
-                - "-j"
-                - "16"
-              env:
-                - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    
-      - name: rust
-        detection_files: ["Cargo.toml"]
-        index:
-          name: scip-rust
-          commands:
-            - base: "bash"
-              args:
-                - "-c"
-                - "rust-analyzer scip __sourcePath__ --output __outputPath__/index.scip"
-              env:
-                - "CARGO_NET_OFFLINE=true"
-                - "NUM_JOBS=32"
-                - "CARGO_BUILD_JOBS=32"
-                - "RUSTUP_AUTO_INSTALL=0"
-                - "RUSTUP_TOOLCHAIN=stable-x86_64-unknown-linux-gnu"
-                - "PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                - "CARGOPATH=/root/.cargo"
-
-  settings.xml: |
-    <?xml version="1.0" encoding="UTF-8"?>
-    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
-  
-      <localRepository>/tmp/localRepository</localRepository>
-  
-      <pluginGroups>
-      </pluginGroups>
-  
-      <proxies>
-      </proxies>
-  
-      <servers>
-      </servers>
-  
-     <mirrors>
-      <mirror>
-        <id>mirror</id>
-        <mirrorOf>central,jcenter</mirrorOf>
-        <name>mirror</name>            
-       <url>https://maven.aliyun.com/nexus/content/groups/public</url>
-      </mirror>
-    </mirrors>
-  
-    </settings>
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: codebase-indexer
+  name: codebase-querier
   namespace: shenma
   labels:
-    app: codebase-indexer
+    app: codebase-querier
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: codebase-indexer
+      app: codebase-querier
   template:
     metadata:
       labels:
-        app: codebase-indexer
+        app: codebase-querier
     spec:
       containers:
-      - name: codebase-indexer
-        image: zgsm/codebase-indexer:2025.06.26.5
+      - name: codebase-querier
+        image: zgsm/codebase-querier:2025.06.26.5
         imagePullPolicy: IfNotPresent
         command:
           - /app/server
@@ -402,13 +62,6 @@ spec:
         env:
           - name: TZ
             value: Asia/Shanghai
-          - name: INDEX_NODE
-            value: "1"
-          - name: DB_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: postgres-auth
-                key: password
         livenessProbe:
           tcpSocket:
             port: 8888
@@ -422,42 +75,17 @@ spec:
             cpu: "8"
             memory: 16Gi
         volumeMounts:
-        - name: logs
-          mountPath: /app/logs
-        - name: store
-          mountPath: /mnt/codebase-store/
         - name: app-conf
           mountPath: /app/conf
-        - name: maven
-          mountPath: /root/.m2
-          subPath: settings.xml
-        - mountPath: /dev/shm
-          name: dshm
       volumes:
-        - name: logs
-          emptyDir:
-            sizeLimit: 5Gi
-        - name: store
-          persistentVolumeClaim:
-            claimName: codebase-indexer-pvc
         - name: app-conf
           configMap:
-            name: codebase-indexer-config
-        - name: maven
-          configMap:
-            name: codebase-indexer-config
-            items:
-              - key: "settings.xml"
-                path: "settings.xml"
-        - name: dshm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 512Mi
+            name: codebase-querier-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: codebase-indexer-svc
+  name: codebase-querier-svc
   namespace: shenma
 spec:
   ports:
@@ -468,4 +96,4 @@ spec:
     targetPort: 6060
     name: metrics
   selector:
-    app: codebase-indexer
+    app: codebase-querier

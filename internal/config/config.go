@@ -10,13 +10,6 @@ type Config struct {
 	Auth struct {
 		UserInfoHeader string
 	}
-	Database      Database
-	Redis         RedisConfig
-	CodeBaseStore CodeBaseStoreConf
-	MessageQueue  MessageQueueConf
-	IndexTask     IndexTaskConf
-	VectorStore   VectorStoreConf
-	Cleaner       CleanerConf
 }
 
 // Validate 实现 Validator 接口
