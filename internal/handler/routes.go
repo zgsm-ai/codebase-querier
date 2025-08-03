@@ -12,62 +12,47 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
+	// 1. 注册健康检查路由
+	registerHealthCheckRoutes(server, serverCtx)
+	
+	// 2. 注册多路由代理
+	if serverCtx.Config.ProxyConfig != nil {
+		multiHandler := NewMultiProxyHandler(serverCtx.Config.ProxyConfig)
+		
+		// 注册多路由代理处理器
+		methods := []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodPatch,
+			http.MethodHead,
+			http.MethodOptions,
+		}
+		
+		routes := make([]rest.Route, 0, len(serverCtx.Config.ProxyConfig.Routes)*len(methods))
+		for _, routeConfig := range serverCtx.Config.ProxyConfig.Routes {
+			for _, method := range methods {
+				routes = append(routes, rest.Route{
+					Method:  method,
+					Path:    routeConfig.PathPrefix,
+					Handler: http.HandlerFunc(multiHandler.ServeHTTP),
+				})
+			}
+		}
+		
+		server.AddRoutes(routes)
+	}
+}
 
+// registerHealthCheckRoutes 注册健康检查路由
+func registerHealthCheckRoutes(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
-				Path:    "/api/v1/codebases/directory",
-				Handler: codebaseTreeHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/files/content",
-				Handler: getFileContentHandler(serverCtx),
-			},
-		},
-		rest.WithPrefix("/codebase-indexer"),
-	)
-
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/search/relation",
-				Handler: relationHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/search/definition",
-				Handler: definitionQueryHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/files/structure",
-				Handler: definitionParseHandler(serverCtx),
-			},
-		},
-		rest.WithPrefix("/codebase-indexer"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/search/semantic",
-				Handler: semanticSearchHandler(serverCtx),
-			},
-		},
-		rest.WithPrefix("/codebase-indexer"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/api/v1/index/summary",
-				Handler: summaryHandler(serverCtx),
+				Path:    "/api/v1/proxy/health",
+				Handler: proxyHealthCheckHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/codebase-indexer"),

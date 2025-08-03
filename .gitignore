@@ -28,3 +28,4 @@ main.exe
 *.iml
 *.scip
 bin/*
+.roo

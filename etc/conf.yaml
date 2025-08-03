@@ -1,6 +1,6 @@
 Name: codebase-querier
 Host: 0.0.0.0
-Port: 8888
+Port: 1010
 #Timeout: 30000 #ms
 Timeout: 300000 #ms，debug使用，300s
 MaxBytes: 104857600 # 100MB
@@ -21,3 +21,29 @@ Log:
   KeepDays: 15
   MaxSize: 100 # MB per file, take affect when Rotation is size.
   Rotation: daily # split by day or size
+
+proxy_config:
+  mode: "full_path"              # 使用全路径模式
+  routes:                        # 路由规则数组
+    - path_prefix: "/api/v1"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/static"     # 静态资源路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8081"  # 静态资源服务地址
+        timeout: 10s             # 10秒
+    - path_prefix: "/ws"         # WebSocket路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8082"  # WebSocket服务地址
+        timeout: 60s             # 60秒
+  rewrite:
+    enabled: false               # 全路径模式下禁用路径重写
+    rules: []
+  headers:
+    pass_through: true           # 是否透传所有header
+    exclude:                     # 需要排除的header
+      - "X-Internal-*"
+      - "Authorization"
+    override:                    # 需要覆盖的header
+      Host: "localhost:8080"
