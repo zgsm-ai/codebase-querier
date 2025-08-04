@@ -8,6 +8,31 @@ Proxy:
     Rules:
       - From: "/api/v1/proxy"     # 原始路径前缀
         To: ""                    # 重写后的路径前缀（空表示移除）
+      # Codebase Querier API 接口代理配置
+      - From: "/codebase-indexer/api/v1/search/relation"
+        To: "/api/v1/search/relation"
+      - From: "/codebase-indexer/api/v1/search/definition"
+        To: "/api/v1/search/definition"
+      - From: "/codebase-indexer/api/v1/file/structure"
+        To: "/api/v1/file/structure"
+      - From: "/codebase-indexer/api/v1/files/content"
+        To: "/api/v1/files/content"
+      - From: "/codebase-indexer/api/v1/codebases/directory"
+        To: "/api/v1/codebases/directory"
+      - From: "/codebase-indexer/api/v1/codebases/hash"
+        To: "/api/v1/codebases/hash"
+      - From: "/codebase-indexer/api/v1/search/semantic"
+        To: "/api/v1/search/semantic"
+      - From: "/codebase-indexer/api/v1/index/summary"
+        To: "/api/v1/index/summary"
+      - From: "/codebase-indexer/api/v1/index/task"
+        To: "/api/v1/index/task"
+      - From: "/codebase-indexer/api/v1/index"
+        To: "/api/v1/index"
+      - From: "/codebase-indexer/api/v1/codebase"
+        To: "/api/v1/codebase"
+      - From: "/codebase-indexer/api/v1/files/upload"
+        To: "/api/v1/files/upload"
   Headers:
     PassThrough: true             # 是否透传所有header
     Exclude:                      # 需要排除的header

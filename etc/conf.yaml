@@ -20,23 +20,63 @@ Log:
   Level: info # debug,info,error,severe
   KeepDays: 15
   MaxSize: 100 # MB per file, take affect when Rotation is size.
-  Rotation: daily # split by day or size
+  Rotation: daily
 
 proxy_config:
   mode: "full_path"              # 使用全路径模式
   routes:                        # 路由规则数组
-    - path_prefix: "/api/v1"     # API服务路径前缀
+    - path_prefix: "/api/v1/proxy"     # API服务路径前缀
       target:                    # 目标服务配置
         url: "http://localhost:8080"  # API服务地址
         timeout: 30s             # 30秒
-    - path_prefix: "/static"     # 静态资源路径前缀
+    - path_prefix: "/codebase-indexer/api/v1/search/relation"     # API服务路径前缀
       target:                    # 目标服务配置
-        url: "http://localhost:8081"  # 静态资源服务地址
-        timeout: 10s             # 10秒
-    - path_prefix: "/ws"         # WebSocket路径前缀
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/search/definition"     # API服务路径前缀
       target:                    # 目标服务配置
-        url: "http://localhost:8082"  # WebSocket服务地址
-        timeout: 60s             # 60秒
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/file/structure"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/files/content"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/codebases/directory"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/codebases/hash"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/search/semantic"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/index/summary"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/index/task"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/index"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/codebase"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
+    - path_prefix: "/codebase-indexer/api/v1/files/upload"     # API服务路径前缀
+      target:                    # 目标服务配置
+        url: "http://localhost:8080"  # API服务地址
+        timeout: 30s             # 30秒
   rewrite:
     enabled: false               # 全路径模式下禁用路径重写
     rules: []
