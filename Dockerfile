@@ -14,9 +14,11 @@ COPY . .
 
 RUN make build
 
-FROM alpine:latest
+# FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata
+FROM golang:1.24.4
+
+# RUN apk --no-cache add ca-certificates tzdata
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /usr/share/zoneinfo/Asia/Shanghai /usr/share/zoneinfo/Asia/Shanghai
