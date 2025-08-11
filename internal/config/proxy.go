@@ -9,12 +9,25 @@ import (
 
 // ProxyConfig 代理配置
 type ProxyConfig struct {
-	Mode           string        `json:"mode" yaml:"mode"`     // 代理模式: rewrite, full_path
-	Routes         []RouteConfig `json:"routes" yaml:"routes"` // 路由规则数组
-	Rewrite        RewriteConfig `json:"rewrite" yaml:"rewrite"`
-	Headers        HeadersConfig `json:"headers" yaml:"headers"`
-	PortManagerURL string        `json:"port_manager_url" yaml:"port_manager_url"` // 端口管理器URL
-	DynamicPort    bool          `json:"dynamic_port" yaml:"dynamic_port"`         // 是否启用动态端口
+	Mode           string            `json:"mode" yaml:"mode"`     // 代理模式: rewrite, full_path
+	Routes         []RouteConfig     `json:"routes" yaml:"routes"` // 路由规则数组
+	Rewrite        RewriteConfig     `json:"rewrite" yaml:"rewrite"`
+	Headers        HeadersConfig     `json:"headers" yaml:"headers"`
+	PortManagerURL string            `json:"port_manager_url" yaml:"port_manager_url"` // 端口管理器URL
+	DynamicPort    bool              `json:"dynamic_port" yaml:"dynamic_port"`         // 是否启用动态端口
+	PortManager    PortManagerConfig `json:"port_manager" yaml:"port_manager"`         // 端口管理器配置
+	ForwardURL     string            `json:"forward_url" yaml:"forward_url"`           // 转发地址
+}
+
+// PortManagerConfig 端口管理器配置
+type PortManagerConfig struct {
+	URL                 string        `json:"url" yaml:"url"`                                         // 端口管理器URL
+	ForwardURL          string        `json:"forward_url" yaml:"forward_url"`                         // 转发地址
+	Timeout             time.Duration `json:"timeout" yaml:"timeout"`                                 // 请求超时时间
+	CacheExp            time.Duration `json:"cache_exp" yaml:"cache_exp"`                             // 缓存过期时间
+	MaxIdleConns        int           `json:"max_idle_conns" yaml:"max_idle_conns"`                   // 最大空闲连接数
+	MaxIdleConnsPerHost int           `json:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"` // 每个主机的最大空闲连接数
+	IdleConnTimeout     time.Duration `json:"idle_conn_timeout" yaml:"idle_conn_timeout"`             // 空闲连接超时时间
 }
 
 // RouteConfig 路由配置
@@ -93,11 +106,31 @@ func (c *ProxyConfig) Validate() error {
 
 	// 如果启用动态端口，验证端口管理器URL
 	if c.DynamicPort {
-		if c.PortManagerURL == "" {
-			return errors.New("port_manager_url is required when dynamic_port is enabled")
+		// 检查新的端口管理器配置
+		if c.PortManager.URL == "" {
+			// 如果新配置为空，则使用旧的PortManagerURL作为后备
+			if c.PortManagerURL == "" {
+				return errors.New("port_manager.url is required when dynamic_port is enabled")
+			}
+			c.PortManager.URL = c.PortManagerURL
 		}
-		if _, err := url.Parse(c.PortManagerURL); err != nil {
-			return fmt.Errorf("invalid port_manager_url: %w", err)
+		if _, err := url.Parse(c.PortManager.URL); err != nil {
+			return fmt.Errorf("invalid port_manager.url: %w", err)
+		}
+		if c.PortManager.Timeout <= 0 {
+			c.PortManager.Timeout = 10 * time.Second
+		}
+		if c.PortManager.CacheExp <= 0 {
+			c.PortManager.CacheExp = 5 * time.Minute
+		}
+		if c.PortManager.MaxIdleConns <= 0 {
+			c.PortManager.MaxIdleConns = 10
+		}
+		if c.PortManager.MaxIdleConnsPerHost <= 0 {
+			c.PortManager.MaxIdleConnsPerHost = 5
+		}
+		if c.PortManager.IdleConnTimeout <= 0 {
+			c.PortManager.IdleConnTimeout = 30 * time.Second
 		}
 	}
 
@@ -155,6 +188,14 @@ func DefaultProxyConfig() *ProxyConfig {
 			PassThrough: true,
 			Exclude:     []string{},
 			Override:    make(map[string]string),
+		},
+		PortManager: PortManagerConfig{
+			ForwardURL:          "http://10.233.23.31", // 默认转发地址
+			Timeout:             10 * time.Second,
+			CacheExp:            5 * time.Minute,
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     30 * time.Second,
 		},
 	}
 }

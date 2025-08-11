@@ -19,8 +19,13 @@ type DynamicProxyHandler struct {
 
 // NewDynamicProxyHandler 创建动态代理处理器
 func NewDynamicProxyHandler(cfg *config.ProxyConfig) *DynamicProxyHandler {
+	var portManager *proxy.PortManager
+
+	// 优先使用新的端口管理器配置
+	portManager = proxy.NewPortManagerWithConfig(cfg.PortManager)
+
 	return &DynamicProxyHandler{
-		portManager: proxy.NewPortManager(cfg.PortManagerURL),
+		portManager: portManager,
 		proxyConfig: cfg,
 	}
 }

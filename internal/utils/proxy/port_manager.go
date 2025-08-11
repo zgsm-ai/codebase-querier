@@ -10,18 +10,18 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zgsm-ai/codebase-indexer/internal/config"
 )
 
 // PortResponse 接口响应结构
 type PortResponse struct {
-	Port     int    `json:"mappingPort"`
-	Host     string `json:"host"`
-	Protocol string `json:"protocol"`
+	Port int `json:"mappingPort"`
 }
 
 // PortManager 端口管理器
 type PortManager struct {
 	baseURL    string
+	forwardURL string
 	httpClient *http.Client
 	cache      map[string]PortResponse
 	cacheExp   time.Duration
@@ -32,7 +32,8 @@ type PortManager struct {
 // NewPortManager 创建端口管理器
 func NewPortManager(baseURL string) *PortManager {
 	return &PortManager{
-		baseURL: strings.TrimSuffix(baseURL, "/"),
+		baseURL:    strings.TrimSuffix(baseURL, "/"),
+		forwardURL: "http://10.233.23.31", // 默认转发地址
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
@@ -43,6 +44,52 @@ func NewPortManager(baseURL string) *PortManager {
 		},
 		cache:      make(map[string]PortResponse),
 		cacheExp:   5 * time.Minute, // 缓存5分钟
+		lastUpdate: make(map[string]time.Time),
+	}
+}
+
+// NewPortManagerWithConfig 从配置创建端口管理器
+func NewPortManagerWithConfig(config config.PortManagerConfig) *PortManager {
+	// 设置默认值
+	baseURL := config.URL
+	forwardURL := config.ForwardURL
+	if forwardURL == "" {
+		forwardURL = "http://10.233.23.31" // 默认转发地址
+	}
+	timeout := config.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+	cacheExp := config.CacheExp
+	if cacheExp == 0 {
+		cacheExp = 5 * time.Minute
+	}
+	maxIdleConns := config.MaxIdleConns
+	if maxIdleConns == 0 {
+		maxIdleConns = 10
+	}
+	maxIdleConnsPerHost := config.MaxIdleConnsPerHost
+	if maxIdleConnsPerHost == 0 {
+		maxIdleConnsPerHost = 5
+	}
+	idleConnTimeout := config.IdleConnTimeout
+	if idleConnTimeout == 0 {
+		idleConnTimeout = 30 * time.Second
+	}
+
+	return &PortManager{
+		baseURL:    strings.TrimSuffix(baseURL, "/"),
+		forwardURL: strings.TrimSuffix(forwardURL, "/"),
+		httpClient: &http.Client{
+			Timeout: timeout,
+			Transport: &http.Transport{
+				MaxIdleConns:        maxIdleConns,
+				MaxIdleConnsPerHost: maxIdleConnsPerHost,
+				IdleConnTimeout:     idleConnTimeout,
+			},
+		},
+		cache:      make(map[string]PortResponse),
+		cacheExp:   cacheExp,
 		lastUpdate: make(map[string]time.Time),
 	}
 }
@@ -63,13 +110,13 @@ func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*
 	pm.mu.RUnlock()
 
 	// 构建请求URL
-	url := fmt.Sprintf("%s/tunnel-manager/api/v1/ports?clientId=%s&appName=%s",
+	requestURL := fmt.Sprintf("%s/tunnel-manager/api/v1/ports?clientId=%s&appName=%s",
 		pm.baseURL, clientID, appName)
 
-	logx.Infof("Fetching port from: %s", url)
+	logx.Infof("Fetching port from: %s", requestURL)
 
 	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -116,15 +163,6 @@ func (pm *PortManager) GetPortFromHeaders(ctx context.Context, headers http.Head
 
 // BuildTargetURL 构建目标URL
 func (pm *PortManager) BuildTargetURL(portResp *PortResponse) string {
-	protocol := "http"
-	if portResp.Protocol != "" {
-		protocol = portResp.Protocol
-	}
-
-	host := "127.0.0.1"
-	if portResp.Host != "" {
-		host = portResp.Host
-	}
-
-	return fmt.Sprintf("%s://%s:%d", protocol, host, portResp.Port)
+	// 构建完整URL
+	return fmt.Sprintf("%s:%d", pm.forwardURL, portResp.Port)
 }

@@ -40,3 +40,13 @@ Proxy:
       - "Authorization"
     Override:                     # 需要覆盖的header
       Host: "localhost:8080"
+  # 动态端口配置
+  DynamicPort: true              # 是否启用动态端口
+  PortManagerURL: "http://localhost:8090"  # 端口管理器URL（旧配置，向后兼容）
+  PortManager:                    # 端口管理器配置（新配置）
+    URL: "http://localhost:8090"  # 端口管理器URL
+    Timeout: 10s                  # 请求超时时间
+    CacheExp: 5m                  # 缓存过期时间
+    MaxIdleConns: 10              # 最大空闲连接数
+    MaxIdleConnsPerHost: 5        # 每个主机的最大空闲连接数
+    IdleConnTimeout: 30s          # 空闲连接超时时间

@@ -24,7 +24,8 @@ Log:
 
 proxy_config:
   mode: "full_path"              # 使用全路径模式
-  port_manager_url: "http://127.0.0.1:31226/tunnel-manager/api/v1/ports"
+  port_manager_url: "http://127.0.0.1:31226"
+  forward_url: "http://10.233.23.31"  # 转发地址
   routes:                        # 路由规则数组
     - path_prefix: "/api/v1/proxy"     # API服务路径前缀
       target:                    # 目标服务配置
@@ -88,3 +89,10 @@ proxy_config:
       - "Authorization"
     override:                    # 需要覆盖的header
       Host: "localhost:8080"
+  port_manager:                    # 端口管理器配置（新配置）
+    URL: "http://127.0.0.1:31226"  # 端口管理器URL
+    Timeout: 10s                  # 请求超时时间
+    CacheExp: 5m                  # 缓存过期时间
+    MaxIdleConns: 10              # 最大空闲连接数
+    MaxIdleConnsPerHost: 5        # 每个主机的最大空闲连接数
+    IdleConnTimeout: 30s          # 空闲连接超时时间
