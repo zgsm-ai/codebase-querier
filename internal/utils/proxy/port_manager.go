@@ -1,0 +1,130 @@
+package proxy
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+// PortResponse 接口响应结构
+type PortResponse struct {
+	Port     int    `json:"mappingPort"`
+	Host     string `json:"host"`
+	Protocol string `json:"protocol"`
+}
+
+// PortManager 端口管理器
+type PortManager struct {
+	baseURL    string
+	httpClient *http.Client
+	cache      map[string]PortResponse
+	cacheExp   time.Duration
+	lastUpdate map[string]time.Time
+	mu         sync.RWMutex
+}
+
+// NewPortManager 创建端口管理器
+func NewPortManager(baseURL string) *PortManager {
+	return &PortManager{
+		baseURL: strings.TrimSuffix(baseURL, "/"),
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        10,
+				MaxIdleConnsPerHost: 5,
+				IdleConnTimeout:     30 * time.Second,
+			},
+		},
+		cache:      make(map[string]PortResponse),
+		cacheExp:   5 * time.Minute, // 缓存5分钟
+		lastUpdate: make(map[string]time.Time),
+	}
+}
+
+// GetPort 获取端口信息
+func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*PortResponse, error) {
+	cacheKey := fmt.Sprintf("%s:%s", clientID, appName)
+
+	// 检查缓存
+	pm.mu.RLock()
+	if cached, exists := pm.cache[cacheKey]; exists {
+		if time.Since(pm.lastUpdate[cacheKey]) < pm.cacheExp {
+			pm.mu.RUnlock()
+			logx.Infof("Using cached port for client %s, app %s: %d", clientID, appName, cached.Port)
+			return &cached, nil
+		}
+	}
+	pm.mu.RUnlock()
+
+	// 构建请求URL
+	url := fmt.Sprintf("%s/tunnel-manager/api/v1/ports?clientId=%s&appName=%s",
+		pm.baseURL, clientID, appName)
+
+	logx.Infof("Fetching port from: %s", url)
+
+	// 创建请求
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 发送请求
+	resp, err := pm.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch port: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	// 解析响应
+	var portResp PortResponse
+	if err := json.NewDecoder(resp.Body).Decode(&portResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// 更新缓存
+	pm.mu.Lock()
+	pm.cache[cacheKey] = portResp
+	pm.lastUpdate[cacheKey] = time.Now()
+	pm.mu.Unlock()
+
+	logx.Infof("Successfully fetched port for client %s, app %s: %d", clientID, appName, portResp.Port)
+	return &portResp, nil
+}
+
+// GetPortFromHeaders 从请求头获取端口信息
+func (pm *PortManager) GetPortFromHeaders(ctx context.Context, headers http.Header) (*PortResponse, error) {
+	clientID := headers.Get("clientId")
+	if clientID == "" {
+		return nil, fmt.Errorf("clientId header is required")
+	}
+
+	appName := "codebase-indexer"
+
+	return pm.GetPort(ctx, clientID, appName)
+}
+
+// BuildTargetURL 构建目标URL
+func (pm *PortManager) BuildTargetURL(portResp *PortResponse) string {
+	protocol := "http"
+	if portResp.Protocol != "" {
+		protocol = portResp.Protocol
+	}
+
+	host := "127.0.0.1"
+	if portResp.Host != "" {
+		host = portResp.Host
+	}
+
+	return fmt.Sprintf("%s://%s:%d", protocol, host, portResp.Port)
+}

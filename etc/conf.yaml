@@ -24,6 +24,7 @@ Log:
 
 proxy_config:
   mode: "full_path"              # 使用全路径模式
+  port_manager_url: "http://127.0.0.1:31226/tunnel-manager/api/v1/ports"
   routes:                        # 路由规则数组
     - path_prefix: "/api/v1/proxy"     # API服务路径前缀
       target:                    # 目标服务配置

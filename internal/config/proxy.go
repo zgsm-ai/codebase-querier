@@ -9,10 +9,12 @@ import (
 
 // ProxyConfig 代理配置
 type ProxyConfig struct {
-	Mode    string        `json:"mode" yaml:"mode"`     // 代理模式: rewrite, full_path
-	Routes  []RouteConfig `json:"routes" yaml:"routes"` // 路由规则数组
-	Rewrite RewriteConfig `json:"rewrite" yaml:"rewrite"`
-	Headers HeadersConfig `json:"headers" yaml:"headers"`
+	Mode           string        `json:"mode" yaml:"mode"`     // 代理模式: rewrite, full_path
+	Routes         []RouteConfig `json:"routes" yaml:"routes"` // 路由规则数组
+	Rewrite        RewriteConfig `json:"rewrite" yaml:"rewrite"`
+	Headers        HeadersConfig `json:"headers" yaml:"headers"`
+	PortManagerURL string        `json:"port_manager_url" yaml:"port_manager_url"` // 端口管理器URL
+	DynamicPort    bool          `json:"dynamic_port" yaml:"dynamic_port"`         // 是否启用动态端口
 }
 
 // RouteConfig 路由配置
@@ -89,9 +91,19 @@ func (c *ProxyConfig) Validate() error {
 		return fmt.Errorf("invalid proxy mode: %s, must be %s or %s", c.Mode, ProxyModeRewrite, ProxyModeFullPath)
 	}
 
+	// 如果启用动态端口，验证端口管理器URL
+	if c.DynamicPort {
+		if c.PortManagerURL == "" {
+			return errors.New("port_manager_url is required when dynamic_port is enabled")
+		}
+		if _, err := url.Parse(c.PortManagerURL); err != nil {
+			return fmt.Errorf("invalid port_manager_url: %w", err)
+		}
+	}
+
 	// 验证路由配置
-	if len(c.Routes) == 0 {
-		return errors.New("at least one route is required")
+	if len(c.Routes) == 0 && !c.DynamicPort {
+		return errors.New("at least one route is required when dynamic_port is disabled")
 	}
 
 	for i, route := range c.Routes {
@@ -126,7 +138,8 @@ func (c *ProxyConfig) Validate() error {
 // DefaultProxyConfig 返回默认配置
 func DefaultProxyConfig() *ProxyConfig {
 	return &ProxyConfig{
-		Mode: ProxyModeRewrite, // 默认为rewrite模式，保持向后兼容
+		Mode:        ProxyModeRewrite, // 默认为rewrite模式，保持向后兼容
+		DynamicPort: false,            // 默认不启用动态端口
 		Routes: []RouteConfig{
 			{
 				PathPrefix: "/",

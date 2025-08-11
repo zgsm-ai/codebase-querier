@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zgsm-ai/codebase-indexer/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -15,11 +16,22 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	// 1. 注册健康检查路由
 	registerHealthCheckRoutes(server, serverCtx)
 	
-	// 2. 注册多路由代理
+	// 2. 注册代理路由
 	if serverCtx.Config.ProxyConfig != nil {
-		multiHandler := NewMultiProxyHandler(serverCtx.Config.ProxyConfig)
+		// 根据配置选择代理处理器
+		var proxyHandler http.Handler
 		
-		// 注册多路由代理处理器
+		if serverCtx.Config.ProxyConfig.DynamicPort {
+			// 使用动态代理处理器
+			proxyHandler = NewDynamicProxyHandler(serverCtx.Config.ProxyConfig)
+			logx.Infof("Using dynamic proxy handler with port manager: %s", serverCtx.Config.ProxyConfig.PortManagerURL)
+		} else {
+			// 使用多路由代理处理器
+			proxyHandler = NewMultiProxyHandler(serverCtx.Config.ProxyConfig)
+			logx.Infof("Using multi-route proxy handler")
+		}
+		
+		// 注册代理处理器
 		methods := []string{
 			http.MethodGet,
 			http.MethodPost,
@@ -30,14 +42,30 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			http.MethodOptions,
 		}
 		
-		routes := make([]rest.Route, 0, len(serverCtx.Config.ProxyConfig.Routes)*len(methods))
-		for _, routeConfig := range serverCtx.Config.ProxyConfig.Routes {
-			for _, method := range methods {
-				routes = append(routes, rest.Route{
-					Method:  method,
-					Path:    routeConfig.PathPrefix,
-					Handler: http.HandlerFunc(multiHandler.ServeHTTP),
-				})
+		var routes []rest.Route
+		if serverCtx.Config.ProxyConfig.DynamicPort {
+			// 动态端口模式下，使用统一的路径前缀
+			routes = make([]rest.Route, 0, len(serverCtx.Config.ProxyConfig.Routes)*len(methods))
+			for _, routeConfig := range serverCtx.Config.ProxyConfig.Routes {
+				for _, method := range methods {
+					routes = append(routes, rest.Route{
+						Method:  method,
+						Path:    routeConfig.PathPrefix,
+						Handler: http.HandlerFunc(proxyHandler.ServeHTTP),
+					})
+				}
+			}
+		} else {
+			// 静态路由模式下，使用配置的路径前缀
+			routes = make([]rest.Route, 0, len(serverCtx.Config.ProxyConfig.Routes)*len(methods))
+			for _, routeConfig := range serverCtx.Config.ProxyConfig.Routes {
+				for _, method := range methods {
+					routes = append(routes, rest.Route{
+						Method:  method,
+						Path:    routeConfig.PathPrefix,
+						Handler: http.HandlerFunc(proxyHandler.ServeHTTP),
+					})
+				}
 			}
 		}
 		
@@ -57,4 +85,31 @@ func registerHealthCheckRoutes(server *rest.Server, serverCtx *svc.ServiceContex
 		},
 		rest.WithPrefix("/codebase-indexer"),
 	)
+	
+	// 如果启用了动态代理，注册动态代理健康检查路由
+	if serverCtx.Config.ProxyConfig != nil && serverCtx.Config.ProxyConfig.DynamicPort {
+		server.AddRoutes(
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/api/v1/dynamic-proxy/health",
+					Handler: dynamicProxyHealthCheckHandler(serverCtx),
+				},
+			},
+			rest.WithPrefix("/codebase-indexer"),
+		)
+	}
+}
+
+// dynamicProxyHealthCheckHandler 动态代理健康检查处理器
+func dynamicProxyHealthCheckHandler(serverCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if serverCtx.Config.ProxyConfig != nil && serverCtx.Config.ProxyConfig.DynamicPort {
+			dynamicHandler := NewDynamicProxyHandler(serverCtx.Config.ProxyConfig)
+			dynamicHandler.HealthCheck(w, r)
+			return
+		}
+
+		http.Error(w, "Dynamic proxy not configured", http.StatusNotImplemented)
+	}
 }
