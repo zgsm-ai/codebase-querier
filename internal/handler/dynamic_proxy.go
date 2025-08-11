@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -36,11 +38,22 @@ func (h *DynamicProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	logx.Infof("Received dynamic proxy request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
-	// 从请求头获取端口信息
-	portResp, err := h.portManager.GetPortFromHeaders(ctx, r.Header)
+	// 读取请求体
+	var body []byte
+	if r.Method != "GET" {
+		// 限制读取的body大小，防止内存问题
+		body = make([]byte, 1024*1024) // 1MB
+		n, _ := r.Body.Read(body)
+		body = body[:n]
+		// 重置body以便后续使用
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+
+	// 从请求获取端口信息（GET请求从params获取，其他请求从body获取）
+	portResp, err := h.portManager.GetPortFromHeaders(ctx, r.Method, r.Header, r.URL.Query(), body)
 	if err != nil {
-		logx.Errorf("Failed to get port from headers: %v", err)
-		logx.Errorf("Failed to get port from headers: %v", portResp)
+		logx.Errorf("Failed to get port: %v", err)
 		h.sendError(w, fmt.Sprintf("Failed to get port: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -130,8 +143,20 @@ func (h *DynamicProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 func (h *DynamicProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 从请求头获取端口信息
-	portResp, err := h.portManager.GetPortFromHeaders(ctx, r.Header)
+	// 读取请求体
+	var body []byte
+	if r.Method != "GET" {
+		// 限制读取的body大小，防止内存问题
+		body = make([]byte, 1024*1024) // 1MB
+		n, _ := r.Body.Read(body)
+		body = body[:n]
+		// 重置body以便后续使用
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewReader(body))
+	}
+
+	// 从请求获取端口信息（GET请求从params获取，其他请求从body获取）
+	portResp, err := h.portManager.GetPortFromHeaders(ctx, r.Method, r.Header, r.URL.Query(), body)
 	if err != nil {
 		logx.Errorf("Health check failed to get port: %v", err)
 		h.sendHealthCheckResponse(w, false, 0, fmt.Sprintf("Failed to get port: %v", err))

@@ -98,7 +98,7 @@ data:
         override:                    # 需要覆盖的header
           Host: "localhost:8080"
       port_manager:                    # 端口管理器配置（新配置）
-        url: "http://127.0.0.1:31226"  # 端口管理器URL
+        url: "http://tunnel-manager.costrict:8080"  # 端口管理器URL
         forward_url: "http://10.233.23.31"
         timeout: 10s                  # 请求超时时间
         cache_exp: 5m                  # 缓存过期时间
@@ -125,7 +125,7 @@ spec:
     spec:
       containers:
       - name: codebase-querier
-        image: zgsm/codebase-querier:v0.0.1
+        image: zgsm/codebase-querier:v0.0.2
         imagePullPolicy: IfNotPresent
         command:
           - /app/server
@@ -165,10 +165,12 @@ metadata:
   name: codebase-querier-svc
   namespace: costrict
 spec:
+  type: NodePort
   ports:
   - port: 8888
     targetPort: 8888
     name: http
+    nodePort: 32001
   - port: 6470
     targetPort: 6060
     name: metrics

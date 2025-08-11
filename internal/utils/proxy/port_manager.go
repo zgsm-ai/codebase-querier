@@ -149,11 +149,39 @@ func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*
 	return &portResp, nil
 }
 
-// GetPortFromHeaders 从请求头获取端口信息
-func (pm *PortManager) GetPortFromHeaders(ctx context.Context, headers http.Header) (*PortResponse, error) {
-	clientID := headers.Get("clientId")
+// GetPortFromHeaders 从请求获取端口信息
+// 对于 GET 请求，从 params 中获取 clientId
+// 对于其他请求，从 body 中获取 clientId
+func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, headers http.Header, params map[string][]string, body []byte) (*PortResponse, error) {
+	var clientID string
+
+	// 根据请求方法从不同位置获取 clientId
+	if method == "GET" {
+		// 从 GET 请求的 params 中获取 clientId
+		if clientIds, exists := params["clientId"]; exists && len(clientIds) > 0 {
+			clientID = clientIds[0]
+		}
+	} else {
+		// 从其他请求的 body 中获取 clientId
+		if len(body) > 0 {
+			// 尝试解析 JSON body
+			var requestBody map[string]interface{}
+			if err := json.Unmarshal(body, &requestBody); err == nil {
+				if id, exists := requestBody["clientId"]; exists {
+					if idStr, ok := id.(string); ok {
+						clientID = idStr
+					}
+				}
+			}
+		}
+	}
+
 	if clientID == "" {
-		return nil, fmt.Errorf("clientId header is required")
+		// 如果从 params 或 body 中获取不到，尝试从 headers 中获取（向后兼容）
+		clientID = headers.Get("clientId")
+		if clientID == "" {
+			return nil, fmt.Errorf("clientId is required in params (for GET) or body (for other methods) or headers")
+		}
 	}
 
 	appName := "codebase-indexer"
