@@ -16,7 +16,7 @@ RUN make build
 
 # FROM alpine:latest
 
-FROM golang:1.24.4
+FROM golang:1.24.4 AS STANDARD
 
 # RUN apk --no-cache add ca-certificates tzdata
 
