@@ -163,7 +163,7 @@ func (h *DynamicProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request
 	var body []byte
 	if r.Method != "GET" {
 		// 使用 io.ReadAll 读取完整的请求体，但限制最大大小为 10MB 防止内存问题
-		const maxBodySize = 10 * 1024 * 1024 // 10MB
+		const maxBodySize = 100 * 1024 * 1024 // 10MB
 		limitReader := io.LimitReader(r.Body, maxBodySize)
 		var err error
 		body, err = io.ReadAll(limitReader)
