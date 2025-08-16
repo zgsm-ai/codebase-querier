@@ -47,7 +47,7 @@ data:
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
-        - path_prefix: "/codebase-indexer/api/v1/file/structure"     # API服务路径前缀
+        - path_prefix: "/codebase-indexer/api/v1/files/structure"     # API服务路径前缀
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒

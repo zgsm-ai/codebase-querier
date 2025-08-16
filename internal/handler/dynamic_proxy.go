@@ -41,13 +41,29 @@ func (h *DynamicProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	// 读取请求体
 	var body []byte
 	if r.Method != "GET" {
-		// 限制读取的body大小，防止内存问题
-		body = make([]byte, 1024*1024) // 1MB
-		n, _ := r.Body.Read(body)
-		body = body[:n]
+		// 使用 io.ReadAll 读取完整的请求体，但限制最大大小为 10MB 防止内存问题
+		const maxBodySize = 100 * 1024 * 1024 // 10MB
+		limitReader := io.LimitReader(r.Body, maxBodySize)
+		var err error
+		body, err = io.ReadAll(limitReader)
+		if err != nil {
+			logx.Errorf("Failed to read request body: %v", err)
+			h.sendError(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// 检查是否超出限制
+		if len(body) >= maxBodySize {
+			logx.Errorf("Request body too large, exceeds %d bytes", maxBodySize)
+			h.sendError(w, fmt.Sprintf("Request body too large, exceeds %d bytes", maxBodySize), http.StatusRequestEntityTooLarge)
+			return
+		}
+
 		// 重置body以便后续使用
 		r.Body.Close()
 		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		logx.Infof("Read request body: %d bytes", len(body))
 	}
 
 	// 从请求获取端口信息（GET请求从params获取，其他请求从body获取）
@@ -146,13 +162,29 @@ func (h *DynamicProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request
 	// 读取请求体
 	var body []byte
 	if r.Method != "GET" {
-		// 限制读取的body大小，防止内存问题
-		body = make([]byte, 1024*1024) // 1MB
-		n, _ := r.Body.Read(body)
-		body = body[:n]
+		// 使用 io.ReadAll 读取完整的请求体，但限制最大大小为 10MB 防止内存问题
+		const maxBodySize = 10 * 1024 * 1024 // 10MB
+		limitReader := io.LimitReader(r.Body, maxBodySize)
+		var err error
+		body, err = io.ReadAll(limitReader)
+		if err != nil {
+			logx.Errorf("Failed to read request body in health check: %v", err)
+			h.sendHealthCheckResponse(w, false, 0, fmt.Sprintf("Failed to read request body: %v", err))
+			return
+		}
+
+		// 检查是否超出限制
+		if len(body) >= maxBodySize {
+			logx.Errorf("Health check request body too large, exceeds %d bytes", maxBodySize)
+			h.sendHealthCheckResponse(w, false, 0, fmt.Sprintf("Request body too large, exceeds %d bytes", maxBodySize))
+			return
+		}
+
 		// 重置body以便后续使用
 		r.Body.Close()
 		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		logx.Infof("Health check read request body: %d bytes", len(body))
 	}
 
 	// 从请求获取端口信息（GET请求从params获取，其他请求从body获取）
