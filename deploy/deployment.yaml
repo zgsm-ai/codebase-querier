@@ -110,7 +110,7 @@ data:
       header_name: "X-Costrict-Version" # 请求头名称
       target_path: "/codebase-embedder/api/v1/search/semantic" # 目标路径
       with_header_url: "http://codebase-embedder-svc.costrict.svc.cluster.local:8888/codebase-embedder/api/v1/search/semantic"     # 有请求头时的转发地址
-      without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-index/api/v1/search/semantic"       # 无请求头时的转发地址
+      without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-indexer/api/v1/search/semantic"       # 无请求头时的转发地址
 ---
 apiVersion: apps/v1
 kind: Deployment

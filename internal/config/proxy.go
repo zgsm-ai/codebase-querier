@@ -23,9 +23,14 @@ type ProxyConfig struct {
 
 // HeaderBasedForwardConfig 基于请求头的转发配置
 type HeaderBasedForwardConfig struct {
-	Enabled          bool   `json:"enabled" yaml:"enabled"`                       // 是否启用基于请求头的转发
-	HeaderName       string `json:"header_name" yaml:"header_name"`               // 请求头名称
-	TargetPath       string `json:"target_path" yaml:"target_path"`               // 目标路径
+	Enabled    bool                           `json:"enabled" yaml:"enabled"`         // 是否启用基于请求头的转发
+	HeaderName string                         `json:"header_name" yaml:"header_name"` // 请求头名称
+	Paths      []HeaderBasedForwardPathConfig `json:"paths" yaml:"paths"`             // 多路径配置数组
+}
+
+// HeaderBasedForwardPathConfig 基于请求头的转发路径配置
+type HeaderBasedForwardPathConfig struct {
+	Path             string `json:"path" yaml:"path"`                             // 目标路径
 	WithHeaderURL    string `json:"with_header_url" yaml:"with_header_url"`       // 有请求头时的转发地址
 	WithoutHeaderURL string `json:"without_header_url" yaml:"without_header_url"` // 无请求头时的转发地址
 }
@@ -181,14 +186,19 @@ func (c *ProxyConfig) Validate() error {
 		if c.HeaderBasedForward.HeaderName == "" {
 			return errors.New("header_based_forward.header_name is required when header_based_forward.enabled is true")
 		}
-		if c.HeaderBasedForward.TargetPath == "" {
-			return errors.New("header_based_forward.target_path is required when header_based_forward.enabled is true")
+		if len(c.HeaderBasedForward.Paths) == 0 {
+			return errors.New("header_based_forward.paths is required when header_based_forward.enabled is true")
 		}
-		if c.HeaderBasedForward.WithHeaderURL == "" {
-			return errors.New("header_based_forward.with_header_url is required when header_based_forward.enabled is true")
-		}
-		if c.HeaderBasedForward.WithoutHeaderURL == "" {
-			return errors.New("header_based_forward.without_header_url is required when header_based_forward.enabled is true")
+		for i, pathConfig := range c.HeaderBasedForward.Paths {
+			if pathConfig.Path == "" {
+				return fmt.Errorf("header_based_forward.paths[%d].path is required", i)
+			}
+			if pathConfig.WithHeaderURL == "" {
+				return fmt.Errorf("header_based_forward.paths[%d].with_header_url is required", i)
+			}
+			if pathConfig.WithoutHeaderURL == "" {
+				return fmt.Errorf("header_based_forward.paths[%d].without_header_url is required", i)
+			}
 		}
 	}
 
@@ -225,11 +235,15 @@ func DefaultProxyConfig() *ProxyConfig {
 			IdleConnTimeout:     30 * time.Second,
 		},
 		HeaderBasedForward: HeaderBasedForwardConfig{
-			Enabled:          false,                                       // 默认不启用基于请求头的转发
-			HeaderName:       "X-Costrict-Version",                        // 默认请求头名称
-			TargetPath:       "/codebase-embedder/api/v1/search/semantic", // 默认目标路径
-			WithHeaderURL:    "codebase-embedder/api/v1/search/semantic",  // 有请求头时的转发地址
-			WithoutHeaderURL: "/codebase-index/api/v1/search/semantic",    // 无请求头时的转发地址
+			Enabled:    false,                // 默认不启用基于请求头的转发
+			HeaderName: "X-Costrict-Version", // 默认请求头名称
+			Paths: []HeaderBasedForwardPathConfig{
+				{
+					Path:             "/codebase-embedder/api/v1/search/semantic", // 默认目标路径
+					WithHeaderURL:    "codebase-embedder/api/v1/search/semantic",  // 有请求头时的转发地址
+					WithoutHeaderURL: "/codebase-index/api/v1/search/semantic",    // 无请求头时的转发地址
+				},
+			},
 		},
 	}
 }

@@ -68,20 +68,22 @@ func NewSmartProxyHandler(cfg *config.ProxyConfig) *SmartProxyHandler {
 func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 检查是否启用了基于请求头的转发
 	if h.proxyConfig.HeaderBasedForward.Enabled {
-		// 检查请求路径是否匹配目标路径
-		if r.URL.Path == h.proxyConfig.HeaderBasedForward.TargetPath {
-			// 检查请求头中是否有指定的字段
-			headerValue := r.Header.Get(h.proxyConfig.HeaderBasedForward.HeaderName)
-			if headerValue != "" {
-				logx.Infof("Request contains %s header: %s, forwarding to: %s",
-					h.proxyConfig.HeaderBasedForward.HeaderName, headerValue, h.proxyConfig.HeaderBasedForward.WithHeaderURL)
-				h.forwardToURL(w, r, h.proxyConfig.HeaderBasedForward.WithHeaderURL)
-				return
-			} else {
-				logx.Infof("No %s header found, forwarding to: %s",
-					h.proxyConfig.HeaderBasedForward.HeaderName, h.proxyConfig.HeaderBasedForward.WithoutHeaderURL)
-				h.forwardToURL(w, r, h.proxyConfig.HeaderBasedForward.WithoutHeaderURL)
-				return
+		// 检查请求路径是否匹配任何一个配置的路径
+		for _, pathConfig := range h.proxyConfig.HeaderBasedForward.Paths {
+			if r.URL.Path == pathConfig.Path {
+				// 检查请求头中是否有指定的字段
+				headerValue := r.Header.Get(h.proxyConfig.HeaderBasedForward.HeaderName)
+				if headerValue != "" {
+					logx.Infof("Request contains %s header: %s, forwarding to: %s",
+						h.proxyConfig.HeaderBasedForward.HeaderName, headerValue, pathConfig.WithHeaderURL)
+					h.forwardToURL(w, r, pathConfig.WithHeaderURL)
+					return
+				} else {
+					logx.Infof("No %s header found, forwarding to: %s",
+						h.proxyConfig.HeaderBasedForward.HeaderName, pathConfig.WithoutHeaderURL)
+					h.forwardToURL(w, r, pathConfig.WithoutHeaderURL)
+					return
+				}
 			}
 		}
 	}
@@ -214,12 +216,20 @@ func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) 
 
 	// 如果启用了基于请求头的转发，检查其配置状态
 	if h.proxyConfig.HeaderBasedForward.Enabled {
+		paths := make([]map[string]interface{}, len(h.proxyConfig.HeaderBasedForward.Paths))
+		for i, pathConfig := range h.proxyConfig.HeaderBasedForward.Paths {
+			paths[i] = map[string]interface{}{
+				"path":               pathConfig.Path,
+				"with_header_url":    pathConfig.WithHeaderURL,
+				"without_header_url": pathConfig.WithoutHeaderURL,
+			}
+		}
+
 		headerBasedForwardStatus := map[string]interface{}{
-			"enabled":            true,
-			"header_name":        h.proxyConfig.HeaderBasedForward.HeaderName,
-			"target_path":        h.proxyConfig.HeaderBasedForward.TargetPath,
-			"with_header_url":    h.proxyConfig.HeaderBasedForward.WithHeaderURL,
-			"without_header_url": h.proxyConfig.HeaderBasedForward.WithoutHeaderURL,
+			"enabled":     true,
+			"header_name": h.proxyConfig.HeaderBasedForward.HeaderName,
+			"paths":       paths,
+			"path_count":  len(h.proxyConfig.HeaderBasedForward.Paths),
 		}
 		healthStatus.HeaderBasedForward = headerBasedForwardStatus
 	}
