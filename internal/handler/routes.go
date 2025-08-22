@@ -18,18 +18,9 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	
 	// 2. 注册代理路由
 	if serverCtx.Config.ProxyConfig != nil {
-		// 根据配置选择代理处理器
-		var proxyHandler http.Handler
-		
-		if serverCtx.Config.ProxyConfig.DynamicPort {
-			// 使用动态代理处理器
-			proxyHandler = NewDynamicProxyHandler(serverCtx.Config.ProxyConfig)
-			logx.Infof("Using dynamic proxy handler with port manager: %s", serverCtx.Config.ProxyConfig.PortManagerURL)
-		} else {
-			// 使用多路由代理处理器
-			proxyHandler = NewMultiProxyHandler(serverCtx.Config.ProxyConfig)
-			logx.Infof("Using multi-route proxy handler")
-		}
+		// 使用智能代理处理器，根据请求头和配置自动选择转发策略
+		proxyHandler := NewSmartProxyHandler(serverCtx.Config.ProxyConfig)
+		logx.Infof("Using smart proxy handler with automatic routing strategy")
 		
 		// 注册代理处理器
 		methods := []string{

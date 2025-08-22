@@ -63,7 +63,7 @@ data:
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
-        - path_prefix: "/codebase-indexer/api/v1/search/semantic"     # API服务路径前缀
+        - path_prefix: "/codebase-indexer/api/v1/search/reference"     # API服务路径前缀
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
@@ -83,7 +83,7 @@ data:
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
-        - path_prefix: "/codebase-indexer/api/v1/files/upload"     # API服务路径前缀
+        - path_prefix: "/codebase-indexer/api/v1/snippets/read"     # API服务路径前缀
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
@@ -98,9 +98,9 @@ data:
         override:                    # 需要覆盖的header
           Host: "localhost:8080"
       port_manager:                    # 端口管理器配置（新配置）
-        url: "http://tunnel-manager.costrict:8080"  # 端口管理器URL
-        forward_url: "http://10.233.23.31"
-        timeout: 10s                  # 请求超时时间
+        url: "http://tunnel-manager.costrict.svc.cluster.local:8080"  # 端口管理器URL
+        forward_url: "http://cotun.costrict.svc.cluster.local"
+        timeout: 30s                  # 请求超时时间
         cache_exp: 5m                  # 缓存过期时间
         max_idle_conns: 10              # 最大空闲连接数
         max_idle_conns_per_host: 5        # 每个主机的最大空闲连接数
@@ -125,7 +125,7 @@ spec:
     spec:
       containers:
       - name: codebase-querier
-        image: zgsm/codebase-querier:v0.0.2
+        image: zgsm/codebase-querier:v0.0.3
         imagePullPolicy: IfNotPresent
         command:
           - /app/server
