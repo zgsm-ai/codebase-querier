@@ -87,6 +87,15 @@ data:
           target:                    # 目标服务配置
             url: "http://localhost:11380"  # API服务地址
             timeout: 30s             # 30秒
+        - path_prefix: "/codebase-embedder/api/v1/search/semantic"     # API服务路径前缀
+          target:                    # 目标服务配置
+            url: "http://localhost:11380"  # API服务地址
+            timeout: 30s             # 30秒    
+        - path_prefix: "/codebase-embedder/api/v1/embeddings/summary"     # API服务路径前缀
+          target:                    # 目标服务配置
+            url: "http://localhost:11380"  # API服务地址
+            timeout: 30s             # 30秒   
+        
       rewrite:
         enabled: false               # 全路径模式下禁用路径重写
         rules: []
@@ -105,12 +114,16 @@ data:
         max_idle_conns: 10              # 最大空闲连接数
         max_idle_conns_per_host: 5        # 每个主机的最大空闲连接数
         idle_conn_timeout: 30s          # 空闲连接超时时间
-    header_based_forward:
-      enabled: true                    # 启用基于请求头的转发
-      header_name: "X-Costrict-Version" # 请求头名称
-      target_path: "/codebase-embedder/api/v1/search/semantic" # 目标路径
-      with_header_url: "http://codebase-embedder-svc.costrict.svc.cluster.local:8888/codebase-embedder/api/v1/search/semantic"     # 有请求头时的转发地址
-      without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-indexer/api/v1/search/semantic"       # 无请求头时的转发地址
+      header_based_forward:
+        enabled: true                    # 启用基于请求头的转发
+        header_name: "X-Costrict-Version" # 请求头名称
+        paths:                          # 多路径配置数组
+          - path: "/codebase-embedder/api/v1/search/semantic" # 目标路径
+            with_header_url: "http://codebase-embedder-svc.costrict.svc.cluster.local:8888/codebase-embedder/api/v1/search/semantic"     # 有请求头时的转发地址
+            without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-indexer/api/v1/search/semantic"       # 无请求头时的转发地址
+          - path: "/codebase-embedder/api/v1/embeddings/summary" # 第二个目标路径
+            with_header_url: "http://codebase-embedder-svc.costrict.svc.cluster.local:8888/codebase-embedder/api/v1/embeddings/summary"     # 有请求头时的转发地址
+            without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-indexer/api/v1/embeddings/summary"       # 无请求头时的转发地址
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -131,7 +144,7 @@ spec:
     spec:
       containers:
       - name: codebase-querier
-        image: zgsm/codebase-querier:v0.0.3
+        image: zgsm/codebase-querier:v0.1.1
         imagePullPolicy: IfNotPresent
         command:
           - /app/server

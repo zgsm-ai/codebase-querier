@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -111,8 +112,28 @@ func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // forwardToURL 转发请求到指定URL
 func (h *SmartProxyHandler) forwardToURL(w http.ResponseWriter, r *http.Request, targetURL string) {
-	// 创建一个新的请求副本
-	targetReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	// 读取请求体内容
+	var bodyBytes []byte
+	var err error
+	if r.Body != nil {
+		bodyBytes, err = io.ReadAll(r.Body)
+		if err != nil {
+			logx.Errorf("Failed to read request body: %v", err)
+			h.sendError(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusInternalServerError)
+			return
+		}
+		// 重新设置请求体，以便其他中间件或处理器可以读取
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	}
+
+	// 创建一个新的请求副本，使用读取的body内容
+	var bodyReader io.Reader = nil
+	if len(bodyBytes) > 0 {
+		bodyReader = bytes.NewBuffer(bodyBytes)
+	}
+
+	targetReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bodyReader)
 	if err != nil {
 		logx.Errorf("Failed to create target request: %v", err)
 		h.sendError(w, fmt.Sprintf("Failed to create target request: %v", err), http.StatusInternalServerError)
