@@ -32,7 +32,7 @@ data:
     proxy_config:
       mode: "full_path"              # 使用全路径模式
       port_manager_url: "http://127.0.0.1:31226"
-      forward_url: "http://10.233.23.31"  # 转发地址
+      forward_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888"  # 转发地址
       dynamic_port: true
       routes:                        # 路由规则数组
         - path_prefix: "/codebase-indexer/api/v1/register"     # API服务路径前缀
@@ -105,6 +105,12 @@ data:
         max_idle_conns: 10              # 最大空闲连接数
         max_idle_conns_per_host: 5        # 每个主机的最大空闲连接数
         idle_conn_timeout: 30s          # 空闲连接超时时间
+    header_based_forward:
+      enabled: true                    # 启用基于请求头的转发
+      header_name: "X-Costrict-Version" # 请求头名称
+      target_path: "/codebase-embedder/api/v1/search/semantic" # 目标路径
+      with_header_url: "http://codebase-embedder-svc.costrict.svc.cluster.local:8888/codebase-embedder/api/v1/search/semantic"     # 有请求头时的转发地址
+      without_header_url: "http://codebase-indexer-svc.costrict.svc.cluster.local:8888/codebase-index/api/v1/search/semantic"       # 无请求头时的转发地址
 ---
 apiVersion: apps/v1
 kind: Deployment

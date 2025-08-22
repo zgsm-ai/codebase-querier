@@ -66,6 +66,27 @@ func NewSmartProxyHandler(cfg *config.ProxyConfig) *SmartProxyHandler {
 
 // ServeHTTP 处理智能代理请求
 func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 检查是否启用了基于请求头的转发
+	if h.proxyConfig.HeaderBasedForward.Enabled {
+		// 检查请求路径是否匹配目标路径
+		if r.URL.Path == h.proxyConfig.HeaderBasedForward.TargetPath {
+			// 检查请求头中是否有指定的字段
+			headerValue := r.Header.Get(h.proxyConfig.HeaderBasedForward.HeaderName)
+			if headerValue != "" {
+				logx.Infof("Request contains %s header: %s, forwarding to: %s",
+					h.proxyConfig.HeaderBasedForward.HeaderName, headerValue, h.proxyConfig.HeaderBasedForward.WithHeaderURL)
+				h.forwardToURL(w, r, h.proxyConfig.HeaderBasedForward.WithHeaderURL)
+				return
+			} else {
+				logx.Infof("No %s header found, forwarding to: %s",
+					h.proxyConfig.HeaderBasedForward.HeaderName, h.proxyConfig.HeaderBasedForward.WithoutHeaderURL)
+				h.forwardToURL(w, r, h.proxyConfig.HeaderBasedForward.WithoutHeaderURL)
+				return
+			}
+		}
+	}
+
+	// 如果没有启用基于请求头的转发或路径不匹配，使用原有的逻辑
 	// 检查请求头中是否有 X-Costrict-Version 字段
 	costrictVersion := r.Header.Get("X-Costrict-Version")
 	if costrictVersion != "" {
@@ -86,13 +107,94 @@ func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.dynamicProxyHandler.ServeHTTP(w, r)
 }
 
+// forwardToURL 转发请求到指定URL
+func (h *SmartProxyHandler) forwardToURL(w http.ResponseWriter, r *http.Request, targetURL string) {
+	// 创建一个新的请求副本
+	targetReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	if err != nil {
+		logx.Errorf("Failed to create target request: %v", err)
+		h.sendError(w, fmt.Sprintf("Failed to create target request: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 复制请求头
+	for key, values := range r.Header {
+		for _, value := range values {
+			targetReq.Header.Add(key, value)
+		}
+	}
+
+	// 复制查询参数
+	if r.URL.RawQuery != "" {
+		targetReq.URL.RawQuery = r.URL.RawQuery
+	}
+
+	// 创建HTTP客户端
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
+	// 发送请求
+	resp, err := client.Do(targetReq)
+	if err != nil {
+		logx.Errorf("Failed to forward request: %v", err)
+		h.sendError(w, fmt.Sprintf("Failed to forward request: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 复制响应头
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// 复制响应状态码和内容
+	w.WriteHeader(resp.StatusCode)
+
+	// 复制响应体
+	buf := make([]byte, 32*1024) // 32KB buffer
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				logx.Errorf("Failed to write response: %v", writeErr)
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+
+	logx.Infof("Successfully forwarded request: %s %s -> %d", r.Method, targetURL, resp.StatusCode)
+}
+
+// sendError 发送错误响应
+func (h *SmartProxyHandler) sendError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":      "PROXY_ERROR",
+		"message":   message,
+		"timestamp": time.Now().UTC(),
+	})
+}
+
 // HealthCheck 健康检查
 func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	type HealthStatus struct {
-		DynamicProxy map[string]interface{} `json:"dynamic_proxy"`
-		StaticProxy  map[string]interface{} `json:"static_proxy,omitempty"`
-		ForwardURL   string                 `json:"forward_url,omitempty"`
-		Strategy     string                 `json:"strategy"`
+		DynamicProxy       map[string]interface{} `json:"dynamic_proxy"`
+		StaticProxy        map[string]interface{} `json:"static_proxy,omitempty"`
+		ForwardURL         string                 `json:"forward_url,omitempty"`
+		HeaderBasedForward map[string]interface{} `json:"header_based_forward,omitempty"`
+		Strategy           string                 `json:"strategy"`
 	}
 
 	healthStatus := &HealthStatus{
@@ -108,6 +210,18 @@ func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) 
 		staticHealth := h.checkStaticProxyHealth(r)
 		healthStatus.StaticProxy = staticHealth
 		healthStatus.ForwardURL = h.proxyConfig.ForwardURL
+	}
+
+	// 如果启用了基于请求头的转发，检查其配置状态
+	if h.proxyConfig.HeaderBasedForward.Enabled {
+		headerBasedForwardStatus := map[string]interface{}{
+			"enabled":            true,
+			"header_name":        h.proxyConfig.HeaderBasedForward.HeaderName,
+			"target_path":        h.proxyConfig.HeaderBasedForward.TargetPath,
+			"with_header_url":    h.proxyConfig.HeaderBasedForward.WithHeaderURL,
+			"without_header_url": h.proxyConfig.HeaderBasedForward.WithoutHeaderURL,
+		}
+		healthStatus.HeaderBasedForward = headerBasedForwardStatus
 	}
 
 	response := map[string]interface{}{

@@ -17,6 +17,17 @@ type ProxyConfig struct {
 	DynamicPort    bool              `json:"dynamic_port" yaml:"dynamic_port"`         // 是否启用动态端口
 	PortManager    PortManagerConfig `json:"port_manager" yaml:"port_manager"`         // 端口管理器配置
 	ForwardURL     string            `json:"forward_url" yaml:"forward_url"`           // 转发地址
+	// 基于请求头的转发配置
+	HeaderBasedForward HeaderBasedForwardConfig `json:"header_based_forward" yaml:"header_based_forward"` // 基于请求头的转发配置
+}
+
+// HeaderBasedForwardConfig 基于请求头的转发配置
+type HeaderBasedForwardConfig struct {
+	Enabled          bool   `json:"enabled" yaml:"enabled"`                       // 是否启用基于请求头的转发
+	HeaderName       string `json:"header_name" yaml:"header_name"`               // 请求头名称
+	TargetPath       string `json:"target_path" yaml:"target_path"`               // 目标路径
+	WithHeaderURL    string `json:"with_header_url" yaml:"with_header_url"`       // 有请求头时的转发地址
+	WithoutHeaderURL string `json:"without_header_url" yaml:"without_header_url"` // 无请求头时的转发地址
 }
 
 // PortManagerConfig 端口管理器配置
@@ -165,6 +176,22 @@ func (c *ProxyConfig) Validate() error {
 		}
 	}
 
+	// 验证基于请求头的转发配置
+	if c.HeaderBasedForward.Enabled {
+		if c.HeaderBasedForward.HeaderName == "" {
+			return errors.New("header_based_forward.header_name is required when header_based_forward.enabled is true")
+		}
+		if c.HeaderBasedForward.TargetPath == "" {
+			return errors.New("header_based_forward.target_path is required when header_based_forward.enabled is true")
+		}
+		if c.HeaderBasedForward.WithHeaderURL == "" {
+			return errors.New("header_based_forward.with_header_url is required when header_based_forward.enabled is true")
+		}
+		if c.HeaderBasedForward.WithoutHeaderURL == "" {
+			return errors.New("header_based_forward.without_header_url is required when header_based_forward.enabled is true")
+		}
+	}
+
 	return nil
 }
 
@@ -196,6 +223,13 @@ func DefaultProxyConfig() *ProxyConfig {
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 5,
 			IdleConnTimeout:     30 * time.Second,
+		},
+		HeaderBasedForward: HeaderBasedForwardConfig{
+			Enabled:          false,                                       // 默认不启用基于请求头的转发
+			HeaderName:       "X-Costrict-Version",                        // 默认请求头名称
+			TargetPath:       "/codebase-embedder/api/v1/search/semantic", // 默认目标路径
+			WithHeaderURL:    "codebase-embedder/api/v1/search/semantic",  // 有请求头时的转发地址
+			WithoutHeaderURL: "/codebase-index/api/v1/search/semantic",    // 无请求头时的转发地址
 		},
 	}
 }
