@@ -3,17 +3,18 @@
 ## 1. 设计概述
 
 ### 1.1 设计目标
-基于现有Codebase Querier项目架构，实现轻量级HTTP反向代理功能，支持请求转发、响应透传和错误处理。重点解决 RegisterHandlers 函数中的路径匹配问题，确保全路径模式下能够正确匹配所有路径包括根路径 "/"。
+基于现有Codebase Querier项目架构，实现智能HTTP反向代理功能，支持多种转发策略、动态端口管理、响应透传和错误处理。重点实现智能路由选择机制，根据请求头和配置自动选择最优转发策略。
 
 ### 1.2 设计范围
-- 路径匹配问题修复
-- 核心转发功能实现
+- 智能代理处理器实现
+- 动态端口管理集成
+- 多种转发策略支持
 - 配置管理集成
 - 错误处理机制
 - 性能优化策略
 - 安全控制措施
-- 全路径转发功能
-- 代理模式切换机制
+- 基于请求头的路由
+- 健康检查机制
 
 ## 2. 技术选型
 
@@ -25,13 +26,14 @@
 | 配置管理 | go-zero config | 内置 | 与现有配置系统兼容 |
 | 日志 | go-zero logx | 内置 | 统一日志格式和级别 |
 | 监控 | Prometheus | 集成 | 利用go-zero内置监控支持 |
+| 端口管理 | 自定义实现 | 内置 | 支持动态端口获取和缓存 |
 
 ### 2.2 技术方案对比
 | 方案 | 优点 | 缺点 | 选择结果 |
 |------|------|------|----------|
-| **标准库net/http** | 性能优秀，零依赖，完全控制 | 需手动处理细节 | ✅ 选择 |
-| **第三方库(如fasthttp)** | 更高性能，功能丰富 | 增加依赖，学习成本 | ❌ 放弃 |
-| **go-zero内置代理** | 集成度高，配置简单 | 功能有限，灵活性差 | ❌ 放弃 |
+| **智能代理架构** | 自动路由选择，灵活策略 | 实现复杂，需要多种处理器 | ✅ 选择 |
+| **单一静态代理** | 实现简单，性能稳定 | 功能有限，不够灵活 | ❌ 放弃 |
+| **第三方代理库** | 功能丰富，开箱即用 | 增加依赖，定制困难 | ❌ 放弃 |
 
 ## 3. 系统架构
 
@@ -44,292 +46,279 @@ graph TB
     
     subgraph "代理服务层"
         B[HTTP Server<br/>go-zero]
-        C[Proxy Handler]
+        C[Smart Proxy Handler<br/>智能路由选择]
         D[Config Manager]
         E[Error Handler]
         F[Logger]
-        G[Mode Router]
+        G[Route Registrar]
     end
     
-    subgraph "转发逻辑层"
-        H[Request Builder]
-        I[Response Copier]
-        J[Path Builder]
-        K[Header Filter]
-        L[Path Rewriter]
-        M[FullPath Builder]
+    subgraph "转发策略层"
+        H[Dynamic Proxy Handler<br/>动态端口管理]
+        I[Static Proxy Handler<br/>固定地址转发]
+        J[Header-based Forward<br/>基于请求头路由]
+        K[Port Manager<br/>端口管理器]
+    end
+    
+    subgraph "核心逻辑层"
+        L[Request Builder]
+        M[Response Copier]
+        N[Path Builder]
+        O[Header Filter]
+        P[Health Checker]
     end
     
     subgraph "目标服务层"
-        N[目标HTTP服务]
+        Q[目标HTTP服务]
+        R[端口管理服务]
     end
     
     A -->|HTTP请求| B
     B --> C
-    C --> D
-    C --> G
+    C -->|智能路由判断| D
+    C -->|X-Costrict-Version| H
+    C -->|ForwardURL配置| I
+    C -->|Header规则| J
     
-    G -->|mode=rewrite| L
-    G -->|mode=full_path| M
+    H -->|获取端口| K
+    K -->|端口查询| R
+    R -->|端口信息| K
+    K -->|构建URL| L
     
-    L --> K
-    M --> K
-    K --> H
-    H -->|转发请求| N
-    N -->|响应| I
-    I --> C
+    I --> L
+    J --> L
+    
+    L -->|转发请求| Q
+    Q -->|响应| M
+    M --> C
     C --> E
     C --> F
     C -->|原始响应| A
+    
+    C -->|健康检查| P
+    P -->|检查状态| Q
 ```
 
 ### 3.2 模块划分
 
 #### 3.2.1 配置模块 (internal/config/proxy.go)
-- **职责**: 管理代理配置，支持热加载
+- **职责**: 管理代理配置，支持多种转发策略
 - **功能**:
   - 解析YAML配置文件
   - 支持环境变量覆盖
   - 配置验证和错误提示
-  - 代理模式配置管理
+  - 多种代理模式配置管理
+  - 动态端口管理配置
+  - 基于请求头的转发配置
 
-#### 3.2.2 处理器模块 (internal/handler/proxy.go)
-- **职责**: 接收HTTP请求并协调转发流程
+#### 3.2.2 智能代理处理器 (internal/handler/smart_proxy.go)
+- **职责**: 智能路由选择，根据请求头和配置自动选择转发策略
 - **功能**:
-  - 请求路由匹配
-  - 代理模式路由
-  - 调用转发逻辑
+  - 请求头分析 (X-Costrict-Version)
+  - 转发策略自动选择
+  - 静态代理和动态代理协调
+  - 基于请求头的路由
+  - 统一健康检查接口
+
+#### 3.2.3 动态代理处理器 (internal/handler/dynamic_proxy.go)
+- **职责**: 处理动态端口代理请求
+- **功能**:
+  - 端口信息获取和缓存
+  - 动态URL构建
+  - 请求体处理 (GET/POST分离)
   - 错误处理和响应
 
-#### 3.2.3 路由注册模块 (internal/handler/routes.go)
-- **职责**: 注册HTTP路由，处理路径匹配
+#### 3.2.4 静态代理处理器 (internal/handler/proxy.go)
+- **职责**: 处理固定地址代理请求
 - **功能**:
-  - 路径匹配策略实现
-  - 全路径模式路由注册
-  - 重写模式路由注册
+  - 路径重写和全路径支持
+  - 请求转发和响应复制
+  - Header过滤和重写
+  - 健康检查实现
+
+#### 3.2.5 路由注册模块 (internal/handler/routes.go)
+- **职责**: 注册HTTP路由，支持动态和静态路由
+- **功能**:
+  - 智能代理处理器注册
   - 健康检查路由注册
+  - 动态端口模式路由注册
+  - 多方法支持 (GET, POST, PUT, DELETE等)
 
-#### 3.2.4 转发逻辑模块 (internal/logic/proxy.go)
-- **职责**: 核心转发逻辑实现
+#### 3.2.6 端口管理器 (internal/utils/proxy/port_manager.go)
+- **职责**: 管理动态端口信息，提供端口获取服务
 - **功能**:
-  - 构建转发请求
-  - 执行HTTP调用
-  - 处理响应数据
-  - 路径构建策略
+  - 端口信息获取和缓存
+  - 多种clientId获取方式支持
+  - 缓存过期管理
+  - 目标URL构建
 
-#### 3.2.5 工具模块 (internal/utils/proxy/)
-- **职责**: 提供通用工具函数
-- **功能**:
-  - 路径重写
-  - 全路径构建
-  - Header过滤
-  - 错误格式化
+## 4. 智能代理架构设计
 
-## 4. 路径匹配问题解决方案
+### 4.1 架构设计理念
+当前系统采用智能代理架构，通过多种转发策略的组合，实现灵活、高效的请求转发。核心设计理念包括：
 
-### 4.1 问题分析
-当前 RegisterHandlers 函数中的路径匹配问题主要体现在：
+1. **智能路由选择**: 根据请求头和配置自动选择最优转发策略
+2. **多策略支持**: 支持动态端口、固定地址、基于请求头等多种转发方式
+3. **统一接口**: 所有代理策略提供统一的HTTP处理接口
+4. **健康检查**: 完善的健康检查机制，确保服务可用性
 
-1. **全路径模式下的路径匹配问题**：
-   - 当前使用 `"/*path"` 作为路径模式
-   - 在 go-zero 框架中无法正确匹配根路径 "/"
-   - 对某些特殊路径结构匹配失败
+### 4.2 智能代理处理器设计
 
-2. **前缀配置与路径匹配的冲突**：
-   - 所有路由都配置了 `rest.WithPrefix("/codebase-indexer")` 前缀
-   - 前缀与路径模式结合导致实际匹配路径不符合预期
-
-3. **路径匹配逻辑的不一致性**：
-   - 健康检查路由使用固定路径：`"/api/v1/proxy/health"`
-   - 全路径模式使用：`"/*path"`
-   - rewrite模式使用：`"/api/v1/proxy/*path"`
-   - 不一致性导致某些情况下路径匹配失败
-
-### 4.2 解决方案设计
-
-#### 4.2.1 路径匹配策略优化
-**核心策略**: 统一使用 `"/*"` 通配符替代 `"/*path"`
-
+#### 4.2.1 转发策略选择逻辑
 ```go
-// 修改前：使用 "/*path"
-Path: "/*path"
-
-// 修改后：使用 "/*"
-Path: "/*"
-```
-
-**优势分析**:
-- `"/*"` 在 go-zero 框架中能够匹配所有路径，包括根路径 "/"
-- 避免了 `"/*path"` 通配符的路径匹配限制
-- 简化了路径匹配逻辑，提高可靠性
-
-#### 4.2.2 路由注册架构优化
-
-```mermaid
-graph TD
-    A[RegisterHandlers] --> B{检查代理模式}
-    B -->|full_path| C[注册全路径模式路由]
-    B -->|rewrite| D[注册重写模式路由]
-    B -->|always| E[注册健康检查路由]
-    
-    C --> F[使用 "/*" 通配符]
-    D --> G[使用 "/api/v1/proxy/*" 前缀]
-    E --> H[使用固定路径]
-    
-    F --> I[支持根路径匹配]
-    G --> J[支持前缀路径匹配]
-    H --> K[健康检查专用]
-```
-
-#### 4.2.3 前缀配置兼容性处理
-**策略**: 保持现有前缀配置不变，优化路径模式与前缀的组合
-
-```go
-// 当前配置
-rest.WithPrefix("/codebase-indexer")
-
-// 全路径模式实际匹配路径：/codebase-indexer/*
-// 重写模式实际匹配路径：/codebase-indexer/api/v1/proxy/*
-// 健康检查实际匹配路径：/codebase-indexer/api/v1/proxy/health
-```
-
-### 4.3 详细实现方案
-
-#### 4.3.1 路由注册函数重构
-
-```go
-func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
-    // 1. 注册健康检查路由（保持不变）
-    registerHealthCheckRoutes(server, serverCtx)
-    
-    // 2. 根据代理模式注册代理路由
-    if serverCtx.Config.ProxyConfig != nil {
-        switch serverCtx.Config.ProxyConfig.Mode {
-        case config.ProxyModeFullPath:
-            registerFullPathRoutes(server, serverCtx)
-        case config.ProxyModeRewrite:
-            registerRewriteRoutes(server, serverCtx)
-        default:
-            // 默认使用重写模式，保持向后兼容
-            registerRewriteRoutes(server, serverCtx)
+// SmartProxyHandler.ServeHTTP 转发策略选择
+func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    // 1. 检查基于请求头的转发
+    if h.proxyConfig.HeaderBasedForward.Enabled {
+        for _, pathConfig := range h.proxyConfig.HeaderBasedForward.Paths {
+            if r.URL.Path == pathConfig.Path {
+                headerValue := r.Header.Get(h.proxyConfig.HeaderBasedForward.HeaderName)
+                if headerValue != "" {
+                    h.forwardToURL(w, r, pathConfig.WithHeaderURL)
+                } else {
+                    h.forwardToURL(w, r, pathConfig.WithoutHeaderURL)
+                }
+                return
+            }
         }
     }
-}
-
-// 注册健康检查路由
-func registerHealthCheckRoutes(server *rest.Server, serverCtx *svc.ServiceContext) {
-    server.AddRoutes(
-        []rest.Route{
-            {
-                Method:  http.MethodGet,
-                Path:    "/api/v1/proxy/health",
-                Handler: proxyHealthCheckHandler(serverCtx),
-            },
-        },
-        rest.WithPrefix("/codebase-indexer"),
-    )
-}
-
-// 注册全路径模式路由
-func registerFullPathRoutes(server *rest.Server, serverCtx *svc.ServiceContext) {
-    routes := make([]rest.Route, 0, 7)
     
-    // 支持的HTTP方法
-    methods := []string{
-        http.MethodGet,
-        http.MethodPost,
-        http.MethodPut,
-        http.MethodDelete,
-        http.MethodPatch,
-        http.MethodHead,
-        http.MethodOptions,
+    // 2. 检查X-Costrict-Version请求头
+    costrictVersion := r.Header.Get("X-Costrict-Version")
+    if costrictVersion != "" {
+        h.dynamicProxyHandler.ServeHTTP(w, r) // 使用动态代理
+        return
     }
     
-    // 为每个方法创建路由，使用 "/*" 通配符
-    for _, method := range methods {
-        routes = append(routes, rest.Route{
-            Method:  method,
-            Path:    "/*", // 使用 "/*" 替代 "/*path"
-            Handler: proxyHandler(serverCtx),
-        })
+    // 3. 检查ForwardURL配置
+    if h.staticProxyHandler != nil {
+        h.staticProxyHandler.ServeHTTP(w, r) // 使用静态代理
+        return
     }
     
-    server.AddRoutes(routes, rest.WithPrefix("/codebase-indexer"))
-}
-
-// 注册重写模式路由（保持现有逻辑）
-func registerRewriteRoutes(server *rest.Server, serverCtx *svc.ServiceContext) {
-    routes := make([]rest.Route, 0, 7)
-    
-    methods := []string{
-        http.MethodGet,
-        http.MethodPost,
-        http.MethodPut,
-        http.MethodDelete,
-        http.MethodPatch,
-        http.MethodHead,
-        http.MethodOptions,
-    }
-    
-    for _, method := range methods {
-        routes = append(routes, rest.Route{
-            Method:  method,
-            Path:    "/api/v1/proxy/*", // 保持现有的前缀匹配
-            Handler: proxyHandler(serverCtx),
-        })
-    }
-    
-    server.AddRoutes(routes, rest.WithPrefix("/codebase-indexer"))
+    // 4. 默认使用动态代理
+    h.dynamicProxyHandler.ServeHTTP(w, r)
 }
 ```
 
-#### 4.3.2 路径处理逻辑优化
+#### 4.2.2 优势分析
+- **灵活性**: 支持多种转发策略，可根据业务需求灵活配置
+- **智能性**: 自动根据请求特征选择最优转发策略
+- **可扩展性**: 易于添加新的转发策略
+- **兼容性**: 保持向后兼容，现有配置无需修改
 
+### 4.3 动态端口管理
+
+#### 4.3.1 端口管理器设计
 ```go
-// 在处理器中优化路径解析逻辑
-func handleFullPathProxy(w http.ResponseWriter, r *http.Request, cfg *config.ProxyConfig) {
-    // 获取完整的原始路径（包括根路径）
-    originalPath := r.URL.Path
-    
-    // 记录调试信息
-    logx.Infof("[PROXY_DEBUG] Full path mode - originalPath: %s", originalPath)
-    
-    // 构建目标URL - 直接拼接目标URL和原始路径
-    targetURL := buildTargetURL(cfg.Target.URL, originalPath, r.URL.RawQuery)
-    
-    // 继续原有的代理逻辑...
+// PortManager 端口管理器核心功能
+type PortManager struct {
+    baseURL    string
+    forwardURL string
+    httpClient *http.Client
+    cache      map[string]PortResponse
+    cacheExp   time.Duration
+    lastUpdate map[string]time.Time
+    mu         sync.RWMutex
 }
 
-func buildTargetURL(baseURL, path, query string) string {
-    // 规范化URL拼接
-    if !strings.HasSuffix(baseURL, "/") && !strings.HasPrefix(path, "/") {
-        baseURL += "/"
+// 支持多种clientId获取方式
+func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, headers http.Header, params map[string][]string, body []byte) (*PortResponse, error) {
+    var clientID string
+    
+    if method == "GET" {
+        // GET请求从params获取
+        clientID = params["clientId"][0]
+    } else {
+        // 其他请求从body获取
+        var requestBody map[string]interface{}
+        json.Unmarshal(body, &requestBody)
+        clientID = requestBody["clientId"].(string)
     }
     
-    targetURL := baseURL + path
-    
-    if query != "" {
-        targetURL += "?" + query
-    }
-    
-    return targetURL
+    return pm.GetPort(ctx, clientID, "codebase-indexer")
 }
 ```
 
-### 4.4 兼容性保证
+#### 4.3.2 缓存机制
+- **本地缓存**: 端口信息本地缓存，减少远程调用
+- **过期管理**: 支持缓存过期时间配置，默认5分钟
+- **并发安全**: 使用读写锁保证并发安全
+- **性能优化**: 缓存命中时直接返回，避免网络延迟
 
-#### 4.4.1 向后兼容性
-- **重写模式**: 保持现有的 `/api/v1/proxy/*` 路径模式不变
-- **配置格式**: 保持现有配置格式，默认模式仍为 rewrite
-- **API接口**: 健康检查接口路径保持不变
+### 4.4 路由注册优化
 
-#### 4.4.2 前缀配置处理
-- **统一前缀**: 所有路由继续使用 `/codebase-indexer` 前缀
-- **路径匹配**: 优化后的路径模式与前缀配置完全兼容
-- **实际匹配路径**:
-  - 全路径模式: `/codebase-indexer/*` → 匹配所有以 `/codebase-indexer/` 开头的路径
-  - 重写模式: `/codebase-indexer/api/v1/proxy/*` → 匹配代理前缀路径
-  - 健康检查: `/codebase-indexer/api/v1/proxy/health` → 固定健康检查路径
+#### 4.4.1 统一路由注册
+```go
+func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
+    // 1. 注册健康检查路由
+    registerHealthCheckRoutes(server, serverCtx)
+    
+    // 2. 注册智能代理路由
+    if serverCtx.Config.ProxyConfig != nil {
+        proxyHandler := NewSmartProxyHandler(serverCtx.Config.ProxyConfig)
+        
+        methods := []string{
+            http.MethodGet, http.MethodPost, http.MethodPut,
+            http.MethodDelete, http.MethodPatch, http.MethodHead, http.MethodOptions,
+        }
+        
+        var routes []rest.Route
+        for _, routeConfig := range serverCtx.Config.ProxyConfig.Routes {
+            for _, method := range methods {
+                routes = append(routes, rest.Route{
+                    Method:  method,
+                    Path:    routeConfig.PathPrefix,
+                    Handler: http.HandlerFunc(proxyHandler.ServeHTTP),
+                })
+            }
+        }
+        
+        server.AddRoutes(routes)
+    }
+}
+```
+
+#### 4.4.2 动态路由支持
+- **配置驱动**: 路由配置从配置文件读取，支持动态修改
+- **多方法支持**: 支持所有常见HTTP方法
+- **灵活路径**: 支持任意路径前缀配置
+- **统一处理**: 所有路由使用统一的智能代理处理器
+
+### 4.5 健康检查机制
+
+#### 4.5.1 多层健康检查
+```go
+// SmartProxyHandler.HealthCheck 统一健康检查接口
+func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+    healthStatus := &HealthStatus{
+        Strategy: "smart",
+    }
+    
+    // 检查动态代理健康状态
+    dynamicHealth := h.checkDynamicProxyHealth(r)
+    healthStatus.DynamicProxy = dynamicHealth
+    
+    // 检查静态代理健康状态
+    if h.staticProxyHandler != nil {
+        staticHealth := h.checkStaticProxyHealth(r)
+        healthStatus.StaticProxy = staticHealth
+    }
+    
+    // 检查基于请求头的转发配置
+    if h.proxyConfig.HeaderBasedForward.Enabled {
+        healthStatus.HeaderBasedForward = h.getHeaderBasedForwardStatus()
+    }
+    
+    json.NewEncoder(w).Encode(response)
+}
+```
+
+#### 4.5.2 健康检查特性
+- **全面性**: 检查所有转发策略的健康状态
+- **实时性**: 实时检查目标服务可用性
+- **性能监控**: 记录响应时间等性能指标
+- **错误诊断**: 提供详细的错误信息和诊断数据
 
 ## 5. 数据模型设计
 
@@ -337,17 +326,47 @@ func buildTargetURL(baseURL, path, query string) string {
 ```go
 // ProxyConfig 代理配置
 type ProxyConfig struct {
-    Mode    string        `json:"mode" yaml:"mode"` // 代理模式: rewrite, full_path
-    Target  TargetConfig  `json:"target" yaml:"target"`
-    Rewrite RewriteConfig `json:"rewrite" yaml:"rewrite"`
-    Headers HeadersConfig `json:"headers" yaml:"headers"`
+    Mode           string            `json:"mode" yaml:"mode"`     // 代理模式: rewrite, full_path
+    Routes         []RouteConfig     `json:"routes" yaml:"routes"` // 路由规则数组
+    Rewrite        RewriteConfig     `json:"rewrite" yaml:"rewrite"`
+    Headers        HeadersConfig     `json:"headers" yaml:"headers"`
+    PortManagerURL string            `json:"port_manager_url" yaml:"port_manager_url"` // 端口管理器URL
+    DynamicPort    bool              `json:"dynamic_port" yaml:"dynamic_port"`         // 是否启用动态端口
+    PortManager    PortManagerConfig `json:"port_manager" yaml:"port_manager"`         // 端口管理器配置
+    ForwardURL     string            `json:"forward_url" yaml:"forward_url"`           // 转发地址
+    HeaderBasedForward HeaderBasedForwardConfig `json:"header_based_forward" yaml:"header_based_forward"` // 基于请求头的转发配置
 }
 
-// 代理模式常量
-const (
-    ProxyModeRewrite  = "rewrite"   // 路径重写模式
-    ProxyModeFullPath = "full_path" // 全路径转发模式
-)
+// HeaderBasedForwardConfig 基于请求头的转发配置
+type HeaderBasedForwardConfig struct {
+    Enabled    bool                           `json:"enabled" yaml:"enabled"`         // 是否启用基于请求头的转发
+    HeaderName string                         `json:"header_name" yaml:"header_name"` // 请求头名称
+    Paths      []HeaderBasedForwardPathConfig `json:"paths" yaml:"paths"`             // 多路径配置数组
+}
+
+// HeaderBasedForwardPathConfig 基于请求头的转发路径配置
+type HeaderBasedForwardPathConfig struct {
+    Path             string `json:"path" yaml:"path"`                             // 目标路径
+    WithHeaderURL    string `json:"with_header_url" yaml:"with_header_url"`       // 有请求头时的转发地址
+    WithoutHeaderURL string `json:"without_header_url" yaml:"without_header_url"` // 无请求头时的转发地址
+}
+
+// PortManagerConfig 端口管理器配置
+type PortManagerConfig struct {
+    URL                 string        `json:"url" yaml:"url"`                                         // 端口管理器URL
+    ForwardURL          string        `json:"forward_url" yaml:"forward_url"`                         // 转发地址
+    Timeout             time.Duration `json:"timeout" yaml:"timeout"`                                 // 请求超时时间
+    CacheExp            time.Duration `json:"cache_exp" yaml:"cache_exp"`                             // 缓存过期时间
+    MaxIdleConns        int           `json:"max_idle_conns" yaml:"max_idle_conns"`                   // 最大空闲连接数
+    MaxIdleConnsPerHost int           `json:"max_idle_conns_per_host" yaml:"max_idle_conns_per_host"` // 每个主机的最大空闲连接数
+    IdleConnTimeout     time.Duration `json:"idle_conn_timeout" yaml:"idle_conn_timeout"`             // 空闲连接超时时间
+}
+
+// RouteConfig 路由配置
+type RouteConfig struct {
+    PathPrefix string       `json:"path_prefix" yaml:"path_prefix"` // 路径前缀
+    Target     TargetConfig `json:"target" yaml:"target"`           // 目标服务配置
+}
 
 // TargetConfig 目标服务配置
 type TargetConfig struct {
@@ -375,25 +394,47 @@ type HeadersConfig struct {
 }
 ```
 
-### 5.2 路径构建器接口
+### 5.2 端口管理数据模型
 ```go
-// PathBuilder 路径构建器接口
-type PathBuilder interface {
-    BuildPath(originalPath string) (string, error)
+// PortResponse 接口响应结构
+type PortResponse struct {
+    Port int `json:"mappingPort"`
 }
 
-// RewritePathBuilder 路径重写构建器
-type RewritePathBuilder struct {
-    rules []RewriteRule
-}
-
-// FullPathBuilder 全路径构建器
-type FullPathBuilder struct {
-    targetURL string
+// PortManager 端口管理器
+type PortManager struct {
+    baseURL    string
+    forwardURL string
+    httpClient *http.Client
+    cache      map[string]PortResponse
+    cacheExp   time.Duration
+    lastUpdate map[string]time.Time
+    mu         sync.RWMutex
 }
 ```
 
-### 5.3 错误响应结构
+### 5.3 处理器接口设计
+```go
+// SmartProxyHandler 智能代理处理器
+type SmartProxyHandler struct {
+    dynamicProxyHandler *DynamicProxyHandler
+    staticProxyHandler  *ProxyHandler
+    proxyConfig         *config.ProxyConfig
+}
+
+// DynamicProxyHandler 动态代理处理器
+type DynamicProxyHandler struct {
+    portManager *proxy.PortManager
+    proxyConfig *config.ProxyConfig
+}
+
+// ProxyHandler 静态代理处理器
+type ProxyHandler struct {
+    proxyLogic *ProxyLogic
+}
+```
+
+### 5.4 错误响应结构
 ```go
 // ProxyError 代理错误响应
 type ProxyError struct {
@@ -402,31 +443,84 @@ type ProxyError struct {
     Details   string    `json:"details,omitempty"`
     Timestamp time.Time `json:"timestamp"`
 }
-```
+
+// 健康状态结构
+type HealthStatus struct {
+    DynamicProxy       map[string]interface{} `json:"dynamic_proxy"`
+    StaticProxy        map[string]interface{} `json:"static_proxy,omitempty"`
+    ForwardURL         string                 `json:"forward_url,omitempty"`
+    HeaderBasedForward map[string]interface{} `json:"header_based_forward,omitempty"`
+    Strategy           string                 `json:"strategy"`
+}
 
 ## 6. API接口设计
 
-### 6.1 转发接口
-- **路径**: `/proxy/{path...}` (rewrite模式)
-- **路径**: `/{any_path...}` (full_path模式)
+### 6.1 智能转发接口
+- **路径**: `{route_config.PathPrefix}` (根据配置动态决定)
 - **方法**: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS
-- **描述**: 将请求转发到配置的目标地址
-- **请求参数**: 透传所有原始参数
+- **描述**: 智能转发接口，根据请求头和配置自动选择转发策略
+- **请求参数**:
+  - X-Costrict-Version: 用于选择动态代理策略
+  - clientId: 用于动态端口获取 (GET请求从params获取，其他请求从body获取)
+  - 其他参数: 透传所有原始参数
+- **转发策略**:
+  1. 基于请求头的转发 (优先级最高)
+  2. X-Costrict-Version请求头 → 动态代理
+  3. ForwardURL配置 → 静态代理
+  4. 默认 → 动态代理
 - **响应格式**: 透传目标服务响应
 
 ### 6.2 健康检查接口
-- **路径**: `/health/proxy`
+- **路径**: `/api/v1/proxy/health`
 - **方法**: GET
-- **描述**: 检查代理服务和目标服务的健康状态
+- **描述**: 检查智能代理服务和所有转发策略的健康状态
 - **响应格式**:
   ```json
   {
     "status": "ok",
     "proxy": {
-      "mode": "full_path",
-      "target_url": "http://target-service:8080",
+      "strategy": "smart",
+      "dynamic_proxy": {
+        "healthy": true,
+        "status_code": 200,
+        "response": "OK"
+      },
+      "static_proxy": {
+        "healthy": true,
+        "response_time_ms": 45
+      },
+      "forward_url": "http://target-service:8080",
+      "header_based_forward": {
+        "enabled": true,
+        "header_name": "X-Costrict-Version",
+        "paths": [
+          {
+            "path": "/codebase-embedder/api/v1/search/semantic",
+            "with_header_url": "codebase-embedder/api/v1/search/semantic",
+            "without_header_url": "/codebase-index/api/v1/search/semantic"
+          }
+        ],
+        "path_count": 1
+      }
+    }
+  }
+  ```
+
+### 6.3 动态代理健康检查接口
+- **路径**: `/api/v1/dynamic-proxy/health`
+- **方法**: GET
+- **描述**: 专门检查动态代理和端口管理器的健康状态
+- **启用条件**: 当 `DynamicPort = true` 时自动注册
+- **响应格式**:
+  ```json
+  {
+    "status": "ok",
+    "proxy": {
+      "mode": "rewrite",
+      "dynamic_port": true,
+      "port_manager_url": "http://port-manager:8080",
       "reachable": true,
-      "response_time_ms": 45
+      "response_time_ms": 23
     }
   }
   ```
@@ -435,27 +529,66 @@ type ProxyError struct {
 
 ### 7.1 核心接口定义
 
-#### 7.1.1 ProxyHandler接口
+#### 7.1.1 智能代理处理器接口
 ```go
-type ProxyHandler interface {
-    ServeHTTP(w http.ResponseWriter, r *http.Request)
-    HealthCheck() (HealthStatus, error)
+// SmartProxyHandler 智能代理处理器
+type SmartProxyHandler struct {
+    dynamicProxyHandler *DynamicProxyHandler
+    staticProxyHandler  *ProxyHandler
+    proxyConfig         *config.ProxyConfig
 }
+
+func NewSmartProxyHandler(cfg *config.ProxyConfig) *SmartProxyHandler
+func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
+func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request)
+func (h *SmartProxyHandler) Close() error
 ```
 
-#### 7.1.2 Forwarder接口
+#### 7.1.2 动态代理处理器接口
 ```go
-type Forwarder interface {
-    Forward(ctx context.Context, req *http.Request) (*http.Response, error)
-    BuildTargetRequest(ctx context.Context, original *http.Request) (*http.Request, error)
+// DynamicProxyHandler 动态代理处理器
+type DynamicProxyHandler struct {
+    portManager *proxy.PortManager
+    proxyConfig *config.ProxyConfig
 }
+
+func NewDynamicProxyHandler(cfg *config.ProxyConfig) *DynamicProxyHandler
+func (h *DynamicProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
+func (h *DynamicProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request)
+func (h *DynamicProxyHandler) Close() error
 ```
 
-#### 7.1.3 PathBuilder接口
+#### 7.1.3 静态代理处理器接口
 ```go
-type PathBuilder interface {
-    BuildPath(originalPath string) (string, error)
+// ProxyHandler 静态代理处理器
+type ProxyHandler struct {
+    proxyLogic *ProxyLogic
 }
+
+func NewProxyHandler(cfg *config.ProxyConfig) *ProxyHandler
+func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
+func (h *ProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request)
+func (h *ProxyHandler) Close() error
+```
+
+#### 7.1.4 端口管理器接口
+```go
+// PortManager 端口管理器
+type PortManager struct {
+    baseURL    string
+    forwardURL string
+    httpClient *http.Client
+    cache      map[string]PortResponse
+    cacheExp   time.Duration
+    lastUpdate map[string]time.Time
+    mu         sync.RWMutex
+}
+
+func NewPortManager(baseURL string) *PortManager
+func NewPortManagerWithConfig(config config.PortManagerConfig) *PortManager
+func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*PortResponse, error)
+func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, headers http.Header, params map[string][]string, body []byte) (*PortResponse, error)
+func (pm *PortManager) BuildTargetURL(portResp *PortResponse) string
 ```
 
 ### 7.2 关键函数签名
@@ -468,35 +601,74 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext)
 // registerHealthCheckRoutes 注册健康检查路由
 func registerHealthCheckRoutes(server *rest.Server, serverCtx *svc.ServiceContext)
 
-// registerFullPathRoutes 注册全路径模式路由
-func registerFullPathRoutes(server *rest.Server, serverCtx *svc.ServiceContext)
+// proxyHealthCheckHandler 代理健康检查处理器
+func proxyHealthCheckHandler(serverCtx *svc.ServiceContext) http.HandlerFunc
 
-// registerRewriteRoutes 注册重写模式路由
-func registerRewriteRoutes(server *rest.Server, serverCtx *svc.ServiceContext)
+// dynamicProxyHealthCheckHandler 动态代理健康检查处理器
+func dynamicProxyHealthCheckHandler(serverCtx *svc.ServiceContext) http.HandlerFunc
 ```
 
-#### 7.2.2 转发处理函数
+#### 7.2.2 智能代理处理函数
 ```go
-// HandleProxyRequest 处理代理请求
-func HandleProxyRequest(w http.ResponseWriter, r *http.Request, cfg *ProxyConfig) error
+// ServeHTTP 处理智能代理请求
+func (h *SmartProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
-// ForwardRequest 执行请求转发
-func ForwardRequest(ctx context.Context, client *http.Client, targetReq *http.Request) (*http.Response, error)
+// forwardToURL 转发请求到指定URL
+func (h *SmartProxyHandler) forwardToURL(w http.ResponseWriter, r *http.Request, targetURL string)
 
-// CopyResponse 复制响应数据
-func CopyResponse(dst http.ResponseWriter, src *http.Response) error
+// HealthCheck 健康检查
+func (h *SmartProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request)
+
+// checkDynamicProxyHealth 检查动态代理健康状态
+func (h *SmartProxyHandler) checkDynamicProxyHealth(r *http.Request) map[string]interface{}
+
+// checkStaticProxyHealth 检查静态代理健康状态
+func (h *SmartProxyHandler) checkStaticProxyHealth(r *http.Request) map[string]interface{}
 ```
 
-#### 7.2.3 路径构建函数
+#### 7.2.3 动态代理处理函数
 ```go
-// BuildRewritePath 构建重写路径
-func BuildRewritePath(path string, rules []RewriteRule) string
+// ServeHTTP 处理动态代理请求
+func (h *DynamicProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
-// BuildFullPath 构建全路径
-func BuildFullPath(targetURL, originalPath string) string
+// HealthCheck 动态代理健康检查
+func (h *DynamicProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request)
 
-// buildTargetURL 构建目标URL（新增）
-func buildTargetURL(baseURL, path, query string) string
+// sendHealthCheckResponse 发送健康检查响应
+func (h *DynamicProxyHandler) sendHealthCheckResponse(w http.ResponseWriter, healthy bool, duration time.Duration, errorMsg string)
+```
+
+#### 7.2.4 静态代理处理函数
+```go
+// Forward 执行请求转发
+func (l *ProxyLogic) Forward(ctx context.Context, original *http.Request) (*http.Response, error)
+
+// buildTargetRequest 构建目标请求
+func (l *ProxyLogic) buildTargetRequest(ctx context.Context, original *http.Request) (*http.Request, error)
+
+// HealthCheck 检查目标服务健康状态
+func (l *ProxyLogic) HealthCheck(ctx context.Context) (bool, time.Duration, error)
+
+// GetTargetURL 获取目标URL
+func (l *ProxyLogic) GetTargetURL() string
+```
+
+#### 7.2.5 路径构建函数
+```go
+// BuildPath 构建路径（RewritePathBuilder实现）
+func (b *RewritePathBuilder) BuildPath(originalPath string) (string, error)
+
+// BuildPath 构建路径（FullPathBuilder实现）
+func (b *FullPathBuilder) BuildPath(originalPath string) (string, error)
+
+// rewritePath 重写路径
+func rewritePath(path string, rules []UtilsRewriteRule) string
+
+// cleanPath 清理路径
+func cleanPath(path string) string
+
+// joinPath 拼接路径
+func joinPath(baseURL, path string) string
 
 // GetPathBuilder 根据模式获取路径构建器
 func GetPathBuilder(mode string, cfg *ProxyConfig) (PathBuilder, error)
