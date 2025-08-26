@@ -144,7 +144,7 @@ spec:
     spec:
       containers:
       - name: codebase-querier
-        image: zgsm/codebase-querier:v0.1.1
+        image: zgsm/codebase-querier:v0.1.4
         imagePullPolicy: IfNotPresent
         command:
           - /app/server

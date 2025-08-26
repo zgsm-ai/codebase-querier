@@ -400,11 +400,11 @@ func (h *ProxyHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 // validateRequest 验证请求
 func (h *ProxyHandler) validateRequest(r *http.Request) error {
 	// 验证URL长度
-	if len(r.URL.String()) > 32768 {
+	if len(r.URL.String()) > 65536 {
 		return &ProxyError{
 			Code:    "PROXY_URL_TOO_LONG",
 			Message: "Request URL too long",
-			Details: "URL length exceeds 8KB limit",
+			Details: "URL length exceeds 64KB limit",
 		}
 	}
 
