@@ -236,7 +236,7 @@ func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, he
         clientID = requestBody["clientId"].(string)
     }
     
-    return pm.GetPort(ctx, clientID, "codebase-indexer")
+    return pm.GetPort(ctx, clientID, "codebase-indexer", headers)
 }
 ```
 
@@ -586,7 +586,7 @@ type PortManager struct {
 
 func NewPortManager(baseURL string) *PortManager
 func NewPortManagerWithConfig(config config.PortManagerConfig) *PortManager
-func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*PortResponse, error)
+func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string, headers http.Header) (*PortResponse, error)
 func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, headers http.Header, params map[string][]string, body []byte) (*PortResponse, error)
 func (pm *PortManager) BuildTargetURL(portResp *PortResponse) string
 ```

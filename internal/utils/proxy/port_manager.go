@@ -95,7 +95,7 @@ func NewPortManagerWithConfig(config config.PortManagerConfig) *PortManager {
 }
 
 // GetPort 获取端口信息
-func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*PortResponse, error) {
+func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string, headers http.Header) (*PortResponse, error) {
 	cacheKey := fmt.Sprintf("%s:%s", clientID, appName)
 
 	// 检查缓存
@@ -119,6 +119,19 @@ func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string) (*
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 复制原始请求头到端口管理器请求中
+	if headers != nil {
+		for key, values := range headers {
+			// 跳过可能冲突的头部
+			if strings.ToLower(key) == "host" || strings.ToLower(key) == "content-length" {
+				continue
+			}
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
 	}
 
 	// 发送请求
@@ -186,7 +199,7 @@ func (pm *PortManager) GetPortFromHeaders(ctx context.Context, method string, he
 
 	appName := "codebase-indexer"
 
-	return pm.GetPort(ctx, clientID, appName)
+	return pm.GetPort(ctx, clientID, appName, headers)
 }
 
 // BuildTargetURL 构建目标URL
