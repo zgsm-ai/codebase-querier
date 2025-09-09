@@ -113,8 +113,6 @@ func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string, he
 	requestURL := fmt.Sprintf("%s/tunnel-manager/api/v1/ports?clientId=%s&appName=%s",
 		pm.baseURL, clientID, appName)
 
-	logx.Infof("Fetching port from: %s", requestURL)
-
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
@@ -141,15 +139,23 @@ func (pm *PortManager) GetPort(ctx context.Context, clientID, appName string, he
 	}
 	defer resp.Body.Close()
 
-	// 检查响应状态
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
 	// 解析响应
 	var portResp PortResponse
 	if err := json.NewDecoder(resp.Body).Decode(&portResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// 打印详细的请求和响应信息
+	headersStr := ""
+	for key, values := range req.Header {
+		headersStr += fmt.Sprintf("%s: %s; ", key, strings.Join(values, ","))
+	}
+	logx.Infof("Port request completed - URL: %s, Headers: [%s], StatusCode: %d, Response: %+v", 
+		requestURL, headersStr, resp.StatusCode, portResp)
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	// 更新缓存
