@@ -24,9 +24,7 @@
 .idea
 main
 main.exe
-.codebase_index/
 *.iml
 *.scip
 bin/*
-.roo
 docs/task.md
