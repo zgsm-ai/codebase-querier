@@ -5,8 +5,8 @@ argument-hint: change-id
 <!-- VIBEPLUS:START -->
 **护栏原则**
 - 优先采用直接、最小化的实现方式，仅在明确需要或被要求时添加复杂性。
-- 保持变更范围紧密围绕预期结果。
-- 如需额外的VibePlus约定或澄清，请参考`vibeplus/AGENTS.md`。
+- 保持变更范围是紧密围绕用户预期结果展开的。
+- VibePlus约束或最佳实践，请一定要参考`vibeplus/AGENTS.md`。
 
 **步骤**
 将这些步骤作为待办事项跟踪，并逐一完成。

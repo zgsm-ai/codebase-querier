@@ -109,6 +109,12 @@ vibeplus/
 ## 影响
 - 受影响的规范：[列出功能]
 - 受影响的代码：[关键文件/系统]
+例如：
+- **受影响的规范**：招聘管理 (Recruitment Management)
+- **受影响的代码**：
+    - `hrms/static/api/menus.json`: 新增菜单项。
+    - `hrms/views/`: 新增页面文件。
+    - `hrms/service/candidate.go` & `hrms/handler/candidate.go`: 新增或更新查询逻辑。
 ```
 
 3. **创建规范增量：** `specs/[capability]/spec.md`
@@ -135,10 +141,9 @@ vibeplus/
 4. **创建 tasks.md:**
 ```markdown
 ## 1. 实施
-- [ ] 1.1 创建数据库架构
-- [ ] 1.2 实现 API 端点
-- [ ] 1.3 添加前端组件
-- [ ] 1.4 编写测试
+- [ ] 1.1 后端：在 `service/candidate.go` 中实现联合查询逻辑，支持按候选人姓名 (`name`) 和面试官姓名 (`staff_name`) 筛选。需处理 `Candidate` 表与 `Staff` 表的关联。
+- [ ] 1.2 前端：更新 `views/interview_record_manage.html` 中的 JS 逻辑，适配新的搜索 API 和评价更新 API。
+- [ ] 1.3 配置：更新 `hrms/static/api/menus.json`，在“招聘管理”下添加“面试记录”菜单项。
 ```
 
 5. **在需要时创建 design.md:**
@@ -350,7 +355,7 @@ notifications/spec.md
 - `archive/` - 已完成的变更
 
 ### 文件用途
-- `proposal.md` - 原因和内容
+- `proposal.md` - 提案原因和具体内容
 - `tasks.md` - 实施步骤
 - `design.md` - 技术决策
 - `spec.md` - 需求和行为
